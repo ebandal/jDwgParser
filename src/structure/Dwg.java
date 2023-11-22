@@ -8,7 +8,9 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 
 import decode.DecodeCallback;
@@ -208,7 +210,7 @@ public class Dwg {
         if (ver.until(DwgVersion.R2004)) {
             // H : Handle of the current viewport entity header (hard pointer)
             hdrVars.hCurrViewportEntityHeader 
-                = readHandleReference(buf, offset.get(), bitOffset.get(), "Handle of current viewport", cb);
+                = readHandle(buf, offset.get(), bitOffset.get(), "Handle of current viewport", cb);
         }
         
         /*
@@ -636,17 +638,6 @@ public class Dwg {
         return hdrVars;
     }
     
-    public static int readClassSection(byte[] buf, int offset, Dwg dwg) {
-        // TODO Auto-generated method stub
-        return 0;
-    }
-
-    public static int readObjectMap(byte[] buf, int offset, Dwg dwg) {
-        // TODO Auto-generated method stub
-        return 0;
-    }
-
-
     private static double readBitDouble(byte[] buf, int off, int bitOff, String name, DecodeCallback cb) {
         int retBitOffset = 0;
         int offset = off;
@@ -883,26 +874,188 @@ public class Dwg {
         return 0;
     }
     
-    private static HandleRef readHandleReference(byte[] buf, int off, int bitOff, String name, DecodeCallback cb) {
+    private static HandleRef readHandle(byte[] buf, int off, int bitOff, String name, DecodeCallback cb) {
+        HandleRef handleRef = new HandleRef();
+
         int retBitOffset = 0;
         int offset = off;
-        int bitOffset = bitOff;
-        HandleRef handleRef = new HandleRef();
-        
-        byte firstByte = (byte) ((((buf[offset+1]&0x00FF)>>(8-bitOffset))&0xFF) | (buf[offset]<<bitOffset&0xFF));
-        offset += 1; retBitOffset += 8;
+        byte firstByte = (byte) ((((buf[offset+1]&0x00FF)>>(8-bitOff))&0xFF) | (buf[offset]<<bitOff&0xFF));
         handleRef.code = (byte) (firstByte>>4&0x0F);
         handleRef.counter = (byte) (firstByte&0x0F);
         handleRef.handle = new byte[handleRef.counter];
+        offset += 1; retBitOffset += 8;
+
         for (int i=0; i<handleRef.counter; i++) {
-            handleRef.handle[i] = (byte) ((((buf[offset+i+1]&0x00FF)>>(8-bitOffset))&0xFF) | (buf[offset+i]<<bitOffset&0xFF));
+            handleRef.handle[i] = (byte) ((((buf[offset+i+1]&0x00FF)>>(8-bitOff))&0xFF) | (buf[offset+i]<<bitOff&0xFF));
         }
         offset += handleRef.counter; 
         retBitOffset += handleRef.counter*8;
         cb.onDecoded(name, handleRef, retBitOffset);
         
-        return null;
+        return handleRef;
     }
+    
+    private static CmColor readCmColor(byte[] buf, int off, int bitOff, DwgVersion ver, String name, DecodeCallback cb) {
+        int retBitOffset = 0;
+        int offset = off;
+        int bitOffset = bitOff;
+        byte[] dBuf = null;
+        
+        CmColor cmColor = new CmColor();
+        
+        byte bitControl = bitOffset==7 ? (byte)((buf[offset]<<1 & 0x02)|(buf[offset+1]>>7 & 0x01)) : (byte)(buf[offset]>>(8-bitOffset-2) & 0x03);
+        bitOffset += 2; retBitOffset += 2;
+        offset += bitOffset/8;
+        bitOffset = bitOffset%8;
+        dBuf = new byte[2];
+        switch(bitControl) {
+        case 0: // A short(2bytes) follows, little-endian order (LSB first)
+            for (int i=0; i<2; i++) {
+                dBuf[i] = (byte)((((buf[offset+i+1]&0x00FF)>>(8-bitOffset))&0xFF) | (buf[offset+i]<<bitOffset&0xFF));
+            }
+            cmColor.colorIndex = ByteBuffer.wrap(dBuf, 0, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+            offset += 2; retBitOffset += 16;
+            break;
+        case 1: // An unsigned char (1 byte) follows
+            cmColor.colorIndex = (short) ((((buf[offset+1]&0x00FF)>>(8-bitOffset))&0xFF) | (buf[offset]<<bitOffset&0xFF));
+            offset += 1; retBitOffset += 8;
+            break;
+        case 2: // 0
+            cmColor.colorIndex = 0;
+            break;
+        case 3: // 256
+            cmColor.colorIndex = 256;
+            break;
+        }
+        
+        if (ver.from(DwgVersion.R2004)) {
+            bitControl = bitOffset==7 ? (byte)((buf[offset]<<1 & 0x02) | (buf[offset+1]>>7 & 0x01)) : (byte)(buf[offset]>>(8-bitOffset-2) & 0x03);
+            bitOffset += 2; retBitOffset += 2;
+            offset += bitOffset/8;
+            bitOffset = bitOffset%8;
+            dBuf = new byte[4];
+            switch(bitControl) {
+            case 0: // A long(4bytes) follows, little-endian order (LSB first)
+                for (int i=0; i<4; i++ ) {
+                    dBuf[i] = (byte) ((((buf[offset+i+1]&0x00FF)>>(8-bitOffset))&0xFF) | (buf[offset+i]<<bitOffset&0xFF));
+                }
+                cmColor.rgbValue = ByteBuffer.wrap(dBuf, 0, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+                offset += 4; retBitOffset += 32;
+                break;
+            case 1: // An unsigned char (1 byte) follows
+                cmColor.rgbValue = ((((buf[offset+1]&0x00FF)>>(8-bitOffset))&0xFF) | (buf[offset]<<bitOffset&0xFF));
+                offset += 1; retBitOffset += 8;
+                break;
+            case 2: // 0
+                cmColor.rgbValue = 0;
+                break;
+            case 3: // not used
+                break;
+            }
+            
+            cmColor.colorByte = (byte) ((((buf[offset+1]&0x00FF)>>(8-bitOffset))&0xFF) | (buf[offset]<<bitOffset&0xFF));
+            offset += 1; retBitOffset += 8;
+        }
+        
+        cb.onDecoded(name, cmColor, retBitOffset);
+        return cmColor;
+    }
+    
+    
+    private static long readModularChar(byte[] buf, int off, String name, DecodeCallback cb) {
+        int offset = off;
+        byte[] step1Bytes = new byte[8];
+        int idx = 0;
+        
+        while(true) {
+            step1Bytes[idx] = (byte)(buf[offset+idx]);
+            if ((step1Bytes[idx]&0x80) == 0x00) {
+                break;
+            }
+            idx += 1;
+        }
+        idx += 1;
+        
+        byte[] step2Bytes = new byte[idx];
+        for (int i=0; i<idx; i++) {
+            step2Bytes[i] = (byte)((byte)((step1Bytes[idx-1-i]&0x007F)>>(idx-1-i)) | (i>0 ? ((step1Bytes[idx-i]&0x7F)<<(8-(idx-i))) : 0x00));
+        }
+        
+        long sum = 0;
+        for (int i=0; i<idx; i++) {
+            sum += ((step2Bytes[i]&0x00FF) * (long)Math.pow(256, (idx-1-i)));
+        }
+        cb.onDecoded(name,  sum, (idx+1)*8);
+        
+        return sum;
+    }
+    
+    public static int readClassSection(byte[] buf, int offset, Dwg dwg) {
+        // TODO Auto-generated method stub
+        return 0;
+    }
+
+    public static int readObjectMap(byte[] buf, int off, Dwg dwg, DwgVersion ver) {
+        AtomicInteger offset = new AtomicInteger(off);
+        AtomicInteger bitOffset = new AtomicInteger(0);
+        int retBitOffset = 0;
+        
+        Map<Long, Long> objectMap = new HashMap<>();
+        
+        // page 251
+        if (ver.between(DwgVersion.R13, DwgVersion.R15)) {
+            // 
+            DecodeCallback cb = new DecodeCallback() {
+                public void onDecoded(String name, Object value, int retBitOffset) {
+                    // log.info("[" + name + "] = (" + value.toString() + ")");
+                    offset.addAndGet((bitOffset.get()+retBitOffset)/8);
+                    bitOffset.set((bitOffset.get()+retBitOffset)%8);
+                }
+            };
+            
+            short sectionSize = ByteBuffer.wrap(buf, offset.get(), 2).order(ByteOrder.BIG_ENDIAN).getShort();
+            offset.addAndGet(2);
+            
+            while(offset.get() < sectionSize) {
+                long handleOffset = readModularChar(buf, offset.get(), "Handle Offset", cb);
+                long locationOffset = readModularChar(buf, offset.get(), "Location Offset", cb);
+                
+                objectMap.put(handleOffset,  locationOffset);
+            }
+            short crc = ByteBuffer.wrap(buf, offset.get(), 2).order(ByteOrder.BIG_ENDIAN).getShort();
+            offset.addAndGet(2);
+        } else if (ver.from(DwgVersion.R18)) {
+            byte[] decomBuf = decompressR18(buf, offset.get());
+            AtomicInteger decomOffset = new AtomicInteger(0);
+            
+            decomOffset.addAndGet(32);
+            
+            DecodeCallback cb = new DecodeCallback() {
+                public void onDecoded(String name, Object value, int regBitOffset) {
+                    offset.addAndGet((bitOffset.get()+retBitOffset)/8);
+                    bitOffset.set((bitOffset.get()+retBitOffset)%8);
+                }
+            };
+            
+            short sectionSize = ByteBuffer.wrap(decomBuf, decomOffset.get(), 2).order(ByteOrder.BIG_ENDIAN).getShort();
+            decomOffset.addAndGet(2);
+            
+            while(offset.get() < sectionSize) {
+                long handleOffset = readModularChar(decomBuf, decomOffset.get(), "Handle Offset", cb);
+                long locationOffset = readModularChar(decomBuf, decomOffset.get(), "Location Offset", cb);
+                
+                objectMap.put(handleOffset,  locationOffset);
+            }
+            short crc = ByteBuffer.wrap(decomBuf, decomOffset.get(), 2).order(ByteOrder.BIG_ENDIAN).getShort();
+            decomOffset.addAndGet(2);
+        }
+        
+        
+        // TODO Auto-generated method stub
+        return 0;
+    }
+
+
 
 
 }

@@ -114,7 +114,7 @@ public class DecoderR14 {
                 buf = new byte[sl.size];
                 raf.seek(sl.seeker);
                 raf.read(buf, 0, sl.size);
-                offset += Dwg.readObjectMap(buf, offset, dwg);
+                offset += Dwg.readObjectMap(buf, offset, dwg, dwg.header.ver);
                 break;
             case 3:
                 // (C3 and later.) A special table
