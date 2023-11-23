@@ -15,6 +15,7 @@ import java.util.logging.Logger;
 
 import decode.DecodeCallback;
 import decode.DecoderR14;
+import decode.DecoderR18;
 import decode.DwgParseException;
 import structure.header.FileHeader;
 import structure.sectionpage.DataSectionPage;
@@ -1025,7 +1026,7 @@ public class Dwg {
             short crc = ByteBuffer.wrap(buf, offset.get(), 2).order(ByteOrder.BIG_ENDIAN).getShort();
             offset.addAndGet(2);
         } else if (ver.from(DwgVersion.R18)) {
-            byte[] decomBuf = decompressR18(buf, offset.get());
+            byte[] decomBuf = DecoderR18.decompressR18(buf, offset.get());
             AtomicInteger decomOffset = new AtomicInteger(0);
             
             decomOffset.addAndGet(32);
