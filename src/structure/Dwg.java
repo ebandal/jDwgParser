@@ -214,10 +214,13 @@ public class Dwg {
                 = readHandle(buf, offset.get(), bitOffset.get(), "Handle of current viewport", cb);
         }
         
+        // B : DIMASO
+        hdrVars.bDimaso = readBit(buf, offset.get(), bitOffset.get(), "DIMASO", cb);
+        // B : DIMSHO
+        hdrVars.bDimsho = readBit(buf, offset.get(), bitOffset.get(), "DIMSHO", cb);
+        
         /*
             Common:
-            B : DIMASO
-            B : DIMSHO
             R13-R14 Only:
             B : DIMSAV Undocumented.
             Common:
@@ -771,7 +774,13 @@ public class Dwg {
         
         return value;
     }
-    
+
+    public static boolean readBit(byte[] buf, int off, int bitOff, String name, DecodeCallback cb) {
+        boolean value = false;
+        // not implemented yet.
+        return value;
+    }
+
     public static short readBitShort(byte[] buf, int off, int bitOff, String name, DecodeCallback cb) {
         int retBitOffset = 0;
         int offset = off;
