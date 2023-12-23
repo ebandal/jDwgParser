@@ -145,13 +145,13 @@ public class HeaderVariables {
     public double[]     dExtmaxMspace;
     public double[]     dLimminMspace;
     public double[]     dLimmaxMspace;
-    public double[]     dElevationMspace;
+    public double	    dElevationMspace;
     public double[]     dUcsorgMspace;
     public double[]     dUcsxdirMspace;
     public double[]     dUcsydirMspace;
     public HandleRef    hUcsnameMspace;
     public HandleRef    hUcsorthoref;               // R2000+ Only
-    public HandleRef    hUcsorthoview;              // R2000+ Only
+    public short	    sUcsorthoview;              // R2000+ Only
     public HandleRef    hUcsbase;                   // R2000+ Only
     public double[]     dUcsorgtop;                 // R2000+ Only
     public double[]     dUcsorgbottom;              // R2000+ Only
@@ -288,7 +288,7 @@ public class HeaderVariables {
     public short        sTstackalign; //default = 1 // R2000+ Only
     public short        sTstacksize;  //default = 70// R2000+ Only
     public String       tHyperlinkbase;             // R2000+ Only
-    public String       tStylehseet;                // R2000+ Only
+    public String       tStylesheet;                // R2000+ Only
     public HandleRef    hDictionaryLayouts;         // R2000+ Only
     public HandleRef    hDictionaryPlotsettings;    // R2000+ Only
     public HandleRef    hDictionaryPlotstyles;      // R2000+ Only
@@ -308,7 +308,7 @@ public class HeaderVariables {
     public byte         cXclipframe;                // R2004+
     public byte         cDimassoc;                  // R2004+
     public byte         cHalogap;                   // R2004+
-    public short        sObjscuredcolor;            // R2004+
+    public short        sObscuredcolor;            // R2004+
     public short        sIntersectioncolor;         // R2004+
     public byte         cObjscuredltype;            // R2004+
     public byte         cIntersectiondisplay;       // R2004+
@@ -329,7 +329,7 @@ public class HeaderVariables {
     public double       dCameraheight;              // R2007+
     public byte         cSolidhist;                 // R2007+
     public byte         cShowhist;                  // R2007+
-    public double       dPsolwdith;                 // R2007+
+    public double       dPsolwidth;                 // R2007+
     public double       dPsolheight;                // R2007+
     public double       dLoftang1;                  // R2007+
     public double       dLoftang2;                  // R2007+
@@ -337,7 +337,7 @@ public class HeaderVariables {
     public double       dLoftmag2;                  // R2007+
     public short        sLoftparam;                 // R2007+
     public byte         cLoftnormals;               // R2007+
-    public double       dLattide;                   // R2007+
+    public double       dLatitude;                  // R2007+
     public double       dLongitude;                 // R2007+
     public double       dNorthdirection;            // R2007+
     public int          lTimezone;                  // R2007+

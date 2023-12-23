@@ -3,7 +3,7 @@ package decode;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class DecoderR18 {
+public class DecoderR2004 {
 
     public static byte[] decompressR18(byte[] srcBuf, int srcIndex) {
         ByteBuffer bBuffer = ByteBuffer.allocate(srcBuf.length * 2);
