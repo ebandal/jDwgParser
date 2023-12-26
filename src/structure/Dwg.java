@@ -7,7 +7,13 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.JulianFields;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -485,16 +491,22 @@ public class Dwg {
             hdrVars.dPsvpscale = readBitDouble(buf, offset.get(), bitOffset.get(), "PSVPSCALE", cb);
         }
         
-//        3BD : INSBASE (PSPACE)
-//        3BD : EXTMIN (PSPACE)
-//        3BD : EXTMAX (PSPACE)
+        // 3BD : INSBASE (PSPACE)
+        hdrVars.dInsbasePspace = read3BitDouble(buf, offset.get(), bitOffset.get(), "INSBASE (PSPACE)", cb);
+        // 3BD : EXTMIN (PSPACE)
+        hdrVars.dExtminPspace = read3BitDouble(buf, offset.get(), bitOffset.get(), "EXTMIN (PSPACE)", cb);
+        // 3BD : EXTMAX (PSPACE)
+        hdrVars.dExtmaxPspace = read3BitDouble(buf, offset.get(), bitOffset.get(), "EXTMAX (PSPACE)", cb);
 //        2RD : LIMMIN (PSPACE)
 //        2RD : LIMMAX (PSPACE)
         // BD : ELEVATION (PSPACE)
         hdrVars.dElevationPspace = readBitDouble(buf, offset.get(), bitOffset.get(), "ELEVATION (PSPACE)", cb);
-//        3BD : UCSORG (PSPACE)
-//        3BD : UCSXDIR (PSPACE)
-//        3BD : UCSYDIR (PSPACE)
+        // 3BD : UCSORG (PSPACE)
+        hdrVars.dUcsorgPspace = read3BitDouble(buf, offset.get(), bitOffset.get(), "UCSORG (PSPACE)", cb);
+        // 3BD : UCSXDIR (PSPACE)
+        hdrVars.dUcsxdirPspace = read3BitDouble(buf, offset.get(), bitOffset.get(), "UCSXDIR (PSPACE)", cb);
+        // 3BD : UCSYDIR (PSPACE)
+        hdrVars.dUcsydirPspace = read3BitDouble(buf, offset.get(), bitOffset.get(), "UCSYDIR (PSPACE)", cb);
         // H : UCSNAME (PSPACE) (hard pointer)
     	hdrVars.hUcsnamePspace = readHandle(buf, offset.get(), bitOffset.get(), "UCSNAME (PSPACE", cb);
 
@@ -505,24 +517,36 @@ public class Dwg {
             hdrVars.sPucsorthoview = readBitShort(buf, offset.get(), bitOffset.get(), "PUCSORTHOVIEW", cb);
             // H : PUCSBASE (hard pointer)
         	hdrVars.hPucsbase = readHandle(buf, offset.get(), bitOffset.get(), "PUCSBASE", cb);
-//            3BD : PUCSORGTOP
-//            3BD : PUCSORGBOTTOM
-//            3BD : PUCSORGLEFT
-//            3BD : PUCSORGRIGHT
-//            3BD : PUCSORGFRONT
-//            3BD : PUCSORGBACK
+            // 3BD : PUCSORGTOP
+            hdrVars.dPucsorgtop = read3BitDouble(buf, offset.get(), bitOffset.get(), "PUCSORGTOP", cb);
+            // 3BD : PUCSORGBOTTOM
+            hdrVars.dPucsorgbottom = read3BitDouble(buf, offset.get(), bitOffset.get(), "PUCSORGBOTTOM", cb);
+            // 3BD : PUCSORGLEFT
+            hdrVars.dPucsorgleft = read3BitDouble(buf, offset.get(), bitOffset.get(), "PUCSORGLEFT", cb);
+            // 3BD : PUCSORGRIGHT
+            hdrVars.dPucsorgright = read3BitDouble(buf, offset.get(), bitOffset.get(), "PUCSORGRIGHT", cb);
+            // 3BD : PUCSORGFRONT
+            hdrVars.dPucsorgfront = read3BitDouble(buf, offset.get(), bitOffset.get(), "PUCSORGFRONT", cb);
+            // 3BD : PUCSORGBACK
+            hdrVars.dPucsorgback = read3BitDouble(buf, offset.get(), bitOffset.get(), "PUCSORGBACK", cb);
         }
         
-//        3BD : INSBASE (MSPACE)
-//        3BD : EXTMIN (MSPACE)
-//        3BD : EXTMAX (MSPACE)
+        // 3BD : INSBASE (MSPACE)
+        hdrVars.dInsbaseMspace = read3BitDouble(buf, offset.get(), bitOffset.get(), "INSBASE (MSPACE)", cb);
+        // 3BD : EXTMIN (MSPACE)
+        hdrVars.dExtminMspace = read3BitDouble(buf, offset.get(), bitOffset.get(), "EXTMIN (MSPACE)", cb);
+        // 3BD : EXTMAX (MSPACE)
+        hdrVars.dExtmaxMspace = read3BitDouble(buf, offset.get(), bitOffset.get(), "EXTMAX (MSPACE)", cb);
 //        2RD : LIMMIN (MSPACE)
 //        2RD : LIMMAX (MSPACE)
         // BD : ELEVATION (MSPACE)
         hdrVars.dElevationMspace = readBitDouble(buf, offset.get(), bitOffset.get(), "ELEVATION", cb);
-//        3BD : UCSORG (MSPACE)
-//        3BD : UCSXDIR (MSPACE)
-//        3BD : UCSYDIR (MSPACE)
+        // 3BD : UCSORG (MSPACE)
+        hdrVars.dUcsorgMspace = read3BitDouble(buf, offset.get(), bitOffset.get(), "UCSORG (MSPACE)", cb);
+        // 3BD : UCSXDIR (MSPACE)
+        hdrVars.dUcsxdirMspace = read3BitDouble(buf, offset.get(), bitOffset.get(), "UCSXDIR (MSPACE)", cb);
+        // 3BD : UCSYDIR (MSPACE)
+        hdrVars.dUcsydirMspace = read3BitDouble(buf, offset.get(), bitOffset.get(), "UCSYDIR (MSPACE)", cb);
         // H : UCSNAME (MSPACE) (hard pointer)
     	hdrVars.hUcsnameMspace = readHandle(buf, offset.get(), bitOffset.get(), "UCSNAME (MSPACE)", cb);
 
@@ -533,12 +557,18 @@ public class Dwg {
             hdrVars.sUcsorthoview = readBitShort(buf, offset.get(), bitOffset.get(), "UCSORTHOVIEW", cb);
             // H : UCSBASE (hard pointer)
         	hdrVars.hUcsbase = readHandle(buf, offset.get(), bitOffset.get(), "UCSBASE", cb);
-//            3BD : UCSORGTOP
-//            3BD : UCSORGBOTTOM
-//            3BD : UCSORGLEFT
-//            3BD : UCSORGRIGHT
-//            3BD : UCSORGFRONT
-//            3BD : UCSORGBACK
+            // 3BD : UCSORGTOP
+            hdrVars.dUcsorgtop = read3BitDouble(buf, offset.get(), bitOffset.get(), "UCSORGTOP", cb);
+            // 3BD : UCSORGBOTTOM
+            hdrVars.dUcsorgbottom = read3BitDouble(buf, offset.get(), bitOffset.get(), "UCSORGBOTTOM", cb);
+            // 3BD : UCSORGLEFT
+            hdrVars.dUcsorgleft = read3BitDouble(buf, offset.get(), bitOffset.get(), "UCSORGLEFT", cb);
+            // 3BD : UCSORGRIGHT
+            hdrVars.dUcsorgright = read3BitDouble(buf, offset.get(), bitOffset.get(), "UCSORGRIGHT", cb);
+            // 3BD : UCSORGFRONT
+            hdrVars.dUcsorgfront = read3BitDouble(buf, offset.get(), bitOffset.get(), "UCSORGFRONT", cb);
+            // 3BD : UCSORGBACK
+            hdrVars.dUcsorgback = read3BitDouble(buf, offset.get(), bitOffset.get(), "UCSORGBACK", cb);
             // TV : DIMPOST
             hdrVars.tDimpost = readVariableText(buf, offset.get(), bitOffset.get(), ver, "DIMPOST", cb);
             // TV : DIMAPOST
@@ -985,6 +1015,153 @@ public class Dwg {
         return hdrVars;
     }
     
+    public static Map<Integer, DrawingClass> readClassSection(byte[] buf, int off, Dwg dwg, DwgVersion ver) {
+    	Map<Integer, DrawingClass> drwingClassMap = new HashMap<>();
+    	AtomicInteger offset = new AtomicInteger(off);
+    	AtomicInteger bitOffset = new AtomicInteger(0);
+    	int reBitOffset = 0;
+    	
+    	if (ver.between(DwgVersion.R13, DwgVersion.R15)) {
+    		DecodeCallback cb = new DecodeCallback() {
+    			public void onDecoded(String name, Object value, int retBitOffset) {
+    				log.info("[" + name+ "] = (" + value.toString() + ")");
+    				offset.addAndGet((bitOffset.get()+retBitOffset)/8);
+    				bitOffset.set((bitOffset.get()+retBitOffset)%8);
+    			}
+    		};
+    		
+    		// beginning sentinel
+    		// 0x8D 0xA1 0xC4-xA9 0xF8 0xC5 0xDC 0xF4 0x5F 0xE7 0xCF 0xB6 0x*a
+    		offset.addAndGet(16);
+    		
+    		// size of class date area
+    		int sizeClasses = readRawLong(buf, offset.get(), bitOffset.get(), "size of classes data area", cb);
+    		
+    		// read sets until exhaust the data
+    		while(offset.get()-2-16 < sizeClasses) {
+    			log.fine("CLASS SECTION read : " + (offset.get()-2-16) + ", Total Size: " + sizeClasses);
+    			
+    			DrawingClass dc = new DrawingClass();
+    			// classnum
+    			dc.classnum = readBitShort(buf, offset.get(), bitOffset.get(), "classnum", cb);
+    			// version
+    			dc.version = readBitShort(buf, offset.get(), bitOffset.get(), "version", cb);
+    			// appname
+    			dc.appname = readVariableText(buf, offset.get(), bitOffset.get(), ver, "appname", cb);
+    			// cplusplusclassname
+    			dc.cplusplusclassname = readVariableText(buf, offset.get(), bitOffset.get(), ver, "c++cplusplusclassname", cb);
+    			// classdxfname
+    			dc.classdxfname = readVariableText(buf, offset.get(), bitOffset.get(), ver, "classdxfname", cb);
+    			// wasazombie
+    			dc.waszombie = readBit(buf, offset.get(), bitOffset.get(), "c++wasazomebie", cb);
+    			// itemclassid
+    			dc.itemclassid = readBitShort(buf, offset.get(), bitOffset.get(), "itemclassid", cb);
+    			drwingClassMap.put((int)dc.classnum, dc);
+    		}
+    		
+    		// RS: CRC
+    		int crc = readBitShort(buf, offset.get(), bitOffset.get(), "CRC", cb);
+    		// 16 byte sentinel apprears after the CRC
+    		// 0x72,0x5E,0x3B,0x47,0x3B,0x56,0x07,0x3A,0x3F,0x23,0x0B,0xA0,0x180x30,0x49,0x75
+    		
+    		// PADDING random bits to the next byte boundary
+    		if (bitOffset.get()>0) {
+    			bitOffset.set(0);;
+    			offset.addAndGet(1);
+    		}
+    		
+    		byte[] compareBytes = new byte[16];
+    		System.arraycopy(buf,  offset.get(), compareBytes,  0,  16);
+    		offset.addAndGet(16);
+    		byte[] endingSentinel = { (byte)0x72, (byte)0x5E,(byte)0x3B,(byte)0x47,(byte)0x3B,(byte)0x56,(byte)0x07,(byte)0x3A,
+    									(byte)0x3F,(byte)0x23,(byte)0x0B,(byte)0xA0,(byte)0x18,(byte)0x30,(byte)0x49,(byte)0x75 };
+    		if (Arrays.equals(compareBytes, endingSentinel)==false) {
+    			log.severe("Ending Sentinel mismatched!!!");
+    		}
+    	} else if (ver.from(DwgVersion.R18)) {
+
+    		// section is compressed, contains the standard 32byte section header
+			byte[] decomBuf = DecoderR2004.decompressR18(buf, offset.get());
+			AtomicInteger decomOffset = new AtomicInteger(0);
+			
+			DecodeCallback cb = new DecodeCallback() {
+				public void onDecoded(String name, Object value, int retBitOffset) {
+					log.info("[" + name+ "] = (" + value.toString() + ")");
+					offset.addAndGet((bitOffset.get()+retBitOffset)/8);
+					bitOffset.set((bitOffset.get()+retBitOffset)%8);
+				}
+			};
+			
+			// beginning sentinel
+			// 0x8D 0xA1 0xC4-xA9 0xF8 0xC5 0xDC 0xF4 0x5F 0xE7 0xCF 0xB6 0x*a
+			decomOffset.addAndGet(16);
+			
+			// size of class date area
+			int sizeClasses = readRawLong(buf, decomOffset.get(), bitOffset.get(), "size of classes data area", cb);
+			
+			if (ver.from(DwgVersion.R2004)) {
+				short maxClassNum = readBitShort(buf, decomOffset.get(), bitOffset.get(), "Maximum class number", cb);
+				byte cUnknonw = readRawChar(buf, decomOffset.get(), bitOffset.get(), "unknown", cb);
+				cUnknonw = readRawChar(buf, decomOffset.get(), bitOffset.get(), "unknown", cb);
+				boolean bUnknown = readBit(buf, decomOffset.get(), bitOffset.get(), "unknown", cb);
+			}
+			
+			// read sets until exhaust the data
+			while(offset.get()-2-16 < sizeClasses) {
+				log.fine("CLASS SECTION read : " + (decomOffset.get()-2-16) + ", Total Size: " + sizeClasses);
+				
+				DrawingClass dc = new DrawingClass();
+				// classnum
+				dc.classnum = readBitShort(buf, decomOffset.get(), bitOffset.get(), "classnum", cb);
+				// Proxy falsg 
+				dc.proxyFlags = readBitShort(buf, decomOffset.get(), bitOffset.get(), "proxyFlags", cb);
+				// appname
+				dc.appname = readVariableText(buf, decomOffset.get(), bitOffset.get(), ver, "appname", cb);
+				// cplusplusclassname
+				dc.cplusplusclassname = readVariableText(buf, decomOffset.get(), bitOffset.get(), ver, "c++cplusplusclassname", cb);
+				// classdxfname
+				dc.classdxfname = readVariableText(buf, decomOffset.get(), bitOffset.get(), ver, "classdxfname", cb);
+				// wasazombie
+				dc.waszombie = readBit(buf, decomOffset.get(), bitOffset.get(), "c++wasazomebie", cb);
+				// itemclassid
+				dc.itemclassid = readBitShort(buf, decomOffset.get(), bitOffset.get(), "itemclassid", cb);
+				// Number of objects created of this type in the current DB (DXF 91)
+				dc.numObjCreatedCurDB = readBitLong(buf, decomOffset.get(), bitOffset.get(), "Number of objects created", cb);
+				// Dwg version
+				dc.dwgVersion = readBitShort(buf, decomOffset.get(), bitOffset.get(), "Dwg Version", cb);
+				// Maintenance release version
+				dc.mrVer = readBitShort(buf, decomOffset.get(), bitOffset.get(), "Maintenance release version", cb);
+				//Unknown (normally 0L)
+				int lUnknown = readBitLong(buf, decomOffset.get(), bitOffset.get(), "Unknown", cb);
+				// Unknown (normally 0L)
+				lUnknown = readBitLong(buf, decomOffset.get(), bitOffset.get(), "Unknown", cb);
+				drwingClassMap.put((int)dc.classnum, dc);
+			}
+			
+			// RS: CRC
+			int crc = readBitShort(buf, decomOffset.get(), bitOffset.get(), "CRC", cb);
+			// 16 byte sentinel apprears after the CRC
+			// 0x72,0x5E,0x3B,0x47,0x3B,0x56,0x07,0x3A,0x3F,0x23,0x0B,0xA0,0x180x30,0x49,0x75
+			
+			// PADDING random bits to the next byte boundary
+			if (bitOffset.get()>0) {
+				bitOffset.set(0);;
+				decomOffset.addAndGet(1);
+			}
+			
+			byte[] compareBytes = new byte[16];
+			System.arraycopy(buf,  decomOffset.get(), compareBytes,  0,  16);
+			decomOffset.addAndGet(16);
+			byte[] endingSentinel = { (byte)0x72, (byte)0x5E,(byte)0x3B,(byte)0x47,(byte)0x3B,(byte)0x56,(byte)0x07,(byte)0x3A,
+										(byte)0x3F,(byte)0x23,(byte)0x0B,(byte)0xA0,(byte)0x18,(byte)0x30,(byte)0x49,(byte)0x75 };
+			if (Arrays.equals(compareBytes, endingSentinel)==false) {
+				log.severe("Ending Sentinel mismatched!!!");
+			}
+    	}
+    	
+    	return drwingClassMap;
+    }
+    
     private static double readBitDouble(byte[] buf, int off, int bitOff, String name, DecodeCallback cb) {
         int retBitOffset = 0;
         int offset = off;
@@ -1021,7 +1198,45 @@ public class Dwg {
         
         return value;
     }
-    
+
+    private static double[] read3BitDouble(byte[] buf, int off, int bitOff, String name, DecodeCallback cb) {
+        int retBitOffset = 0;
+        int offset = off;
+        int bitOffset = bitOff;
+        byte[] dBuf = new byte[8];
+        double[] values = new double[3];
+
+        for (int j=0; j<3; j++) {
+	        byte bitControl = bitOffset==7 ? (byte)((buf[offset]<<1 & 0x02)|(buf[offset+1]>>7 & 0x01)) : (byte)(buf[offset]>>(8-bitOffset-2) & 0x03);
+	        bitOffset += 2; retBitOffset += 2;
+	        offset += bitOffset/8;
+	        bitOffset = bitOffset%8;
+	        
+	        switch(bitControl) {
+	        case 0: // A double follows
+	            for (int i=0; i<8; i++) {
+	                dBuf[i] = (byte) ((((buf[offset+i+1]&0x00FF)>>(8-bitOffset))&0xFF) | (buf[offset+i]<<bitOffset&0xFF));
+	            }
+	            long lValue = ByteBuffer.wrap(buf, 0, 8).order(ByteOrder.LITTLE_ENDIAN).getLong();
+	            values[j] = Double.longBitsToDouble(lValue);
+	            offset += 8; retBitOffset += 64;
+	            break;
+	        case 1: // 1.0
+	            values[j] = 1.0;
+	            break;
+	        case 2: // 0.0
+	            values[j] = 0.0;
+	            break;
+	        case 3: // not used
+	            break;
+	        }
+	        
+        }
+        
+        cb.onDecoded(name, values, retBitOffset);
+        return values;
+    }
+
     private static String readVariableText(byte[] buf, int off, int bitOff, DwgVersion ver, String name, DecodeCallback cb) {
         if (ver.until(DwgVersion.R2004)) {
             return readText(buf, off, bitOff, name, cb);
@@ -1217,6 +1432,82 @@ public class Dwg {
         return value;
     }
     
+    private static byte readRawChar(byte[] buf, int off, int bitOff, String name, DecodeCallback cb) {
+    	int retBitOffset = 0;
+    	byte value;
+    	
+    	value = (byte) ((((buf[off+1]&0x00FF)>>(8-bitOff))&0xFF) | (buf[off]<<bitOff&0xFF));
+    	retBitOffset += 8;
+    	cb.onDecoded(name, value, retBitOffset);
+    	
+    	return value;
+    }
+
+    private static short readRawShort(byte[] buf, int off, int bitOff, String name, DecodeCallback cb) {
+    	int retBitOffset = 0;
+    	byte[] dBuf = new byte[2];
+    	short value;
+
+    	for (int i=0; i<2; i++) {
+    		dBuf[i] = (byte) ((((buf[off+i+1]&0x00FF)>>(8-bitOff))&0xFF) | (buf[off+i]<<bitOff&0xFF));
+    	}
+    	value = ByteBuffer.wrap(dBuf, 0, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+    	retBitOffset += 16;
+    	cb.onDecoded(name, value, retBitOffset);
+    	
+    	return value;
+    }
+
+    private static double readRawDouble(byte[] buf, int off, int bitOff, String name, DecodeCallback cb) {
+    	int retBitOffset = 0;
+    	byte[] dBuf = new byte[8];
+    	double value;
+
+    	for (int i=0; i<8; i++) {
+    		dBuf[i] = (byte) ((((buf[off+i+1]&0x00FF)>>(8-bitOff))&0xFF) | (buf[off+i]<<bitOff&0xFF));
+    	}
+    	long lValue = ByteBuffer.wrap(dBuf, 0, 8).order(ByteOrder.LITTLE_ENDIAN).getLong();
+    	value = Double.longBitsToDouble(lValue);
+    	retBitOffset += 64;
+    	cb.onDecoded(name, value, retBitOffset);
+    	
+    	return value;
+    }
+
+    private static double[] read2RawDouble(byte[] buf, int off, int bitOff, String name, DecodeCallback cb) {
+    	int retBitOffset = 0;
+    	byte[] dBuf = new byte[8];
+    	double[] values = new double[2];
+
+    	for (int j=0; j<2; j++) {
+	    	for (int i=0; i<8; i++) {
+	    		dBuf[i] = (byte) ((((buf[off+i+1]&0x00FF)>>(8-bitOff))&0xFF) | (buf[off+i]<<bitOff&0xFF));
+	    	}
+	    	long lValue = ByteBuffer.wrap(dBuf, 0, 8).order(ByteOrder.LITTLE_ENDIAN).getLong();
+	    	values[j] = Double.longBitsToDouble(lValue);
+	    	retBitOffset += 64;
+    	}
+    	cb.onDecoded(name, values, retBitOffset);
+    	
+    	return values;
+    }
+
+    private static int readRawLong(byte[] buf, int off, int bitOff, String name, DecodeCallback cb) {
+    	int retBitOffset = 0;
+    	int bitOffset = bitOff;
+    	byte[] dBuf = new byte[4];
+    	int value;
+
+    	for (int i=0; i<4; i++) {
+    		dBuf[i] = (byte) ((((buf[off+i+1]&0x00FF)>>(8-bitOff))&0xFF) | (buf[off+i]<<bitOff&0xFF));
+    	}
+    	value = ByteBuffer.wrap(dBuf, 0, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+    	retBitOffset += 32;
+    	cb.onDecoded(name, value, retBitOffset);
+    	
+    	return value;
+    }
+
     public static int readData(byte[] buf, int offset, Dwg dwg) {
         // TODO Auto-generated method stub
         return 0;
@@ -1402,8 +1693,15 @@ public class Dwg {
         // TODO Auto-generated method stub
         return 0;
     }
+    
 
-
+    private static LocalDateTime fromJulianDay(int lTdcreateDay) {
+    	double dayMs = Duration.ofDays(1).toMillis();
+    	LocalDate date = LocalDate.now().with(JulianFields.JULIAN_DAY, (long)lTdcreateDay);
+    	LocalDateTime result = date.atStartOfDay().plusHours(12).plus((long)(lTdcreateDay%1*dayMs), ChronoUnit.MILLIS);
+    	log.info("GREGORIAN DATE: " + date);
+    	return result;
+    }
 
 
 }
