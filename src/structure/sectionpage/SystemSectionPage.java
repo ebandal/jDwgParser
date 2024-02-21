@@ -1,5 +1,7 @@
 package structure.sectionpage;
 
-public class SystemSectionPage {
+import structure.sectionpage.header.SystemSectionPageHeader;
 
+public class SystemSectionPage {
+    public SystemSectionPageHeader header;
 }

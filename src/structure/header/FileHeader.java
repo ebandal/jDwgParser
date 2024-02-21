@@ -21,6 +21,7 @@ public class FileHeader {
     
     // SECTION-LOCATOR RECORDS
     public List<SectionLocator> sectionLocatorList; // R15
+    public short sectionLocatorCRC;
     
     public int security;                            // R15, R2004
     public int summarySeeker;                       // R15, R2004

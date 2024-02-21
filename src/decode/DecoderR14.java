@@ -92,6 +92,7 @@ public class DecoderR14 {
     public static int readData(RandomAccessFile raf, Dwg dwg) throws IOException, DwgParseException {
         byte[] buf = null;
         int offset = 0;
+        int maxSeeker = 0;
         
         for (SectionLocator sl: dwg.header.sectionLocatorList) {
             switch(sl.number) {
@@ -101,72 +102,68 @@ public class DecoderR14 {
                 raf.seek(sl.seeker);
                 raf.read(buf, 0, sl.size);
                 dwg.headerVariables = Dwg.readHeaderVariable(buf, offset, dwg.header.ver);
+                maxSeeker = Math.max(maxSeeker, sl.seeker+sl.size);
+                offset += sl.size;
                 break;
             case 1:
                 // class section
                 buf = new byte[sl.size];
                 raf.seek(sl.seeker);
                 raf.read(buf, 0, sl.size);
-                offset += Dwg.readClassSection(buf, offset, dwg);
+                dwg.drawingClassMap = Dwg.readClassSection(buf, offset, dwg);
+                maxSeeker = Math.max(maxSeeker, sl.seeker+sl.size);
+                offset += sl.size;
                 break;
             case 2:
                 // object map
                 buf = new byte[sl.size];
                 raf.seek(sl.seeker);
                 raf.read(buf, 0, sl.size);
-                offset += Dwg.readObjectMap(buf, offset, dwg, dwg.header.ver);
+                Dwg.read_AcDb_Handles(buf, 0, dwg, dwg.header.ver);
+                maxSeeker = Math.max(maxSeeker, sl.seeker+sl.size);
                 break;
             case 3:
                 // (C3 and later.) A special table
+                buf = new byte[sl.size];
+                raf.seek(sl.seeker);
+                raf.read(buf, 0, sl.size);
+                Dwg.read_UnknownSection(buf, 0, dwg, dwg.header.ver);
+                maxSeeker = Math.max(maxSeeker, sl.seeker+sl.size);
                 break;
             case 4:
                 // In r13-R15, points to a location where there may be data stored
                 buf = new byte[sl.size];
                 raf.seek(sl.seeker);
                 raf.read(buf, 0, sl.size);
-                offset += Dwg.readData(buf, offset, dwg);
+                Dwg.read_AcDb_Template(buf, 0, dwg);
+                maxSeeker = Math.max(maxSeeker, sl.seeker+sl.size);
+                break;
+            case 5:
+                buf = new byte[sl.size];
+                raf.seek(sl.seeker);
+                raf.read(buf, 0, sl.size);
+                maxSeeker = Math.max(maxSeeker, sl.seeker+sl.size);
                 break;
             default:
                 break;
             }
         }
         
-        // CLASS DEFINITIONS
-        
-        // TEMPLATE (R13 Only, optional)
-        
-        // PADDING (R13c3 AND LATER, 200 bytes, minutes the template section above if present)
-        
-        // IMAGE DATA (pre-R13c3)
-        
-        // OBJECT DATA
-        //   All entities, table entries, dictionary entries, etc. go in this section
-        
-        // OBJECT MAP
-        
-        // OBJECT TREE SPACE (optional)
-        
-        // TEMPLATE (R14-R15, optional)
-        
         // SECOND HEADER
+        buf = new byte[dwg.header.imageSeeker-maxSeeker];
+        raf.seek(maxSeeker);
+        raf.read(buf, 0, dwg.header.imageSeeker-maxSeeker);
+        Dwg.read_SecondFileHeader(buf, 0, dwg);
         
         // IMAGE DATA (R13c3 AND LATER)
+        if (dwg.header.ver.from(DwgVersion.R14)) {
+            int imageSize = (int) (raf.length()-raf.getFilePointer());
+            buf = new byte[imageSize];
+            raf.read(buf, 0, imageSize);
+            Dwg.read_AcDb_Preview(buf, 0, dwg);
+        }
         
         return offset;
     }
     
-    private static short calculateCRC(short seed, int recordsNum) {
-        // Not implemented yet.
-        // don't know how to calculate
-        short ret = 0;
-        
-        switch(recordsNum) {
-        case 3: ret = (short)(seed ^ 0xA598);   break;
-        case 4: ret = (short)(seed ^ 0x8101);   break;
-        case 5: ret = (short)(seed ^ 0x3CC4);   break;
-        case 6: ret = (short)(seed ^ 0x8461);   break;
-        }
-        
-        return ret;
-    }
 }
