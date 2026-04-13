@@ -15,6 +15,7 @@ public class FileHeaderFields {
     private long summaryInfoOffset;
     private long vbaProjectOffset;
     private Map<String, Long> sectionOffsets;
+    private Map<String, Long> sectionSizes;
 
     public FileHeaderFields(DwgVersion version) {
         this.version = version;
@@ -88,6 +89,14 @@ public class FileHeaderFields {
 
     public void setSectionOffsets(Map<String, Long> offsets) {
         this.sectionOffsets = offsets;
+    }
+
+    public Map<String, Long> sectionSizes() {
+        return sectionSizes;
+    }
+
+    public void setSectionSizes(Map<String, Long> sizes) {
+        this.sectionSizes = sizes;
     }
 
     @Override
