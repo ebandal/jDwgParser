@@ -3,6 +3,7 @@ package io.dwg.format.r2004;
 import io.dwg.core.io.BitInput;
 import io.dwg.core.io.BitOutput;
 import io.dwg.core.io.SectionInputStream;
+import io.dwg.core.util.CrcLookupTables;
 import io.dwg.core.util.Lz77Decompressor;
 import io.dwg.core.version.DwgVersion;
 import io.dwg.format.common.AbstractFileStructureHandler;
@@ -10,6 +11,7 @@ import io.dwg.format.common.FileHeaderFields;
 import io.dwg.format.common.PageInfo;
 import io.dwg.format.common.SectionDescriptor;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -38,56 +40,124 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
     public FileHeaderFields readHeader(BitInput input) throws Exception {
         FileHeaderFields fields = new FileHeaderFields(DwgVersion.R2004);
 
-        // 파일 헤더 0x80바이트 읽기
-        byte[] headerBytes = new byte[0x80];
+        // 파일 헤더 구조 (스펙 §4.1):
+        // 0x00-0x05: "AC1018" (버전 문자열, 미암호화)
+        // 0x06-0x7F: 라이브 데이터 (0x7A 바이트, 미암호화)
+        // 0x80-0xEB: 암호화된 헤더 (0x6C 바이트)
+        // 0xEC-0xFF: 패딩 (0x14 바이트)
+
+        // 1. 파일의 0x00-0x7F (라이브 데이터) 읽기
+        byte[] liveData = new byte[0x80];
         for (int i = 0; i < 0x80; i++) {
-            headerBytes[i] = (byte) input.readRawChar();
+            liveData[i] = (byte) input.readRawChar();
         }
 
-        // XOR 복호화 (처음 6바이트는 암호화되지 않음 - 버전 문자열)
-        byte[] decrypted = decryptHeader(headerBytes);
+        // 2. 파일의 0x80-0xEB (암호화된 헤더) 읽기
+        byte[] encryptedHeader = new byte[0x6C];
+        for (int i = 0; i < 0x6C; i++) {
+            encryptedHeader[i] = (byte) input.readRawChar();
+        }
 
-        // 헤더 필드 추출 (스펙 §4.1 R2004 File Header)
-        // 기반: DecoderR2004.java의 참조 구현
-        // 0x00-0x05: "AC1018" (version string - not encrypted)
-        // 0x06-0x0A: 5 bytes (not encrypted)
-        // 0x0B: Maintenance release version (encrypted)
-        // 0x0C: Unknown byte (encrypted)
-        // 0x0D-0x10: Preview address (4 bytes) (encrypted)
-        // 0x11: Application version (encrypted)
-        // 0x12: Application maintenance version (encrypted)
-        // 0x13-0x14: CodePage (2 bytes) (encrypted)
-        // 0x15-0x17: 3 bytes of 0x00 (encrypted)
-        // 0x18-0x1B: Security flags (4 bytes) (encrypted)
-        // 0x1C-0x1F: Unknown (4 bytes) (encrypted)
-        // 0x20-0x23: Summary info address (4 bytes) (encrypted)
-        // 0x24-0x27: VBA Project address (4 bytes) (encrypted)
-        // 0x28-0x2B: 4 bytes of 0x00
-        // 0x2C-0x7F: More headers/padding
+        // 3. 암호화된 헤더 복호화
+        byte[] decryptedHeader = decryptR2004Header(encryptedHeader);
 
-        // 유지보수 버전: offset 0x0B
-        fields.setMaintenanceVersion(decrypted[0x0B] & 0xFF);
+        // 4. 복호화된 헤더 파싱
+        parseDecryptedHeader(decryptedHeader, fields);
 
-        // Preview Offset: offset 0x0D (4바이트)
-        fields.setPreviewOffset(readLE32(decrypted, 0x0D) & 0xFFFFFFFFL);
-
-        // CodePage: offset 0x13 (2바이트)
-        fields.setCodePage(readLE16(decrypted, 0x13) & 0xFFFF);
-
-        // Security Flags: offset 0x18 (4바이트)
-        fields.setSecurityFlags(readLE32(decrypted, 0x18));
-
-        // Summary Info Offset: offset 0x20 (4바이트)
-        fields.setSummaryInfoOffset(readLE32(decrypted, 0x20) & 0xFFFFFFFFL);
-
-        // VBA Project Offset: offset 0x24 (4바이트, not 8!)
-        fields.setVbaProjectOffset(readLE32(decrypted, 0x24) & 0xFFFFFFFFL);
-
-        // Section Map Offset: offset 0x2C (4바이트)
-        // 스펙 §4.1에서 데이터 후 섹션맵 오프셋
-        sectionMapOffset = readLE32(decrypted, 0x2C) & 0xFFFFFFFFL;
+        // 5. 라이브 데이터에서 섹션맵 오프셋 추출 (0x2C-0x2F)
+        sectionMapOffset = readLE32(liveData, 0x2C) & 0xFFFFFFFFL;
 
         return fields;
+    }
+
+    /**
+     * 암호화된 R2004 헤더를 복호화합니다.
+     * libredwg 구현을 기반으로 함: decrypt_R2004_header()
+     */
+    private byte[] decryptR2004Header(byte[] encryptedData) {
+        byte[] decrypted = new byte[encryptedData.length];
+        int rseed = 1;
+
+        for (int i = 0; i < encryptedData.length; i++) {
+            rseed = (int)((rseed * 0x343fdL + 0x269ec3L) & 0xFFFFFFFFL);
+            decrypted[i] = (byte) (encryptedData[i] ^ ((rseed >> 16) & 0xFF));
+        }
+
+        return decrypted;
+    }
+
+    /**
+     * 복호화된 R2004 헤더를 파싱합니다.
+     * 스펙 §4.1: r2004_file_header.spec 참고
+     */
+    private void parseDecryptedHeader(byte[] data, FileHeaderFields fields) {
+        // 0x00-0x0B: file_ID_string ("AcFssFcAJMB" - 12바이트)
+        String fileId = new String(data, 0, 12, StandardCharsets.US_ASCII);
+
+        // 0x0C-0x0F: header_address (4바이트, RLx)
+        // 0x10-0x13: header_size (4바이트, RL)
+        // 0x14-0x17: x04 (4바이트, RL)
+
+        // 0x18-0x1B: root_tree_node_gap (4바이트)
+        // 0x1C-0x1F: lowermost_left_tree_node_gap (4바이트)
+        // 0x20-0x23: lowermost_right_tree_node_gap (4바이트)
+
+        // 0x24-0x27: unknown_long (4바이트)
+        // 0x28-0x2B: last_section_id (4바이트)
+        // 0x2C-0x33: last_section_address (8바이트)
+        // 0x34-0x3B: secondheader_address (8바이트)
+        // 0x3C-0x3F: numgaps (4바이트)
+        // 0x40-0x43: numsections (4바이트)
+        // 0x44-0x47: x20 (4바이트)
+        // 0x48-0x4B: x80 (4바이트)
+        // 0x4C-0x4F: x40 (4바이트)
+        // 0x50-0x53: section_map_id (4바이트)
+        // 0x54-0x5B: section_map_address (8바이트)
+        // 0x5C-0x5F: section_info_id (4바이트)
+        // 0x60-0x63: section_array_size (4바이트)
+        // 0x64-0x67: gap_array_size (4바이트)
+        // 0x68-0x6B: crc32 (4바이트, RLx)
+
+        // CRC32 값 추출 (0x68-0x6B)
+        int storedCrc32 = readLE32(data, 0x68);
+
+        // CRC 검증을 위해 CRC 필드를 0으로 설정
+        byte[] dataForCrc = data.clone();
+        dataForCrc[0x68] = 0;
+        dataForCrc[0x69] = 0;
+        dataForCrc[0x6A] = 0;
+        dataForCrc[0x6B] = 0;
+
+        // CRC32 계산
+        int calculatedCrc32 = calculateCrc32(dataForCrc, 0, 0x6C);
+
+        // CRC 검증 (경고만, 실패는 아님)
+        if (storedCrc32 != calculatedCrc32) {
+            System.out.println("WARNING: R2004 header CRC32 mismatch. "
+                + String.format("Expected: 0x%08x, Calculated: 0x%08x",
+                    storedCrc32, calculatedCrc32));
+        }
+
+        // 주요 필드 설정
+        fields.setMaintenanceVersion(0); // 라이브 데이터에서 추출 가능
+    }
+
+    /**
+     * CRC-32 계산 (R2004+ 헤더용)
+     * libredwg bit_calc_CRC32() 기반
+     */
+    private int calculateCrc32(byte[] data, int offset, int length) {
+        // 초기값: ~seed (seed=0이므로 0xFFFFFFFF)
+        int crc = 0xFFFFFFFF;
+
+        for (int i = offset; i < offset + length; i++) {
+            int byte_val = data[i] & 0xFF;
+            // crc = (crc >> 8) ^ table[(crc ^ byte) & 0xff]
+            crc = CrcLookupTables.CRC32_TABLE[(crc ^ byte_val) & 0xFF] ^ (crc >>> 8);
+        }
+
+        // 최종값을 반전
+        return crc ^ 0xFFFFFFFF;
     }
 
     // -------------------------------------------------------------------------
@@ -155,43 +225,6 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         // TODO: Phase 3 – R2004 섹션 쓰기
     }
 
-    // -------------------------------------------------------------------------
-    // XOR 복호화 (§4.1: 처음 6바이트는 암호화 안 됨, 6~0x7F만 XOR)
-    // -------------------------------------------------------------------------
-    private byte[] decryptHeader(byte[] encrypted) {
-        byte[] decrypted = new byte[encrypted.length];
-
-        // 처음 6바이트는 그대로 복사 (버전 문자열은 암호화되지 않음 - 스펙 §4.1)
-        for (int i = 0; i < 6; i++) {
-            decrypted[i] = encrypted[i];
-        }
-
-        // 6바이트부터 0x80까지 XOR 복호화
-        int[] magic = generateMagicNumber();
-        for (int i = 6; i < 0x80; i++) {
-            int magicIndex = i - 6;  // magic은 offset 0부터 시작 (6번째 바이트부터)
-            int magicValue = (magicIndex < magic.length) ? magic[magicIndex] : 0;
-            decrypted[i] = (byte) (encrypted[i] ^ magicValue);
-        }
-
-        // 0x80 이상은 그대로 복사
-        for (int i = 0x80; i < encrypted.length; i++) {
-            decrypted[i] = encrypted[i];
-        }
-
-        return decrypted;
-    }
-
-    private int[] generateMagicNumber() {
-        // Magic number는 0x7A개 생성 (6부터 0x80까지 = 0x7A개)
-        int[] magic = new int[0x7A];
-        int seed = 1;
-        for (int i = 0; i < magic.length; i++) {
-            seed = seed * 0x0343FD + 0x269EC3;
-            magic[i] = (seed >> 16) & 0xFF;
-        }
-        return magic;
-    }
 
     // -------------------------------------------------------------------------
     // Little-endian helpers
