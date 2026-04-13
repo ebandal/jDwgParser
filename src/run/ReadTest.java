@@ -41,8 +41,7 @@ public class ReadTest {
             h.setLevel(Level.ALL);
         }
         
-        try {
-            Stream<Path> streams = Files.walk(Paths.get("DWG"));
+        try (Stream<Path> streams = Files.walk(Paths.get("DWG"))) {
             streams.filter(p -> p.toFile().isFile())
                     .forEach(p -> {
                         Dwg dwg = new Dwg();
@@ -70,7 +69,7 @@ public class ReadTest {
     
     public static void moveToFolder(Path p, String folderName) {
         try {
-            Files.createDirectories(Paths.get(folderName), null);
+            Files.createDirectories(Paths.get(folderName));
             Path target = Paths.get(folderName, p.getFileName().toString());
             Files.move(p,  target,  StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {

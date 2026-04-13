@@ -38,7 +38,7 @@ public class FileHeader {
     public int sectionPageAmount;                   // R2004
     public int sectionPageMapId;                    // R2004
     public long sectionPageMapAddress;              // R2004
-    public int seciontMapId;                        // R2004
+    public int sectionMapId;                        // R2004 (added field)
     public int sectionPageArraySize;                // R2004
     public int gapArraySize;                        // R2004
     public int crc32;                               // R2004

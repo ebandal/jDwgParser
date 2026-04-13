@@ -18,7 +18,7 @@ public class DecoderR14 {
         int offset = off;
         
         byte[] buf = new byte[25];
-        int readLen = raf.read(buf, offset, 25-6);
+        raf.read(buf, offset, 25-6);
         
         // in R14, 5 0's and the ACADMAINTVER variable
         offset += 6;
@@ -52,9 +52,8 @@ public class DecoderR14 {
         fileHeader.sectionLocatorList = new ArrayList<SectionLocator>();
         log.finest("number of Records Set " + recordsNum);
         
-        short calCRC = 0;
         buf = new byte[25 + 9*recordsNum + 2 + 16];
-        readLen = raf.read(buf, offset, 9*recordsNum + 2+ 16);
+        raf.read(buf, offset, 9*recordsNum + 2+ 16);
         
         for (int i=0; i<recordsNum; i++) {
             SectionLocator sl = new SectionLocator();
@@ -71,10 +70,11 @@ public class DecoderR14 {
             log.finest("Record Number : " + sl.number);
             fileHeader.sectionLocatorList.add(sl);
             
-            calCRC = calculateCRC(calCRC, recordsNum);
+            // calCRC = calculateCRC(calCRC, recordsNum); // TODO: implement CRC calculation
         }
         
-        short crc = ByteBuffer.wrap(buf, offset, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+        // CRC validation: TODO uncomment when CRC calculation is implemented
+        // short crc = ByteBuffer.wrap(buf, offset, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
         offset += 2;
         /*
         if (crc != calCRC) {
@@ -110,7 +110,7 @@ public class DecoderR14 {
                 buf = new byte[sl.size];
                 raf.seek(sl.seeker);
                 raf.read(buf, 0, sl.size);
-                dwg.drawingClassMap = Dwg.readClassSection(buf, offset, dwg);
+                dwg.drawingClassMap = Dwg.readClassSection(buf, offset, dwg, dwg.header.ver);
                 maxSeeker = Math.max(maxSeeker, sl.seeker+sl.size);
                 offset += sl.size;
                 break;
@@ -156,7 +156,7 @@ public class DecoderR14 {
         Dwg.read_SecondFileHeader(buf, 0, dwg);
         
         // IMAGE DATA (R13c3 AND LATER)
-        if (dwg.header.ver.from(DwgVersion.R14)) {
+        if (dwg.header.ver.from(structure.DwgVersion.R14)) {
             int imageSize = (int) (raf.length()-raf.getFilePointer());
             buf = new byte[imageSize];
             raf.read(buf, 0, imageSize);

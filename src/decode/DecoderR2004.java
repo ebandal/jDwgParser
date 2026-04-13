@@ -29,6 +29,7 @@ public class DecoderR2004 {
         // Maintenance release version
         byte mrVer = (byte)(buf[offset]&0xFF);
         offset += 1;
+        log.finest("Maintenance release: " + mrVer);
 
         // byte 0x00, 0x01, 0x03
         offset += 1;
@@ -204,16 +205,14 @@ public class DecoderR2004 {
 
     public static int readSectionPage(RandomAccessFile raf, Dwg dwg) throws IOException, DwgParseException {
         int offset = 0;
-        int readLen = 0;
-        int fileOffset = 0;
         byte[] buf = new byte[4];
         byte[] headBuf = new byte[0x20];
 
         for (int i=0; i<dwg.header.sectionPageAmount; i++) {
             log.finest("iteration : " + i);
 
-            fileOffset = (int)raf.getFilePointer();
-            readLen = raf.read(buf, 0, 4);
+            int fileOffset = (int)raf.getFilePointer();
+            raf.read(buf, 0, 4);
             offset += 4;
             int sectionPageType = ByteBuffer.wrap(buf, 0, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
 
@@ -228,7 +227,7 @@ public class DecoderR2004 {
                 break;
             default:
                 raf.seek(fileOffset);
-                readLen = raf.read(headBuf, 0, 0x20);
+                raf.read(headBuf, 0, 0x20);
                 decryptSectionPage(headBuf, fileOffset);
 
                 sectionPageType = ByteBuffer.wrap(headBuf, 0, 4).order(ByteOrder.BIG_ENDIAN).getInt();
@@ -256,7 +255,6 @@ public class DecoderR2004 {
     }
 
     public static int readSystemSectionPage(RandomAccessFile raf, int sectionPageType, Dwg dwg) throws IOException {
-        int fileOffset = (int) raf.getFilePointer();
         int offset = 0;
 
         SystemSectionPage sectionPage = new SystemSectionPage();
@@ -267,7 +265,7 @@ public class DecoderR2004 {
             sectionPage.header.type = sectionPageType;
 
             byte[] buf = new byte[16];
-            int readLen = raf.read(buf, 0, 16);
+            raf.read(buf, 0, 16);
 
             // Decompressed size
             sectionPage.header.decompressedSize = ByteBuffer.wrap(buf, offset, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
@@ -295,8 +293,6 @@ public class DecoderR2004 {
             byte[] compBuf = new byte[sectionPage.header.compressedSize];
             int readLen = raf.read(compBuf, 0, sectionPage.header.compressedSize);
             offset += readLen;
-
-            int idx = dwg.dataSectionPageList.size();
             try (FileOutputStream fos = new FileOutputStream("R2004_Compressed_system_section.bin");) {
                 fos.write(compBuf, 0, sectionPage.header.compressedSize);
                 fos.flush();
@@ -315,7 +311,6 @@ public class DecoderR2004 {
 
     public static int readDataSectionPage(RandomAccessFile raf, Dwg dwg, byte[] buf) throws IOException, DwgParseException {
         int offset = 0;
-        int readLen = 0;
 
         if (dwg.dataSectionPageList==null) {
             dwg.dataSectionPageList = new ArrayList<>();
@@ -368,8 +363,8 @@ public class DecoderR2004 {
         {
 
             // decompress
-            byte[] comBuf = new byte[sectionPage.header.compressDataSize];
-            readLen = raf.read(compBuf, 0, sectionPage.header.compressDataSize);
+            byte[] compBuf = new byte[sectionPage.header.compressDataSize];
+            int readLen = raf.read(compBuf, 0, sectionPage.header.compressDataSize);
             offset += readLen;
 
             log.info("Decompressed Page size : " + sectionPage.header.decompressedPageSize + ", buf length : " + compBuf.length);
@@ -388,8 +383,8 @@ public class DecoderR2004 {
 
     public static byte[] decompressR18(byte[] srcBuf, int srcIndex) {
         ByteBuffer bBuffer = ByteBuffer.allocate(srcBuf.length * 2);
-        int compressedBytes = 0;
-        int compOffset = 0;
+        int compressedBytes;
+        int compOffset;
         int litCount = 0;
         AtomicInteger srcOffset = new AtomicInteger(srcIndex);
         

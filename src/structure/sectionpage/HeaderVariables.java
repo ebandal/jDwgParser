@@ -345,6 +345,10 @@ public class HeaderVariables {
     public byte         cTilemodelightsynch;        // R2007+
     public byte         cDwfframe;                  // R2007+
     public byte         cDgnframe;                  // R2007+
+    public byte         cDimalttz;                  // R2000+
+    public byte         cDimtad;                    // R2000+
+    public byte         cSortents;                  // R2004+
+    public byte         cObscuredltype;             // R2007+
     // boolean          bUnknown                    // R2007+
     public CmColor      cmInterferecolor;           // R2007+
     public HandleRef    hInterfereobjvs;            // R2007+

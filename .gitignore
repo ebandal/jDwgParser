@@ -1,3 +1,18 @@
 /bin/
 /dwg/
 /doc/
+/target/
+
+# Maven Wrapper
+.mvn/wrapper/maven-wrapper.jar
+.mvn/wrapper/MavenWrapperDownloader.java
+
+# IDE
+.classpath
+.project
+.settings/
+*.swp
+*.swo
+*~
+.DS_Store
+*.log
