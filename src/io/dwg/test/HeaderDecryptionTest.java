@@ -69,29 +69,26 @@ public class HeaderDecryptionTest {
             System.out.printf("  [0x06-0x09] Unknown1: 0x%08X\n",
                 readLE32(decrypted, 0x06));
 
-            int maint = decrypted[10] & 0xFF;
-            System.out.printf("  [0x0A] Maintenance Version: %d (0x%02X)\n", maint, maint);
+            int maint = decrypted[0x0B] & 0xFF;
+            System.out.printf("  [0x0B] Maintenance Version: %d (0x%02X)\n", maint, maint);
 
-            int codePage = readLE16(decrypted, 0x18);
-            System.out.printf("  [0x18-0x19] CodePage: %d (0x%04X)\n", codePage, codePage);
+            int codePage = readLE16(decrypted, 0x13);
+            System.out.printf("  [0x13-0x14] CodePage: %d (0x%04X)\n", codePage, codePage);
 
-            int securityFlags = readLE32(decrypted, 0x1C);
-            System.out.printf("  [0x1C-0x1F] Security Flags: 0x%08X\n", securityFlags);
+            int securityFlags = readLE32(decrypted, 0x18);
+            System.out.printf("  [0x18-0x1B] Security Flags: 0x%08X\n", securityFlags);
 
-            int summaryOffset = readLE32(decrypted, 0x24);
-            System.out.printf("  [0x24-0x27] Summary Info Offset: 0x%08X (%d)\n", summaryOffset, summaryOffset);
+            int summaryOffset = readLE32(decrypted, 0x20);
+            System.out.printf("  [0x20-0x23] Summary Info Offset: 0x%08X (%d)\n", summaryOffset, summaryOffset);
 
-            long vbaOffset = readLE64(decrypted, 0x28);
-            System.out.printf("  [0x28-0x2F] VBA Project Offset: 0x%016X (%d)\n", vbaOffset, vbaOffset);
+            int vbaOffset = readLE32(decrypted, 0x24);
+            System.out.printf("  [0x24-0x27] VBA Project Offset: 0x%08X (%d)\n", vbaOffset, vbaOffset);
 
             // R2004 전용
             if ("AC1018".equals(versionStr)) {
                 System.out.println("\n  [R2004 전용 필드]");
-                int sectionMapId = readLE32(decrypted, 0x48);
-                System.out.printf("    [0x48-0x4B] Section Map ID: 0x%08X (%d)\n", sectionMapId, sectionMapId);
-
-                int sectionMapOffset = readLE32(decrypted, 0x4C);
-                System.out.printf("    [0x4C-0x4F] Section Map Offset: 0x%08X (%d)\n", sectionMapOffset, sectionMapOffset);
+                int sectionMapOffset = readLE32(decrypted, 0x2C);
+                System.out.printf("    [0x2C-0x2F] Section Map Offset: 0x%08X (%d)\n", sectionMapOffset, sectionMapOffset);
 
                 if (sectionMapOffset > 0 && sectionMapOffset < fileBytes.length) {
                     System.out.printf("    → 유효한 offset (파일 크기: %d)\n", fileBytes.length);
@@ -126,20 +123,31 @@ public class HeaderDecryptionTest {
 
     private static byte[] decryptHeader(byte[] encrypted) {
         byte[] decrypted = new byte[encrypted.length];
-        int[] magic = generateMagicNumber();
-        int limit = Math.min(encrypted.length, magic.length);
-        for (int i = 0; i < limit; i++) {
-            decrypted[i] = (byte) (encrypted[i] ^ magic[i]);
-        }
-        // 나머지는 복사
-        for (int i = limit; i < encrypted.length; i++) {
+
+        // 처음 6바이트는 그대로 복사 (버전 문자열은 암호화되지 않음 - 스펙 §4.1)
+        for (int i = 0; i < 6; i++) {
             decrypted[i] = encrypted[i];
         }
+
+        // 6바이트부터 0x80까지 XOR 복호화
+        int[] magic = generateMagicNumber();
+        for (int i = 6; i < 0x80; i++) {
+            int magicIndex = i - 6;  // magic은 offset 0부터 시작 (6번째 바이트부터)
+            int magicValue = (magicIndex < magic.length) ? magic[magicIndex] : 0;
+            decrypted[i] = (byte) (encrypted[i] ^ magicValue);
+        }
+
+        // 0x80 이상은 그대로 복사
+        for (int i = 0x80; i < encrypted.length; i++) {
+            decrypted[i] = encrypted[i];
+        }
+
         return decrypted;
     }
 
     private static int[] generateMagicNumber() {
-        int[] magic = new int[0x6C];
+        // Magic number는 0x7A개 생성 (6부터 0x80까지 = 0x7A개)
+        int[] magic = new int[0x7A];
         int seed = 1;
         for (int i = 0; i < magic.length; i++) {
             seed = seed * 0x0343FD + 0x269EC3;

@@ -47,28 +47,45 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         // XOR 복호화 (처음 6바이트는 암호화되지 않음 - 버전 문자열)
         byte[] decrypted = decryptHeader(headerBytes);
 
-        // 헤더 필드 추출
-        // 유지보수 버전: offset 0x0A
-        fields.setMaintenanceVersion(decrypted[0x0A] & 0xFF);
+        // 헤더 필드 추출 (스펙 §4.1 R2004 File Header)
+        // 기반: DecoderR2004.java의 참조 구현
+        // 0x00-0x05: "AC1018" (version string - not encrypted)
+        // 0x06-0x0A: 5 bytes (not encrypted)
+        // 0x0B: Maintenance release version (encrypted)
+        // 0x0C: Unknown byte (encrypted)
+        // 0x0D-0x10: Preview address (4 bytes) (encrypted)
+        // 0x11: Application version (encrypted)
+        // 0x12: Application maintenance version (encrypted)
+        // 0x13-0x14: CodePage (2 bytes) (encrypted)
+        // 0x15-0x17: 3 bytes of 0x00 (encrypted)
+        // 0x18-0x1B: Security flags (4 bytes) (encrypted)
+        // 0x1C-0x1F: Unknown (4 bytes) (encrypted)
+        // 0x20-0x23: Summary info address (4 bytes) (encrypted)
+        // 0x24-0x27: VBA Project address (4 bytes) (encrypted)
+        // 0x28-0x2B: 4 bytes of 0x00
+        // 0x2C-0x7F: More headers/padding
 
-        // Preview Offset: offset 0x0C (4바이트)
-        fields.setPreviewOffset(readLE32(decrypted, 0x0C));
+        // 유지보수 버전: offset 0x0B
+        fields.setMaintenanceVersion(decrypted[0x0B] & 0xFF);
 
-        // CodePage: offset 0x18 (2바이트)
-        fields.setCodePage(readLE16(decrypted, 0x18) & 0xFFFF);
+        // Preview Offset: offset 0x0D (4바이트)
+        fields.setPreviewOffset(readLE32(decrypted, 0x0D) & 0xFFFFFFFFL);
 
-        // Security Flags: offset 0x1C (4바이트)
-        fields.setSecurityFlags(readLE32(decrypted, 0x1C));
+        // CodePage: offset 0x13 (2바이트)
+        fields.setCodePage(readLE16(decrypted, 0x13) & 0xFFFF);
 
-        // Summary Info Offset: offset 0x24 (4바이트)
-        fields.setSummaryInfoOffset(readLE32(decrypted, 0x24));
+        // Security Flags: offset 0x18 (4바이트)
+        fields.setSecurityFlags(readLE32(decrypted, 0x18));
 
-        // VBA Project Offset: offset 0x28 (8바이트)
-        fields.setVbaProjectOffset(readLE64(decrypted, 0x28));
+        // Summary Info Offset: offset 0x20 (4바이트)
+        fields.setSummaryInfoOffset(readLE32(decrypted, 0x20) & 0xFFFFFFFFL);
 
-        // Section Map Offset: offset 0x4C (4바이트)
-        // 스펙 §4.2: offset 0x4C = sectionMapOffset(RL)
-        sectionMapOffset = readLE32(decrypted, 0x4C) & 0xFFFFFFFFL;
+        // VBA Project Offset: offset 0x24 (4바이트, not 8!)
+        fields.setVbaProjectOffset(readLE32(decrypted, 0x24) & 0xFFFFFFFFL);
+
+        // Section Map Offset: offset 0x2C (4바이트)
+        // 스펙 §4.1에서 데이터 후 섹션맵 오프셋
+        sectionMapOffset = readLE32(decrypted, 0x2C) & 0xFFFFFFFFL;
 
         return fields;
     }
