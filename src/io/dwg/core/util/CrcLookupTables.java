@@ -1,10 +1,10 @@
 package io.dwg.core.util;
 
-abstract class CrcLookupTables {
+public abstract class CrcLookupTables {
     /**
      * CRC-32 테이블 (0x04C11DB7 다항식)
      */
-    static final int[] CRC32_TABLE = new int[256];
+    public static final int[] CRC32_TABLE = new int[256];
     
     /**
      * CRC-8 테이블 (DWG 스펙 기준)

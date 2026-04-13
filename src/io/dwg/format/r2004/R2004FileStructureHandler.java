@@ -56,9 +56,9 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
             throw new IllegalArgumentException("Invalid R2004 version string: " + version);
         }
 
-        // 2. 라이브 데이터 필드 파싱 (0x06-0x79)
-        byte[] liveDataFields = new byte[0x74]; // 0x79 - 0x06 + 1 = 0x74
-        for (int i = 0; i < 0x74; i++) {
+        // 2. 라이브 데이터 필드 파싱 (0x06-0x7F, 0x7A바이트)
+        byte[] liveDataFields = new byte[0x7A]; // 0x7F - 0x06 + 1 = 0x7A
+        for (int i = 0; i < 0x7A; i++) {
             liveDataFields[i] = (byte) input.readRawChar();
         }
 
@@ -115,8 +115,8 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         // 0x28-0x2B: Unknown (4 bytes)
         liveOffset += 4;
 
-        // 0x2C-0x2F: Section map offset (4 bytes, LE32) ← 중요!
-        sectionMapOffset = readLE32(liveDataFields, liveOffset) & 0xFFFFFFFFL;
+        // 0x2C-0x2F: Unknown (4 bytes) - 섹션맵 오프셋은 암호화된 헤더에서 읽음
+        liveOffset += 4;
 
         // 3. 파일의 0x7A-0xE5 (암호화된 헤더) 읽기
         byte[] encryptedHeader = new byte[0x6C];
@@ -127,7 +127,24 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         // 4. 암호화된 헤더 복호화
         byte[] decryptedHeader = decryptR2004Header(encryptedHeader);
 
-        // 5. 복호화된 헤더 CRC 검증
+        // DEBUG: 복호화된 헤더 처음 0x40 바이트 출력
+        System.out.println("[DEBUG] Decrypted header (first 0x40 bytes):");
+        for (int i = 0; i < 0x40; i += 16) {
+            System.out.printf("  0x%02X: ", i);
+            for (int j = 0; j < 16 && i + j < decryptedHeader.length; j++) {
+                System.out.printf("%02X ", decryptedHeader[i + j] & 0xFF);
+            }
+            System.out.println();
+        }
+        // DEBUG: file_ID_string 확인
+        String fileId = new String(decryptedHeader, 0, 12, StandardCharsets.US_ASCII);
+        System.out.printf("[DEBUG] file_ID_string: \"%s\" (should be \"AcFssFcAJMB\")\n", fileId);
+
+        // 5. 복호화된 헤더에서 섹션맵 오프셋 추출 (0x54-0x5B)
+        sectionMapOffset = readLE64(decryptedHeader, 0x54) & 0xFFFFFFFFFFFFFFFFL;
+        System.out.printf("[DEBUG] Section map address at 0x54-0x5B: raw=0x%016X\n", sectionMapOffset);
+
+        // 6. 복호화된 헤더 CRC 검증
         verifyCrc32(decryptedHeader);
 
         return fields;

@@ -19,7 +19,9 @@ public class R2004SectionMap {
         R2004SectionMap map = new R2004SectionMap();
 
         // pageMapOffset 위치로 이동
-        input.seek(pageMapOffset * 8);
+        // libredwg: section_map_address = section_map_address + 0x100
+        long actualOffset = (pageMapOffset + 0x100) * 8;  // 비트 단위로 변환
+        input.seek(actualOffset);
 
         // 섹션 수 (RL)
         int sectionCount = input.readRawLong();

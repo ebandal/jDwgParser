@@ -83,10 +83,27 @@ public class DwgFileStructureDebugTest {
                 input = new ByteBufferBitInput(fileBytes);  // Reset
                 handler.readHeader(input);
 
+                System.out.println("\n  Section Map Offset: 0x" + Long.toHexString(header.summaryInfoOffset()));
+
                 var sections = handler.readSections(input, header);
                 System.out.printf("✓ 섹션 추출 성공: %d개\n", sections.size());
                 for (String sectionName : sections.keySet()) {
-                    System.out.printf("  - %s\n", sectionName);
+                    var section = sections.get(sectionName);
+                    byte[] sectionData = section.rawBytes();
+                    System.out.printf("  - \"%s\": %d bytes (0x%04X)\n",
+                        sectionName.isEmpty() ? "(empty)" : sectionName,
+                        sectionData.length, sectionData.length);
+                    // 처음 0x20 바이트의 hex 출력
+                    if (sectionData.length > 0) {
+                        System.out.print("    First 32 bytes: ");
+                        for (int i = 0; i < Math.min(32, sectionData.length); i++) {
+                            System.out.printf("%02X ", sectionData[i] & 0xFF);
+                            if ((i + 1) % 16 == 0) System.out.print("\n                  ");
+                        }
+                        System.out.println();
+                    } else {
+                        System.out.println("    (no data)");
+                    }
                 }
             } catch (Exception e) {
                 System.out.printf("✗ 섹션 추출 실패: %s\n", e.getMessage());
@@ -94,7 +111,7 @@ public class DwgFileStructureDebugTest {
 
                 // 스택 트레이스 (제한)
                 StackTraceElement[] stackTrace = e.getStackTrace();
-                for (int i = 0; i < Math.min(3, stackTrace.length); i++) {
+                for (int i = 0; i < Math.min(5, stackTrace.length); i++) {
                     StackTraceElement ste = stackTrace[i];
                     System.out.printf("    at %s.%s (%s:%d)\n",
                         ste.getClassName(), ste.getMethodName(),

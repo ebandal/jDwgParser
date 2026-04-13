@@ -29,10 +29,16 @@ public class R2004DataSectionDescriptor {
 
         int pageCount = input.readRawLong();
 
+        // DEBUG
+        System.out.printf("[DEBUG] Section: \"%s\" (pageCount=%d, compSize=0x%X, decompSize=0x%X, compress=%d)\n",
+            name.isEmpty() ? "(empty)" : name, pageCount, compressedSize, uncompressedSize, compressionType);
+
         List<PageInfo> pages = new ArrayList<>();
         for (int i = 0; i < pageCount; i++) {
             R2004PageDescriptor pd = R2004PageDescriptor.read(input);
             pages.add(new PageInfo(pd.pageOffset(), pd.dataSize(), pd.pageId()));
+            System.out.printf("  [Page %d] offset=0x%X, size=0x%X, id=0x%X\n",
+                i, pd.pageOffset(), pd.dataSize(), pd.pageId());
         }
 
         SectionDescriptor desc = new SectionDescriptor(name);
