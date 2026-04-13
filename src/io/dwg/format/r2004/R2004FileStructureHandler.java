@@ -40,32 +40,95 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
     public FileHeaderFields readHeader(BitInput input) throws Exception {
         FileHeaderFields fields = new FileHeaderFields(DwgVersion.R2004);
 
-        // 파일 헤더 구조 (스펙 §4.1):
-        // 0x00-0x05: "AC1018" (버전 문자열, 미암호화)
-        // 0x06-0x7F: 라이브 데이터 (0x7A 바이트, 미암호화)
-        // 0x80-0xEB: 암호화된 헤더 (0x6C 바이트)
-        // 0xEC-0xFF: 패딩 (0x14 바이트)
+        // 파일 헤더 구조 (스펙 §4.1, DecoderR2004 기반):
+        // 0x00-0x05: "AC1018" (버전 문자열)
+        // 0x06-0x79: 라이브 데이터 필드들 (미암호화)
+        // 0x7A-0xE5: 암호화된 헤더 (0x6C 바이트)
+        // 0xE6-0xFF: 패딩
 
-        // 1. 파일의 0x00-0x7F (라이브 데이터) 읽기
-        byte[] liveData = new byte[0x80];
-        for (int i = 0; i < 0x80; i++) {
-            liveData[i] = (byte) input.readRawChar();
+        // 1. 버전 문자열 (0x00-0x05) 검증
+        byte[] versionBytes = new byte[6];
+        for (int i = 0; i < 6; i++) {
+            versionBytes[i] = (byte) input.readRawChar();
+        }
+        String version = new String(versionBytes, StandardCharsets.US_ASCII);
+        if (!version.equals("AC1018")) {
+            throw new IllegalArgumentException("Invalid R2004 version string: " + version);
         }
 
-        // 2. 파일의 0x80-0xEB (암호화된 헤더) 읽기
+        // 2. 라이브 데이터 필드 파싱 (0x06-0x79)
+        byte[] liveDataFields = new byte[0x74]; // 0x79 - 0x06 + 1 = 0x74
+        for (int i = 0; i < 0x74; i++) {
+            liveDataFields[i] = (byte) input.readRawChar();
+        }
+
+        // 라이브 데이터 필드 파싱 (DecoderR2004 참조)
+        int liveOffset = 0;
+
+        // 0x06-0x0A: 5 bytes (unknown)
+        liveOffset += 5;
+
+        // 0x0B: Maintenance release version
+        int maintenanceVersion = liveDataFields[liveOffset++] & 0xFF;
+        fields.setMaintenanceVersion(maintenanceVersion);
+
+        // 0x0C: Unknown
+        liveOffset += 1;
+
+        // 0x0D-0x10: Preview address (4 bytes, LE32)
+        int previewOffset = readLE32(liveDataFields, liveOffset);
+        fields.setPreviewOffset(previewOffset & 0xFFFFFFFFL);
+        liveOffset += 4;
+
+        // 0x11: Application version
+        liveOffset += 1;
+
+        // 0x12: Application maintenance version
+        liveOffset += 1;
+
+        // 0x13-0x14: Code page (2 bytes, LE16)
+        int codePage = readLE16(liveDataFields, liveOffset) & 0xFFFF;
+        fields.setCodePage(codePage);
+        liveOffset += 2;
+
+        // 0x15-0x17: 3 bytes (unknown)
+        liveOffset += 3;
+
+        // 0x18-0x1B: Security flags (4 bytes, LE32)
+        int securityFlags = readLE32(liveDataFields, liveOffset);
+        fields.setSecurityFlags(securityFlags);
+        liveOffset += 4;
+
+        // 0x1C-0x1F: Unknown (4 bytes)
+        liveOffset += 4;
+
+        // 0x20-0x23: Summary info offset (4 bytes, LE32)
+        int summaryInfoOffset = readLE32(liveDataFields, liveOffset);
+        fields.setSummaryInfoOffset(summaryInfoOffset & 0xFFFFFFFFL);
+        liveOffset += 4;
+
+        // 0x24-0x27: VBA project offset (4 bytes, LE32)
+        int vbaOffset = readLE32(liveDataFields, liveOffset);
+        fields.setVbaProjectOffset(vbaOffset & 0xFFFFFFFFL);
+        liveOffset += 4;
+
+        // 0x28-0x2B: Unknown (4 bytes)
+        liveOffset += 4;
+
+        // 0x2C-0x2F: Section map offset (4 bytes, LE32) ← 중요!
+        sectionMapOffset = readLE32(liveDataFields, liveOffset) & 0xFFFFFFFFL;
+
+        // 3. 파일의 0x7A-0xE5 (암호화된 헤더) 읽기
         byte[] encryptedHeader = new byte[0x6C];
         for (int i = 0; i < 0x6C; i++) {
             encryptedHeader[i] = (byte) input.readRawChar();
         }
 
-        // 3. 암호화된 헤더 복호화
+        // 4. 암호화된 헤더 복호화
         byte[] decryptedHeader = decryptR2004Header(encryptedHeader);
 
-        // 4. 복호화된 헤더 파싱
-        parseDecryptedHeader(decryptedHeader, fields);
-
-        // 5. 라이브 데이터에서 섹션맵 오프셋 추출 (0x2C-0x2F)
-        sectionMapOffset = readLE32(liveData, 0x2C) & 0xFFFFFFFFL;
+        // 5. 복호화된 헤더 CRC 검증
+        verifyCrc32(decryptedHeader);
 
         return fields;
     }
@@ -87,42 +150,15 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
     }
 
     /**
-     * 복호화된 R2004 헤더를 파싱합니다.
+     * 복호화된 R2004 헤더의 CRC32를 검증합니다.
      * 스펙 §4.1: r2004_file_header.spec 참고
      */
-    private void parseDecryptedHeader(byte[] data, FileHeaderFields fields) {
-        // 0x00-0x0B: file_ID_string ("AcFssFcAJMB" - 12바이트)
-        String fileId = new String(data, 0, 12, StandardCharsets.US_ASCII);
-
-        // 0x0C-0x0F: header_address (4바이트, RLx)
-        // 0x10-0x13: header_size (4바이트, RL)
-        // 0x14-0x17: x04 (4바이트, RL)
-
-        // 0x18-0x1B: root_tree_node_gap (4바이트)
-        // 0x1C-0x1F: lowermost_left_tree_node_gap (4바이트)
-        // 0x20-0x23: lowermost_right_tree_node_gap (4바이트)
-
-        // 0x24-0x27: unknown_long (4바이트)
-        // 0x28-0x2B: last_section_id (4바이트)
-        // 0x2C-0x33: last_section_address (8바이트)
-        // 0x34-0x3B: secondheader_address (8바이트)
-        // 0x3C-0x3F: numgaps (4바이트)
-        // 0x40-0x43: numsections (4바이트)
-        // 0x44-0x47: x20 (4바이트)
-        // 0x48-0x4B: x80 (4바이트)
-        // 0x4C-0x4F: x40 (4바이트)
-        // 0x50-0x53: section_map_id (4바이트)
-        // 0x54-0x5B: section_map_address (8바이트)
-        // 0x5C-0x5F: section_info_id (4바이트)
-        // 0x60-0x63: section_array_size (4바이트)
-        // 0x64-0x67: gap_array_size (4바이트)
-        // 0x68-0x6B: crc32 (4바이트, RLx)
-
+    private void verifyCrc32(byte[] decryptedHeader) {
         // CRC32 값 추출 (0x68-0x6B)
-        int storedCrc32 = readLE32(data, 0x68);
+        int storedCrc32 = readLE32(decryptedHeader, 0x68);
 
         // CRC 검증을 위해 CRC 필드를 0으로 설정
-        byte[] dataForCrc = data.clone();
+        byte[] dataForCrc = decryptedHeader.clone();
         dataForCrc[0x68] = 0;
         dataForCrc[0x69] = 0;
         dataForCrc[0x6A] = 0;
@@ -134,12 +170,9 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         // CRC 검증 (경고만, 실패는 아님)
         if (storedCrc32 != calculatedCrc32) {
             System.out.println("WARNING: R2004 header CRC32 mismatch. "
-                + String.format("Expected: 0x%08x, Calculated: 0x%08x",
+                + String.format("Stored: 0x%08x, Calculated: 0x%08x",
                     storedCrc32, calculatedCrc32));
         }
-
-        // 주요 필드 설정
-        fields.setMaintenanceVersion(0); // 라이브 데이터에서 추출 가능
     }
 
     /**
