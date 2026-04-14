@@ -36,6 +36,13 @@ public class ObjectTypeResolver {
         resolver.register(new EllipseObjectReader());
         resolver.register(new PointObjectReader());
         resolver.register(new LwPolylineObjectReader());
+        resolver.register(new RayObjectReader());
+        resolver.register(new XLineObjectReader());
+        resolver.register(new SolidObjectReader());
+        resolver.register(new MTextObjectReader());
+        resolver.register(new Face3DObjectReader());
+        resolver.register(new TraceObjectReader());
+        resolver.register(new SplineObjectReader());
         return resolver;
     }
 }
