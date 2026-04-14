@@ -124,21 +124,67 @@ public class R13FileStructureHandler extends AbstractFileStructureHandler {
                 // 파일의 offset 위치로 이동 (바이트 단위를 비트 단위로 변환)
                 input.seek(offset * 8);
 
-                // 섹션 데이터를 읽음 (지정된 크기만큼)
-                byte[] sectionData = new byte[(int) size];
-                for (int i = 0; i < size; i++) {
+                // R13 섹션 구조:
+                // [Section Start Sentinel: 16 bytes]
+                // [Actual section data]
+                // [Section End Sentinel: 16 bytes]
+                // [CRC: 2 bytes]
+                // 총 크기 = 16 + data + 16 + 2
+
+                // 시작 sentinel 읽기 (16 바이트)
+                byte[] startSentinel = new byte[16];
+                for (int i = 0; i < 16; i++) {
+                    startSentinel[i] = (byte) input.readRawChar();
+                }
+                System.out.printf("[DEBUG] R13: Section '%s' start sentinel: %s\n",
+                    sectionName, formatHex(startSentinel, 0, Math.min(16, startSentinel.length)));
+
+                // 실제 데이터 크기 = 전체 크기 - sentinel(16) - sentinel(16) - CRC(2)
+                long dataSize = size - 34;
+                if (dataSize < 0) {
+                    System.err.printf("[DEBUG] R13: Invalid section size for '%s': %d\n", sectionName, size);
+                    continue;
+                }
+
+                // 섹션 데이터를 읽음
+                byte[] sectionData = new byte[(int) dataSize];
+                for (int i = 0; i < dataSize; i++) {
                     sectionData[i] = (byte) input.readRawChar();
                 }
 
+                // 끝 sentinel 읽기 (16 바이트)
+                byte[] endSentinel = new byte[16];
+                for (int i = 0; i < 16; i++) {
+                    endSentinel[i] = (byte) input.readRawChar();
+                }
+                System.out.printf("[DEBUG] R13: Section '%s' end sentinel: %s\n",
+                    sectionName, formatHex(endSentinel, 0, Math.min(16, endSentinel.length)));
+
+                // CRC 읽기 (2 바이트)
+                short crc = input.readRawShort();
+                System.out.printf("[DEBUG] R13: Section '%s' CRC: 0x%04X\n", sectionName, crc & 0xFFFF);
+
                 sections.put(sectionName, new SectionInputStream(sectionData, sectionName));
-                System.out.printf("[DEBUG] R13: Section '%s' read: %d bytes\n", sectionName, sectionData.length);
+                System.out.printf("[DEBUG] R13: Section '%s' read: %d bytes of actual data\n", sectionName, sectionData.length);
 
             } catch (Exception e) {
                 System.err.printf("[DEBUG] R13: Failed to read section '%s': %s\n", sectionName, e.getMessage());
+                e.printStackTrace();
             }
         }
 
         return sections;
+    }
+
+    /**
+     * 바이트 배열을 16진수 문자열로 변환 (디버그용)
+     */
+    private String formatHex(byte[] data, int offset, int length) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = offset; i < offset + length && i < data.length; i++) {
+            sb.append(String.format("%02X ", data[i] & 0xFF));
+        }
+        return sb.toString();
     }
 
     @Override
