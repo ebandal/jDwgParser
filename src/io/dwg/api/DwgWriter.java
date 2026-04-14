@@ -6,6 +6,7 @@ import io.dwg.core.version.DwgVersion;
 import io.dwg.format.common.DwgFileStructureHandler;
 import io.dwg.format.common.DwgFileStructureHandlerFactory;
 import io.dwg.format.common.FileHeaderFields;
+import io.dwg.sections.header.HeaderSectionWriter;
 import io.dwg.sections.objects.ObjectsSectionWriter;
 
 import java.io.OutputStream;
@@ -48,6 +49,13 @@ public class DwgWriter {
 
         // 섹션 직렬화
         Map<String, byte[]> sections = new HashMap<>();
+
+        // Header 섹션 작성
+        if (document.header() != null) {
+            HeaderSectionWriter headerWriter = new HeaderSectionWriter();
+            sections.put(headerWriter.sectionName(),
+                headerWriter.write(document.header(), version).toByteArray());
+        }
 
         // Objects 섹션 작성
         ObjectsSectionWriter objectsWriter = new ObjectsSectionWriter();
