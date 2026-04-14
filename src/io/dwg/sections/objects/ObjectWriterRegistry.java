@@ -41,6 +41,8 @@ public class ObjectWriterRegistry {
         registry.register(new XLineObjectWriter());
         registry.register(new LwPolylineObjectWriter());
         registry.register(new ShapeObjectWriter());
+        registry.register(new MTextObjectWriter());
+        registry.register(new AttribObjectWriter());
         return registry;
     }
 }
