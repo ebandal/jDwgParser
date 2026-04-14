@@ -47,6 +47,16 @@ public class ObjectWriterRegistry {
         registry.register(new MinsertObjectWriter());
         registry.register(new BlockHeaderObjectWriter());
         registry.register(new BlockEndObjectWriter());
+        registry.register(new SplineObjectWriter());
+        registry.register(new HatchObjectWriter());
+        registry.register(new LeaderObjectWriter());
+        registry.register(new DimensionLinearObjectWriter());
+        registry.register(new DimensionAlignedObjectWriter());
+        registry.register(new DimensionOrdinateObjectWriter());
+        registry.register(new DimensionRadiusObjectWriter());
+        registry.register(new DimensionDiameterObjectWriter());
+        registry.register(new DimensionAng3ptObjectWriter());
+        registry.register(new DimensionAng2lnObjectWriter());
         return registry;
     }
 }
