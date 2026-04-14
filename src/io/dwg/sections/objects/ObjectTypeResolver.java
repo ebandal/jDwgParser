@@ -43,6 +43,9 @@ public class ObjectTypeResolver {
         resolver.register(new Face3DObjectReader());
         resolver.register(new TraceObjectReader());
         resolver.register(new SplineObjectReader());
+        resolver.register(new HatchObjectReader());
+        resolver.register(new LeaderObjectReader());
+        resolver.register(new AttribObjectReader());
         return resolver;
     }
 }
