@@ -46,6 +46,9 @@ public class ObjectTypeResolver {
         resolver.register(new HatchObjectReader());
         resolver.register(new LeaderObjectReader());
         resolver.register(new AttribObjectReader());
+        resolver.register(new MLineObjectReader());
+        resolver.register(new ViewportObjectReader());
+        resolver.register(new ShapeObjectReader());
         return resolver;
     }
 }
