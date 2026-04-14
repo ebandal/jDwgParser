@@ -255,12 +255,12 @@ public class ReedSolomonDecoder {
 
     /**
      * 다항식 평가 (Horner's method)
+     * Fixed: 원래 구현에서 poly[deg]가 첫 반복에서 두 번 사용되는 버그 수정
      */
     private static int evaluate(byte[] poly, int deg, int x) {
-        int y = poly[deg] & 0xFF;
-        while (deg >= 0) {
-            y = f256Multiply(x, y) ^ (poly[deg] & 0xFF);
-            deg--;
+        int y = 0;
+        for (int i = deg; i >= 0; i--) {
+            y = f256Multiply(x, y) ^ (poly[i] & 0xFF);
         }
         return y;
     }
