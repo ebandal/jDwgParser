@@ -33,6 +33,9 @@ public class ObjectTypeResolver {
         resolver.register(new TextObjectReader());
         resolver.register(new InsertObjectReader());
         resolver.register(new LayerObjectReader());
+        resolver.register(new EllipseObjectReader());
+        resolver.register(new PointObjectReader());
+        resolver.register(new LwPolylineObjectReader());
         return resolver;
     }
 }
