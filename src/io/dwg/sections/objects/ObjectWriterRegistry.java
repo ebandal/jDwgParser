@@ -26,13 +26,19 @@ public class ObjectWriterRegistry {
         registry.register(new CircleObjectWriter());
         registry.register(new ArcObjectWriter());
         registry.register(new TextObjectWriter());
+        registry.register(new InsertObjectWriter());
         registry.register(new PointObjectWriter());
         registry.register(new EllipseObjectWriter());
+        registry.register(new SolidObjectWriter());
+        registry.register(new TraceObjectWriter());
+        registry.register(new Face3DObjectWriter());
         registry.register(new SeqEndObjectWriter());
         registry.register(new Vertex2DObjectWriter());
         registry.register(new Vertex3DObjectWriter());
         registry.register(new Polyline2DObjectWriter());
         registry.register(new Polyline3DObjectWriter());
+        registry.register(new RayObjectWriter());
+        registry.register(new XLineObjectWriter());
         return registry;
     }
 }
