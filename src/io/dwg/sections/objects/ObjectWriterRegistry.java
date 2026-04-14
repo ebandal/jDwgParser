@@ -43,6 +43,10 @@ public class ObjectWriterRegistry {
         registry.register(new ShapeObjectWriter());
         registry.register(new MTextObjectWriter());
         registry.register(new AttribObjectWriter());
+        registry.register(new AttdefObjectWriter());
+        registry.register(new MinsertObjectWriter());
+        registry.register(new BlockHeaderObjectWriter());
+        registry.register(new BlockEndObjectWriter());
         return registry;
     }
 }
