@@ -70,6 +70,9 @@ public class ObjectTypeResolver {
         resolver.register(new MLineObjectReader());
         resolver.register(new LwPolylineObjectReader());
         resolver.register(new HatchObjectReader());
+        resolver.register(new BlockHeaderObjectReader());
+        resolver.register(new BlockEndObjectReader());
+        resolver.register(new Ole2frameObjectReader());
         return resolver;
     }
 }
