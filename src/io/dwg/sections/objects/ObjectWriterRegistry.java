@@ -57,6 +57,21 @@ public class ObjectWriterRegistry {
         registry.register(new DimensionDiameterObjectWriter());
         registry.register(new DimensionAng3ptObjectWriter());
         registry.register(new DimensionAng2lnObjectWriter());
+        registry.register(new VertexMeshObjectWriter());
+        registry.register(new VertexPfaceObjectWriter());
+        registry.register(new VertexPfaceFaceObjectWriter());
+        registry.register(new PolylineMeshObjectWriter());
+        registry.register(new PolylinePfaceObjectWriter());
+        registry.register(new ViewportObjectWriter());
+        registry.register(new RegionObjectWriter());
+        registry.register(new Solid3DObjectWriter());
+        registry.register(new BodyObjectWriter());
+        registry.register(new ToleranceObjectWriter());
+        registry.register(new MLineObjectWriter());
+        registry.register(new DictionaryObjectWriter());
+        registry.register(new GroupObjectWriter());
+        registry.register(new Ole2frameObjectWriter());
+        registry.register(new XrecordObjectWriter());
         return registry;
     }
 }
