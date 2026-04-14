@@ -73,6 +73,9 @@ public class ObjectTypeResolver {
         resolver.register(new BlockHeaderObjectReader());
         resolver.register(new BlockEndObjectReader());
         resolver.register(new Ole2frameObjectReader());
+        resolver.register(new DictionaryObjectReader());
+        resolver.register(new GroupObjectReader());
+        resolver.register(new XrecordObjectReader());
         return resolver;
     }
 }
