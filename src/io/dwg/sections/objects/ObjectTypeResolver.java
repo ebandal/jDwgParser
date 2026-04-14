@@ -27,6 +27,11 @@ public class ObjectTypeResolver {
 
     public static ObjectTypeResolver defaultResolver(DwgClassRegistry classReg) {
         ObjectTypeResolver resolver = new ObjectTypeResolver();
+        resolver.register(new SeqEndObjectReader());
+        resolver.register(new Vertex2DObjectReader());
+        resolver.register(new Vertex3DObjectReader());
+        resolver.register(new Polyline2DObjectReader());
+        resolver.register(new Polyline3DObjectReader());
         resolver.register(new LineObjectReader());
         resolver.register(new CircleObjectReader());
         resolver.register(new ArcObjectReader());
