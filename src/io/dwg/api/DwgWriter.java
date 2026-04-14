@@ -7,6 +7,7 @@ import io.dwg.format.common.DwgFileStructureHandler;
 import io.dwg.format.common.DwgFileStructureHandlerFactory;
 import io.dwg.format.common.FileHeaderFields;
 import io.dwg.sections.classes.ClassesSectionWriter;
+import io.dwg.sections.handles.HandlesSectionWriter;
 import io.dwg.sections.header.HeaderSectionWriter;
 import io.dwg.sections.objects.ObjectsSectionWriter;
 
@@ -63,6 +64,13 @@ public class DwgWriter {
             ClassesSectionWriter classesWriter = new ClassesSectionWriter();
             sections.put(classesWriter.sectionName(),
                 classesWriter.write(document.customClasses(), version).toByteArray());
+        }
+
+        // Handles 섹션 작성
+        if (document.handleRegistry() != null) {
+            HandlesSectionWriter handlesWriter = new HandlesSectionWriter();
+            sections.put(handlesWriter.sectionName(),
+                handlesWriter.write(document.handleRegistry(), version).toByteArray());
         }
 
         // Objects 섹션 작성
