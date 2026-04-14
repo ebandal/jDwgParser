@@ -39,6 +39,8 @@ public class ObjectWriterRegistry {
         registry.register(new Polyline3DObjectWriter());
         registry.register(new RayObjectWriter());
         registry.register(new XLineObjectWriter());
+        registry.register(new LwPolylineObjectWriter());
+        registry.register(new ShapeObjectWriter());
         return registry;
     }
 }
