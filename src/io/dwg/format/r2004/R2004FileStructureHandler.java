@@ -262,17 +262,57 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
     }
 
     // -------------------------------------------------------------------------
-    // writeHeader / writeSections (Phase 3)
+    // writeHeader / writeSections
     // -------------------------------------------------------------------------
     @Override
     public void writeHeader(BitOutput output, FileHeaderFields header) throws Exception {
-        // TODO: Phase 3 – R2004 헤더 쓰기
+        // R2004 헤더 쓰기
+        System.out.println("[DEBUG] R2004.writeHeader: start, output position=" + output.position());
+
+        // Version string (6 bytes)
+        for (byte b : "AC1018".getBytes(java.nio.charset.StandardCharsets.US_ASCII)) {
+            output.writeRawChar(b & 0xFF);
+        }
+        System.out.println("[DEBUG] R2004.writeHeader: after version, output position=" + output.position());
+
+        // Live data fields (0x06-0x7F) - placeholder
+        // 라이브 데이터 필드는 최소한 존재해야 함
+        // 실제 구현에서는 document 정보를 인코딩해야 함
+        byte[] liveData = new byte[0x7A]; // 0x7F - 0x06 + 1
+        for (int i = 0; i < liveData.length; i++) {
+            output.writeRawChar(liveData[i] & 0xFF);
+        }
+
+        // Encrypted header (0x7A-0xE5) - placeholder
+        byte[] encryptedData = new byte[0x6C]; // Encrypted portion
+        for (int i = 0; i < encryptedData.length; i++) {
+            output.writeRawChar(encryptedData[i] & 0xFF);
+        }
+
+        // Padding (0xE6-0xFF)
+        for (int i = 0; i < 0x1A; i++) {
+            output.writeRawChar(0);
+        }
     }
 
     @Override
     public void writeSections(BitOutput output, Map<String, byte[]> sections,
             FileHeaderFields header) throws Exception {
-        // TODO: Phase 3 – R2004 섹션 쓰기
+        // R2004 섹션 쓰기
+        // 섹션 맵 오프셋은 파일 끝에 있음
+        // 각 섹션은 순서대로 작성됨
+
+        // 단순 구현: 섹션을 그대로 작성 (LZ77 압축 제외)
+        for (String sectionName : sections.keySet()) {
+            byte[] sectionData = sections.get(sectionName);
+            if (sectionData != null) {
+                for (byte b : sectionData) {
+                    output.writeRawChar(b & 0xFF);
+                }
+            }
+        }
+
+        // TODO: Phase 3 – 섹션 맵 작성, 암호화 처리, LZ77 압축
     }
 
 

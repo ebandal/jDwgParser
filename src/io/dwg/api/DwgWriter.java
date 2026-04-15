@@ -78,10 +78,20 @@ public class DwgWriter {
         sections.put(objectsWriter.sectionName(),
             objectsWriter.write(document.objectMap(), version).toByteArray());
 
+        System.out.println("[DEBUG] DwgWriter: version=" + version + ", sections=" + sections.size());
+        for (String sectionName : sections.keySet()) {
+            byte[] data = sections.get(sectionName);
+            System.out.println("  [DEBUG] Section '" + sectionName + "': " + data.length + " bytes");
+        }
+
         BitOutput output = new ByteBufferBitOutput();
         handler.writeHeader(output, headerFields);
+        System.out.println("[DEBUG] After writeHeader: output position=" + output.position());
         handler.writeSections(output, sections, headerFields);
+        System.out.println("[DEBUG] After writeSections: output position=" + output.position());
 
-        return output.toByteArray();
+        byte[] result = output.toByteArray();
+        System.out.println("[DEBUG] Final output: " + result.length + " bytes");
+        return result;
     }
 }
