@@ -30,7 +30,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
 
     @Override
     public boolean supports(DwgVersion version) {
-        return version == DwgVersion.R2000 || version == DwgVersion.R2004;
+        return version == DwgVersion.R2004;
     }
 
     // -------------------------------------------------------------------------
