@@ -15,12 +15,11 @@ public class R2004SectionMap {
 
     private R2004SectionMap() {}
 
-    public static R2004SectionMap read(BitInput input, long pageMapOffset) throws Exception {
+    public static R2004SectionMap read(BitInput input, long sectionMapByteOffset) throws Exception {
         R2004SectionMap map = new R2004SectionMap();
 
-        // pageMapOffset 위치로 이동
-        // libredwg: section_map_address = section_map_address + 0x100
-        long actualOffset = (pageMapOffset + 0x100) * 8;  // 비트 단위로 변환
+        // sectionMapByteOffset is in bytes, convert to bits
+        long actualOffset = sectionMapByteOffset * 8;
         input.seek(actualOffset);
 
         // 섹션 수 (RL)
