@@ -26,6 +26,8 @@ public class DwgRoundTripTest {
         testWriteEmptyDocument();
         testVersionPreservation();
         testR2007Write();
+        testR13Write();
+        testR14Write();
         System.out.println("\n✓ All round-trip tests completed");
     }
 
@@ -221,6 +223,82 @@ public class DwgRoundTripTest {
         } catch (Exception e) {
             System.out.println("✗ R2007 write error: " + e.getMessage());
             // e.printStackTrace();  // Suppress stack trace for cleaner output
+        }
+    }
+
+    public static void testR13Write() throws Exception {
+        System.out.println("\n=== Test 6: R13 Write ===");
+
+        // Create empty R13 document
+        DwgDocument doc = new DwgDocument(DwgVersion.R13);
+
+        Files.createDirectories(OUTPUT_DIR);
+        Path outputFile = OUTPUT_DIR.resolve("r13-empty-output.dwg");
+
+        try {
+            DwgWriter writer = DwgWriter.forVersion(DwgVersion.R13);
+            writer.write(doc, outputFile);
+            System.out.println("✓ R13 file write successful");
+
+            long fileSize = Files.size(outputFile);
+            System.out.println("  Output file size: " + fileSize + " bytes");
+
+            if (fileSize > 100) {
+                System.out.println("✓ Output file has valid size");
+            } else {
+                System.out.println("✗ Output file too small");
+            }
+
+            // Verify header signature
+            byte[] allBytes = java.nio.file.Files.readAllBytes(outputFile);
+            if (allBytes.length >= 6) {
+                String version = new String(allBytes, 0, 6, java.nio.charset.StandardCharsets.US_ASCII);
+                if (version.equals("AC1012")) {
+                    System.out.println("✓ R13 version string correct");
+                } else {
+                    System.out.println("✗ Wrong version string: " + version);
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("✗ R13 write error: " + e.getMessage());
+        }
+    }
+
+    public static void testR14Write() throws Exception {
+        System.out.println("\n=== Test 7: R14 Write ===");
+
+        // Create empty R14 document
+        DwgDocument doc = new DwgDocument(DwgVersion.R14);
+
+        Files.createDirectories(OUTPUT_DIR);
+        Path outputFile = OUTPUT_DIR.resolve("r14-empty-output.dwg");
+
+        try {
+            DwgWriter writer = DwgWriter.forVersion(DwgVersion.R14);
+            writer.write(doc, outputFile);
+            System.out.println("✓ R14 file write successful");
+
+            long fileSize = Files.size(outputFile);
+            System.out.println("  Output file size: " + fileSize + " bytes");
+
+            if (fileSize > 100) {
+                System.out.println("✓ Output file has valid size");
+            } else {
+                System.out.println("✗ Output file too small");
+            }
+
+            // Verify header signature
+            byte[] allBytes = java.nio.file.Files.readAllBytes(outputFile);
+            if (allBytes.length >= 6) {
+                String version = new String(allBytes, 0, 6, java.nio.charset.StandardCharsets.US_ASCII);
+                if (version.equals("AC1014")) {
+                    System.out.println("✓ R14 version string correct");
+                } else {
+                    System.out.println("✗ Wrong version string: " + version);
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("✗ R14 write error: " + e.getMessage());
         }
     }
 }

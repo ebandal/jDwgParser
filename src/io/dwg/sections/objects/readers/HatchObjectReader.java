@@ -25,7 +25,7 @@ public class HatchObjectReader implements ObjectReader {
         hatch.setPatternName(patternName);
 
         // 해치 스타일
-        int hatchStyle = r.getInput().readRawShort();
+        int hatchStyle = r.readBitShort();
         hatch.setHatchStyle(hatchStyle);
 
         // 해치 각도 (라디안)
@@ -37,7 +37,7 @@ public class HatchObjectReader implements ObjectReader {
         hatch.setScale(scale);
 
         // 경계 경로 개수
-        int numBoundaryPaths = r.getInput().readRawShort();
+        int numBoundaryPaths = r.readBitShort();
         hatch.setNumBoundaryPaths(numBoundaryPaths);
 
         // 경계 경로는 복잡하므로 개수만 저장하고 skip

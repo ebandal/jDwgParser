@@ -30,11 +30,11 @@ public class LeaderObjectReader implements ObjectReader {
         leader.setStyleName(styleName);
 
         // 화살표 모양
-        int arrow = r.getInput().readRawShort();
+        int arrow = r.readBitShort();
         leader.setArrow(arrow);
 
         // 점의 개수
-        int numPoints = r.getInput().readRawShort();
+        int numPoints = r.readBitShort();
         for (int i = 0; i < numPoints; i++) {
             double[] pt = r.read3BitDouble();
             leader.addPoint(new Point3D(pt[0], pt[1], pt[2]));

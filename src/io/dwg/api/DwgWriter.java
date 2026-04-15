@@ -6,6 +6,8 @@ import io.dwg.core.version.DwgVersion;
 import io.dwg.format.common.DwgFileStructureHandler;
 import io.dwg.format.common.DwgFileStructureHandlerFactory;
 import io.dwg.format.common.FileHeaderFields;
+import io.dwg.format.common.SectionType;
+import io.dwg.format.r13.R13SectionLocator;
 import io.dwg.sections.classes.ClassesSectionWriter;
 import io.dwg.sections.handles.HandlesSectionWriter;
 import io.dwg.sections.header.HeaderSectionWriter;
@@ -14,7 +16,9 @@ import io.dwg.sections.objects.ObjectsSectionWriter;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -84,9 +88,36 @@ public class DwgWriter {
             System.out.println("  [DEBUG] Section '" + sectionName + "': " + data.length + " bytes");
         }
 
-        // R2004+: 섹션맵 오프셋 계산
+        // R13/R14: 섹션 로케이터 사전 계산
         long sectionMapOffset = 0;
-        if (version.isR2004OrLater()) {
+        if (version == DwgVersion.R13 || version == DwgVersion.R14) {
+            String[] order = {
+                SectionType.HEADER.sectionName(),
+                SectionType.CLASSES.sectionName(),
+                SectionType.HANDLES.sectionName(),
+                SectionType.OBJECTS.sectionName()
+            };
+            // Header size = 6+6+1+4+1+1+2+1 + sectionCount×12 + 2
+            int sectionCount = 0;
+            for (String name : order) {
+                if (sections.containsKey(name)) sectionCount++;
+            }
+            int headerSize = 24 + sectionCount * 12;
+            long currentOffset = headerSize;
+
+            List<R13SectionLocator> locators = new ArrayList<>();
+            int recordNum = 0;
+            for (String name : order) {
+                byte[] data = sections.getOrDefault(name, new byte[0]);
+                long totalSize = data.length + 34; // 16B+data+16B+2B
+                locators.add(new R13SectionLocator(recordNum++, currentOffset, totalSize));
+                currentOffset += totalSize;
+            }
+            headerFields.setSectionLocators(locators);
+            System.out.println("[DEBUG] R13/R14: Locators for " + sectionCount + " sections calculated");
+        }
+        // R2004+: 섹션맵 오프셋 계산
+        else if (version.isR2004OrLater()) {
             long totalSectionSize = 0;
             for (byte[] sectionData : sections.values()) {
                 totalSectionSize += sectionData.length;

@@ -26,22 +26,22 @@ public class SplineObjectReader implements ObjectReader {
         spline.setExtrusion(extrusion);
 
         // B-spline 차수
-        int degree = r.getInput().readRawShort();
+        int degree = r.readBitShort();
         spline.setDegree(degree);
 
         // 플래그
-        int flags = r.getInput().readRawShort();
+        int flags = r.readBitShort();
         spline.setFlags(flags);
 
         // 제어점 개수
-        int numControlPoints = r.getInput().readRawShort();
+        int numControlPoints = r.readBitShort();
         for (int i = 0; i < numControlPoints; i++) {
             double[] pt = r.read3BitDouble();
             spline.addControlPoint(new Point3D(pt[0], pt[1], pt[2]));
         }
 
         // 핏점 개수
-        int numFitPoints = r.getInput().readRawShort();
+        int numFitPoints = r.readBitShort();
         for (int i = 0; i < numFitPoints; i++) {
             double[] pt = r.read3BitDouble();
             spline.addFitPoint(new Point3D(pt[0], pt[1], pt[2]));

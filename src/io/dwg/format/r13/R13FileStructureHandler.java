@@ -6,6 +6,7 @@ import io.dwg.core.io.SectionInputStream;
 import io.dwg.core.version.DwgVersion;
 import io.dwg.format.common.AbstractFileStructureHandler;
 import io.dwg.format.common.FileHeaderFields;
+import io.dwg.format.common.SectionType;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -189,30 +190,90 @@ public class R13FileStructureHandler extends AbstractFileStructureHandler {
 
     @Override
     public void writeHeader(BitOutput output, FileHeaderFields header) throws Exception {
-        // 버전 문자열 (6바이트)
-        String versionStr = "AC10";
-        String mainVer = String.format("%02d", header.maintenanceVersion());
-        writeBytes(output, (versionStr + mainVer).getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        System.out.println("[DEBUG] R13.writeHeader: start");
 
-        // 알 수 없는 6바이트
-        writeBytes(output, new byte[6]);
-
-        // 코드페이지 (2바이트)
-        output.writeRawShort((short)header.codePage());
-
-        // 섹션 수
-        Map<String, Long> offsets = header.sectionOffsets();
-        output.writeRawLong(offsets.size());
-
-        // Locator 배열 쓰기
-        for (@SuppressWarnings("unused") Map.Entry<String, Long> entry : offsets.entrySet()) {
-            // Process offsets
+        // 1. Version string (6 bytes) - "AC1012" (R13) or "AC1014" (R14)
+        String versionStr = (header.version() == DwgVersion.R14) ? "AC1014" : "AC1012";
+        byte[] versionBytes = versionStr.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        for (byte b : versionBytes) {
+            output.writeRawChar(b & 0xFF);
         }
-        // TODO: Implement writing locators
+
+        // 2. Reserved (6 bytes)
+        for (int i = 0; i < 6; i++) {
+            output.writeRawChar(0);
+        }
+
+        // 3. RC (1 byte): zero_one_or_three
+        output.writeRawChar(0);
+
+        // 4. RL (4 bytes): thumbnail_address
+        output.writeRawLong(0);
+
+        // 5. RC (1 byte): dwg_version
+        output.writeRawChar(0);
+
+        // 6. RC (1 byte): maint_version
+        output.writeRawChar(0);
+
+        // 7. RS (2 bytes): codepage
+        output.writeRawShort((short) header.codePage());
+
+        // 8. RC (1 byte): section count
+        java.util.List<R13SectionLocator> locators = header.sectionLocators();
+        int sectionCount = locators != null ? locators.size() : 0;
+        output.writeRawChar(sectionCount);
+
+        // 9. Section locator array
+        if (locators != null) {
+            for (R13SectionLocator loc : locators) {
+                loc.write(output);
+            }
+        }
+
+        // 10. RS (2 bytes): CRC
+        output.writeRawShort((short) 0);
+
+        System.out.println("[DEBUG] R13.writeHeader: complete, " + sectionCount + " sections");
     }
 
     @Override
     public void writeSections(BitOutput output, Map<String, byte[]> sections, FileHeaderFields header) throws Exception {
-        // TODO: Implement section writing for R13/R14
+        System.out.println("[DEBUG] R13.writeSections: start");
+
+        // Section order matches locator record numbers: 0=HEADER, 1=CLASSES, 2=HANDLES, 3=OBJECTS
+        String[] sectionOrder = {
+            SectionType.HEADER.sectionName(),
+            SectionType.CLASSES.sectionName(),
+            SectionType.HANDLES.sectionName(),
+            SectionType.OBJECTS.sectionName()
+        };
+
+        for (String sectionName : sectionOrder) {
+            byte[] data = sections.get(sectionName);
+            if (data == null) data = new byte[0];
+
+            // Write 16-byte start sentinel (zeros)
+            for (int i = 0; i < 16; i++) {
+                output.writeRawChar(0);
+            }
+
+            // Write actual data
+            for (byte b : data) {
+                output.writeRawChar(b & 0xFF);
+            }
+
+            // Write 16-byte end sentinel (zeros)
+            for (int i = 0; i < 16; i++) {
+                output.writeRawChar(0);
+            }
+
+            // Write 2-byte CRC (0)
+            output.writeRawShort((short) 0);
+
+            System.out.println("[DEBUG] R13: Section '" + sectionName + "' written (" + data.length + " bytes)");
+        }
+
+        System.out.println("[DEBUG] R13.writeSections: complete");
     }
 }
