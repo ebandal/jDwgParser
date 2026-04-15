@@ -267,32 +267,91 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
     @Override
     public void writeHeader(BitOutput output, FileHeaderFields header) throws Exception {
         // R2004 헤더 쓰기
-        System.out.println("[DEBUG] R2004.writeHeader: start, output position=" + output.position());
+        System.out.println("[DEBUG] R2004.writeHeader: start");
 
-        // Version string (6 bytes)
-        for (byte b : "AC1018".getBytes(java.nio.charset.StandardCharsets.US_ASCII)) {
+        // 1. Version string (6 bytes) - "AC1018"
+        byte[] versionStr = "AC1018".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        for (byte b : versionStr) {
             output.writeRawChar(b & 0xFF);
         }
-        System.out.println("[DEBUG] R2004.writeHeader: after version, output position=" + output.position());
 
-        // Live data fields (0x06-0x7F) - placeholder
-        // 라이브 데이터 필드는 최소한 존재해야 함
-        // 실제 구현에서는 document 정보를 인코딩해야 함
-        byte[] liveData = new byte[0x7A]; // 0x7F - 0x06 + 1
+        // 2. Live data fields (0x06-0x7A, 0x7A bytes)
+        byte[] liveData = new byte[0x7A];
+        // 0x06-0x0A: Preview address (5 bytes) - placeholder
+        // 0x0B-0x0F: App version (5 bytes) - placeholder
+        // 나머지는 0으로 초기화
         for (int i = 0; i < liveData.length; i++) {
-            output.writeRawChar(liveData[i] & 0xFF);
+            output.writeRawChar(0);
         }
 
-        // Encrypted header (0x7A-0xE5) - placeholder
-        byte[] encryptedData = new byte[0x6C]; // Encrypted portion
-        for (int i = 0; i < encryptedData.length; i++) {
-            output.writeRawChar(encryptedData[i] & 0xFF);
+        // 3. 암호화된 헤더 생성 (0x7A-0xE5, 0x6C bytes)
+        byte[] headerToEncrypt = buildEncryptedHeaderData(header);
+
+        // 4. 헤더 암호화
+        byte[] encryptedHeader = encryptR2004Header(headerToEncrypt);
+
+        // 5. 암호화된 헤더 쓰기
+        for (byte b : encryptedHeader) {
+            output.writeRawChar(b & 0xFF);
         }
 
-        // Padding (0xE6-0xFF)
+        // 6. 패딩 (0xE6-0xFF, 0x1A bytes)
         for (int i = 0; i < 0x1A; i++) {
             output.writeRawChar(0);
         }
+
+        System.out.println("[DEBUG] R2004.writeHeader: encrypted header written, size=" + encryptedHeader.length);
+    }
+
+    /**
+     * 암호화할 헤더 데이터 구성 (0x6C = 108 bytes)
+     */
+    private byte[] buildEncryptedHeaderData(FileHeaderFields header) {
+        byte[] data = new byte[0x6C];
+
+        // 0x00-0x0B: File ID string "AcFssFcAJMB"
+        String fileId = "AcFssFcAJMB";
+        byte[] fileIdBytes = fileId.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        System.arraycopy(fileIdBytes, 0, data, 0, Math.min(fileIdBytes.length, 12));
+
+        // 0x0C-0x53: Reserved/padding (0x48 bytes)
+        // 0x54-0x5B: Section map offset (8 bytes, LE64) - placeholder 0
+        // 0x5C-0x67: Unknown (0x0C bytes)
+        // 0x68-0x6B: CRC32 (4 bytes, LE32) - will be calculated
+
+        // CRC32 계산 (CRC 필드는 0으로)
+        int crc32 = calculateCrc32(data, 0, 0x6C);
+
+        // CRC32 값 설정 (0x68-0x6B, little-endian)
+        writeLE32(data, 0x68, crc32);
+
+        return data;
+    }
+
+    /**
+     * 암호화된 R2004 헤더를 생성합니다.
+     * 복호화의 역과정: XOR with LCG stream
+     */
+    private byte[] encryptR2004Header(byte[] plaintext) {
+        byte[] encrypted = new byte[plaintext.length];
+        int rseed = 1;
+
+        for (int i = 0; i < plaintext.length; i++) {
+            rseed = (int)((rseed * 0x343fdL + 0x269ec3L) & 0xFFFFFFFFL);
+            encrypted[i] = (byte) (plaintext[i] ^ ((rseed >> 16) & 0xFF));
+        }
+
+        return encrypted;
+    }
+
+    /**
+     * Little-endian 32비트 쓰기
+     */
+    private void writeLE32(byte[] data, int offset, int value) {
+        data[offset] = (byte) (value & 0xFF);
+        data[offset + 1] = (byte) ((value >>> 8) & 0xFF);
+        data[offset + 2] = (byte) ((value >>> 16) & 0xFF);
+        data[offset + 3] = (byte) ((value >>> 24) & 0xFF);
     }
 
     @Override
