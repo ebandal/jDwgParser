@@ -200,6 +200,16 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             case LWPLINE             -> new DwgLwPolyline();
             case HATCH               -> new DwgHatch();
             case XRECORD             -> new DwgXrecord();
+            case LTYPE               -> new DwgLtype();
+            case STYLE               -> new DwgStyle();
+            case VIEW                -> new DwgView();
+            case UCS                 -> new DwgUcs();
+            case VPORT               -> new DwgVport();
+            case APPID               -> new DwgAppId();
+            case DIMSTYLE            -> new DwgDimStyle();
+            case MLINESTYLE          -> new DwgMLineStyle();
+            case LONG_TRANSACTION    -> new DwgLongTransaction();
+            case LAYOUT              -> new DwgLayout();
             default -> null;
         };
     }

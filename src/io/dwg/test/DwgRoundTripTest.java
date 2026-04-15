@@ -28,6 +28,8 @@ public class DwgRoundTripTest {
         testR2007Write();
         testR13Write();
         testR14Write();
+        testSampleR13File();
+        testSampleR14File();
         System.out.println("\n✓ All round-trip tests completed");
     }
 
@@ -299,6 +301,60 @@ public class DwgRoundTripTest {
             }
         } catch (Exception e) {
             System.out.println("✗ R14 write error: " + e.getMessage());
+        }
+    }
+
+    public static void testSampleR13File() throws Exception {
+        Path inputFile = Paths.get("samples/example_r13.dwg");
+        if (!Files.exists(inputFile)) {
+            System.out.println("\n=== Test 8: Sample R13 File ===");
+            System.out.println("⊘ Skipping: " + inputFile);
+            return;
+        }
+
+        System.out.println("\n=== Test 8: Sample R13 File ===");
+
+        try {
+            DwgDocument doc = DwgReader.defaultReader().open(inputFile);
+            if (doc == null) {
+                System.out.println("✗ Failed to read R13 sample file");
+                return;
+            }
+
+            System.out.println("✓ Successfully read sample R13 file header");
+            System.out.println("  Version: " + doc.version());
+            System.out.println("  Entity count: " + doc.entities().size());
+            System.out.println("  Object count: " + doc.objectMap().size());
+
+        } catch (Exception e) {
+            System.out.println("✗ Error reading R13 sample: " + e.getClass().getSimpleName());
+        }
+    }
+
+    public static void testSampleR14File() throws Exception {
+        Path inputFile = Paths.get("samples/example_r14.dwg");
+        if (!Files.exists(inputFile)) {
+            System.out.println("\n=== Test 9: Sample R14 File ===");
+            System.out.println("⊘ Skipping: " + inputFile);
+            return;
+        }
+
+        System.out.println("\n=== Test 9: Sample R14 File ===");
+
+        try {
+            DwgDocument doc = DwgReader.defaultReader().open(inputFile);
+            if (doc == null) {
+                System.out.println("✗ Failed to read R14 sample file");
+                return;
+            }
+
+            System.out.println("✓ Successfully read sample R14 file header");
+            System.out.println("  Version: " + doc.version());
+            System.out.println("  Entity count: " + doc.entities().size());
+            System.out.println("  Object count: " + doc.objectMap().size());
+
+        } catch (Exception e) {
+            System.out.println("✗ Error reading R14 sample: " + e.getClass().getSimpleName());
         }
     }
 }
