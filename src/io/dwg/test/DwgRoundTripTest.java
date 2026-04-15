@@ -25,6 +25,7 @@ public class DwgRoundTripTest {
         testRoundTripWithMultipleEntities();
         testWriteEmptyDocument();
         testVersionPreservation();
+        testR2007Write();
         System.out.println("\n✓ All round-trip tests completed");
     }
 
@@ -181,6 +182,45 @@ public class DwgRoundTripTest {
             System.out.println("✓ Version preservation test passed: " + originalVersion);
         } else {
             System.out.println("✗ Version mismatch: " + originalVersion + " vs " + rewritten.version());
+        }
+    }
+
+    public static void testR2007Write() throws Exception {
+        System.out.println("\n=== Test 5: R2007 Write ===");
+
+        // Test writing an empty R2007 document
+        DwgDocument doc = new DwgDocument(DwgVersion.R2007);
+
+        Files.createDirectories(OUTPUT_DIR);
+        Path outputFile = OUTPUT_DIR.resolve("r2007-empty-output.dwg");
+
+        try {
+            DwgWriter writer = DwgWriter.forVersion(DwgVersion.R2007);
+            writer.write(doc, outputFile);
+            System.out.println("✓ R2007 file write successful");
+
+            long fileSize = Files.size(outputFile);
+            System.out.println("  Output file size: " + fileSize + " bytes");
+
+            if (fileSize > 0x480) {
+                System.out.println("✓ Output file has valid size (> header size 0x480)");
+            } else {
+                System.out.println("✗ Output file too small");
+            }
+
+            // Verify header signature
+            byte[] allBytes = java.nio.file.Files.readAllBytes(outputFile);
+            if (allBytes.length >= 6) {
+                String version = new String(allBytes, 0, 6, java.nio.charset.StandardCharsets.US_ASCII);
+                if (version.equals("AC1021")) {
+                    System.out.println("✓ R2007 version string correct");
+                } else {
+                    System.out.println("✗ Wrong version string: " + version);
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("✗ R2007 write error: " + e.getMessage());
+            // e.printStackTrace();  // Suppress stack trace for cleaner output
         }
     }
 }
