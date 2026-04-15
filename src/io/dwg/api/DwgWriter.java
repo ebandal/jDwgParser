@@ -84,6 +84,20 @@ public class DwgWriter {
             System.out.println("  [DEBUG] Section '" + sectionName + "': " + data.length + " bytes");
         }
 
+        // R2004+: 섹션맵 오프셋 계산 (header = 0x100 bytes)
+        long sectionMapOffset = 0;
+        if (version.isR2004OrLater()) {
+            long totalSectionSize = 0;
+            for (byte[] sectionData : sections.values()) {
+                totalSectionSize += sectionData.length;
+            }
+            // Section map offset = (header size + all sections) / 0x100 pages
+            // libredwg: section_map_address는 0x100단위
+            sectionMapOffset = (0x100 + totalSectionSize) / 0x100;
+            headerFields.setSectionMapOffset(sectionMapOffset);
+            System.out.println("[DEBUG] Calculated section map offset: 0x" + Long.toHexString(sectionMapOffset));
+        }
+
         BitOutput output = new ByteBufferBitOutput();
         handler.writeHeader(output, headerFields);
         System.out.println("[DEBUG] After writeHeader: output position=" + output.position());

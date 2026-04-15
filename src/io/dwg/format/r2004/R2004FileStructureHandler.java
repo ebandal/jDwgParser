@@ -315,7 +315,12 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         System.arraycopy(fileIdBytes, 0, data, 0, Math.min(fileIdBytes.length, 12));
 
         // 0x0C-0x53: Reserved/padding (0x48 bytes)
-        // 0x54-0x5B: Section map offset (8 bytes, LE64) - placeholder 0
+
+        // 0x54-0x5B: Section map offset (8 bytes, LE64)
+        long sectionMapOffset = header.sectionMapOffset();
+        writeLE64(data, 0x54, sectionMapOffset);
+        System.out.println("[DEBUG] Header: section map offset set to 0x" + Long.toHexString(sectionMapOffset));
+
         // 0x5C-0x67: Unknown (0x0C bytes)
         // 0x68-0x6B: CRC32 (4 bytes, LE32) - will be calculated
 
@@ -326,6 +331,14 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         writeLE32(data, 0x68, crc32);
 
         return data;
+    }
+
+    /**
+     * Little-endian 64비트 쓰기
+     */
+    private void writeLE64(byte[] data, int offset, long value) {
+        writeLE32(data, offset, (int)(value & 0xFFFFFFFF));
+        writeLE32(data, offset + 4, (int)((value >>> 32) & 0xFFFFFFFF));
     }
 
     /**
@@ -358,20 +371,118 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
     public void writeSections(BitOutput output, Map<String, byte[]> sections,
             FileHeaderFields header) throws Exception {
         // R2004 섹션 쓰기
-        // 섹션 맵 오프셋은 파일 끝에 있음
-        // 각 섹션은 순서대로 작성됨
+        // 구조: [섹션 데이터] + [섹션 맵]
 
-        // 단순 구현: 섹션을 그대로 작성 (LZ77 압축 제외)
+        // 1. 섹션 데이터 쓰기
+        long currentOffset = 0x100 / 0x100;  // Header는 0x100 바이트 (0 pages로 계산)
+        java.util.Map<String, Long> sectionOffsets = new java.util.HashMap<>();
+        java.util.Map<String, Long> sectionSizes = new java.util.HashMap<>();
+
+        System.out.println("[DEBUG] writeSections: Writing section data...");
         for (String sectionName : sections.keySet()) {
             byte[] sectionData = sections.get(sectionName);
-            if (sectionData != null) {
+            if (sectionData != null && sectionData.length > 0) {
+                sectionOffsets.put(sectionName, currentOffset);
+                sectionSizes.put(sectionName, (long)sectionData.length);
+
+                // 섹션 데이터 쓰기
                 for (byte b : sectionData) {
                     output.writeRawChar(b & 0xFF);
                 }
+
+                currentOffset += sectionData.length;
+                System.out.println("  [DEBUG] Section '" + sectionName + "': offset=0x" +
+                    Long.toHexString(sectionOffsets.get(sectionName)) + ", size=0x" +
+                    Long.toHexString((long)sectionData.length));
             }
         }
 
-        // TODO: Phase 3 – 섹션 맵 작성, 암호화 처리, LZ77 압축
+        // 2. 섹션 맵 쓰기
+        long sectionMapStartOffset = currentOffset;
+        System.out.println("[DEBUG] Section map starts at offset 0x" + Long.toHexString(sectionMapStartOffset));
+
+        // Section count (RL - 4 bytes)
+        int sectionCount = 0;
+        for (String sectionName : sections.keySet()) {
+            if (sections.get(sectionName) != null && sections.get(sectionName).length > 0) {
+                sectionCount++;
+            }
+        }
+        output.writeRawLong(sectionCount);
+        System.out.println("[DEBUG] Section count: " + sectionCount);
+
+        // 각 섹션 descriptor 쓰기
+        for (String sectionName : sections.keySet()) {
+            byte[] sectionData = sections.get(sectionName);
+            if (sectionData != null && sectionData.length > 0) {
+                writeR2004DataSectionDescriptor(output, sectionName, sectionData,
+                    sectionOffsets.get(sectionName));
+            }
+        }
+
+        // 3. Section map CRC32 (TODO: Phase 3+)
+        // 현재는 생략
+
+        System.out.println("[DEBUG] writeSections: Complete. Final offset=0x" + Long.toHexString(currentOffset));
+    }
+
+    /**
+     * R2004 Data Section Descriptor 쓰기
+     * Format (per R2004DataSectionDescriptor.read):
+     * - compressedSize (RL, 4 bytes)
+     * - uncompressedSize (RL, 4 bytes)
+     * - compressionType (RL, 4 bytes) - 0=none, 2=LZ77
+     * - 3 x unknown (RL, 12 bytes)
+     * - sectionName (64 bytes, UTF-16LE)
+     * - pageCount (RL, 4 bytes)
+     * - pages: for each page:
+     *   - pageId (RL, 4 bytes)
+     *   - dataSize (RL, 4 bytes)
+     *   - pageOffset (RL, 4 bytes)
+     */
+    private void writeR2004DataSectionDescriptor(BitOutput output, String sectionName,
+            byte[] sectionData, long sectionStartOffset) throws Exception {
+
+        int compressedSize = sectionData.length;
+        int uncompressedSize = sectionData.length;
+        int compressionType = 0;  // No compression
+
+        // compressedSize (RL)
+        output.writeRawLong(compressedSize);
+        // uncompressedSize (RL)
+        output.writeRawLong(uncompressedSize);
+        // compressionType (RL)
+        output.writeRawLong(compressionType);
+
+        // 3 x unknown (RL) - reserved fields
+        output.writeRawLong(0);
+        output.writeRawLong(0);
+        output.writeRawLong(0);
+
+        // sectionName (64 bytes, UTF-16LE, null-terminated)
+        byte[] nameBytes = sectionName.getBytes(java.nio.charset.StandardCharsets.UTF_16LE);
+        for (int i = 0; i < 64; i++) {
+            if (i < nameBytes.length) {
+                output.writeRawChar(nameBytes[i] & 0xFF);
+            } else {
+                output.writeRawChar(0);
+            }
+        }
+
+        // pageCount (RL) - single page for simplicity
+        int pageCount = 1;
+        output.writeRawLong(pageCount);
+
+        // Page descriptor
+        // pageId (RL)
+        output.writeRawLong(0);
+        // dataSize (RL)
+        output.writeRawLong(sectionData.length);
+        // pageOffset (RL) - in page units (0x100 bytes)
+        output.writeRawLong((int)(sectionStartOffset & 0xFFFFFFFFL));
+
+        System.out.println("  [DEBUG] Descriptor for '" + sectionName + "': size=0x" +
+            Integer.toHexString(sectionData.length));
     }
 
 
