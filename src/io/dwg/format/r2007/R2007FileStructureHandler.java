@@ -136,12 +136,71 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
     // -------------------------------------------------------------------------
     @Override
     public void writeHeader(BitOutput output, FileHeaderFields header) throws Exception {
-        // Phase 3 구현 예정
+        System.out.println("[DEBUG] R2007.writeHeader: start");
+
+        // 1. Version string (6 bytes) - "AC1021"
+        byte[] versionStr = "AC1021".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        for (byte b : versionStr) {
+            output.writeRawChar(b & 0xFF);
+        }
+
+        // 2. Live data fields (0x06-0x39, 52 bytes of zeros)
+        for (int i = 0; i < 52; i++) {
+            output.writeRawChar(0);
+        }
+
+        // 3. Padding (0x3A-0x7F, 70 bytes of zeros)
+        for (int i = 0; i < 70; i++) {
+            output.writeRawChar(0);
+        }
+
+        // 4. Build 717-byte RS encoding payload
+        byte[] payload = new byte[717];
+        writeLE64(payload, 0, header.pageMapOffset());
+        writeLE64(payload, 16, header.sectionMapId());
+        // Rest of payload remains zero-filled
+
+        // 5. RS-encode the payload
+        byte[] rsEncoded = io.dwg.core.util.ReedSolomonEncoder.encodeR2007Data(payload);
+        System.out.println("[DEBUG] RS-encoded " + payload.length + " bytes to " + rsEncoded.length + " bytes");
+
+        // 6. Write RS-encoded header (765 bytes = 3 x 255)
+        for (byte b : rsEncoded) {
+            output.writeRawChar(b & 0xFF);
+        }
+
+        // 7. Padding to reach 0x480 total header size
+        // Written so far: 6 + 52 + 70 + 765 = 893 bytes
+        // Need to reach: 0x480 = 1152 bytes
+        int padSize = 0x480 - (6 + 52 + 70 + 765);
+        for (int i = 0; i < padSize; i++) {
+            output.writeRawChar(0);
+        }
+
+        System.out.println("[DEBUG] R2007.writeHeader: complete, total=" + 0x480 + " bytes");
     }
 
     @Override
     public void writeSections(BitOutput output, Map<String, byte[]> sections,
             FileHeaderFields header) throws Exception {
         // Phase 3 구현 예정
+    }
+
+    /**
+     * Helper: Write 64-bit little-endian value
+     */
+    private void writeLE64(byte[] data, int offset, long value) {
+        writeLE32(data, offset, (int)(value & 0xFFFFFFFFL));
+        writeLE32(data, offset + 4, (int)((value >>> 32) & 0xFFFFFFFFL));
+    }
+
+    /**
+     * Helper: Write 32-bit little-endian value
+     */
+    private void writeLE32(byte[] data, int offset, int value) {
+        data[offset] = (byte)(value & 0xFF);
+        data[offset + 1] = (byte)((value >>> 8) & 0xFF);
+        data[offset + 2] = (byte)((value >>> 16) & 0xFF);
+        data[offset + 3] = (byte)((value >>> 24) & 0xFF);
     }
 }

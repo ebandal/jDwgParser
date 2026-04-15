@@ -84,18 +84,37 @@ public class DwgWriter {
             System.out.println("  [DEBUG] Section '" + sectionName + "': " + data.length + " bytes");
         }
 
-        // R2004+: 섹션맵 오프셋 계산 (바이트 단위)
+        // R2004+: 섹션맵 오프셋 계산
         long sectionMapOffset = 0;
         if (version.isR2004OrLater()) {
             long totalSectionSize = 0;
             for (byte[] sectionData : sections.values()) {
                 totalSectionSize += sectionData.length;
             }
-            // Section map offset = header size + all sections (byte offset)
-            // Header is 0x100 bytes (6 version + 0x7A live data + 0x6C encrypted + 0x1A padding)
-            sectionMapOffset = 0x100 + totalSectionSize;
-            headerFields.setSectionMapOffset(sectionMapOffset);
-            System.out.println("[DEBUG] Calculated section map offset: 0x" + Long.toHexString(sectionMapOffset));
+
+            if (version.isR2007OrLater()) {
+                // R2007+ uses page-based addressing with Page Map
+                // Data layout: [0x480 header] [section pages] [section map page] [page map]
+                long baseOffset = 0x480;  // Header size in R2007
+
+                // Section Map will be page 1
+                long sectionMapPageId = 1;
+
+                // Page Map will start after section data and section map page
+                // Estimate section map page size (will be LZ77 compressed)
+                long estimatedSectionMapSize = Math.max(512, totalSectionSize / 10);  // rough estimate
+                long pageMapOffset = baseOffset + totalSectionSize + estimatedSectionMapSize;
+
+                headerFields.setPageMapOffset(pageMapOffset);
+                headerFields.setSectionMapId(sectionMapPageId);
+                System.out.println("[DEBUG] R2007: pageMapOffset=0x" + Long.toHexString(pageMapOffset) +
+                    ", sectionMapId=" + sectionMapPageId);
+            } else {
+                // R2004: direct offset to section map
+                sectionMapOffset = 0x100 + totalSectionSize;
+                headerFields.setSectionMapOffset(sectionMapOffset);
+                System.out.println("[DEBUG] R2004: Calculated section map offset: 0x" + Long.toHexString(sectionMapOffset));
+            }
         }
 
         BitOutput output = new ByteBufferBitOutput();

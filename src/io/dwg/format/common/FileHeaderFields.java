@@ -14,7 +14,9 @@ public class FileHeaderFields {
     private int securityFlags;
     private long summaryInfoOffset;
     private long vbaProjectOffset;
-    private long sectionMapOffset;  // R2004+ only
+    private long sectionMapOffset;  // R2004 only
+    private long pageMapOffset;     // R2007+ only
+    private long sectionMapId;      // R2007+ only (page ID of section map)
     private Map<String, Long> sectionOffsets;
     private Map<String, Long> sectionSizes;
 
@@ -90,6 +92,22 @@ public class FileHeaderFields {
 
     public void setSectionMapOffset(long offset) {
         this.sectionMapOffset = offset;
+    }
+
+    public long pageMapOffset() {
+        return pageMapOffset;
+    }
+
+    public void setPageMapOffset(long offset) {
+        this.pageMapOffset = offset;
+    }
+
+    public long sectionMapId() {
+        return sectionMapId;
+    }
+
+    public void setSectionMapId(long id) {
+        this.sectionMapId = id;
     }
 
     public Map<String, Long> sectionOffsets() {
