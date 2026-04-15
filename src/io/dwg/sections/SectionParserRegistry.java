@@ -1,6 +1,9 @@
 package io.dwg.sections;
 
 import io.dwg.core.exception.UnknownSectionException;
+import io.dwg.sections.aux.AuxHeaderParser;
+import io.dwg.sections.aux.PreviewSectionParser;
+import io.dwg.sections.aux.SummaryInfoParser;
 import io.dwg.sections.classes.ClassesSectionParser;
 import io.dwg.sections.handles.HandlesSectionParser;
 import io.dwg.sections.header.HeaderSectionParser;
@@ -38,6 +41,9 @@ public class SectionParserRegistry {
         reg.register(new ClassesSectionParser());
         reg.register(new HandlesSectionParser());
         reg.register(new ObjectsSectionParser());
+        reg.register(new SummaryInfoParser());
+        reg.register(new PreviewSectionParser());
+        reg.register(new AuxHeaderParser());
         return reg;
     }
 }
