@@ -1,9 +1,9 @@
 package io.dwg.sections;
 
 import io.dwg.core.exception.UnknownSectionException;
-import io.dwg.sections.aux.AuxHeaderParser;
-import io.dwg.sections.aux.PreviewSectionParser;
-import io.dwg.sections.aux.SummaryInfoParser;
+import io.dwg.sections.appdata.AuxHeaderParser;
+import io.dwg.sections.appdata.PreviewSectionParser;
+import io.dwg.sections.appdata.SummaryInfoParser;
 import io.dwg.sections.classes.ClassesSectionParser;
 import io.dwg.sections.handles.HandlesSectionParser;
 import io.dwg.sections.header.HeaderSectionParser;
