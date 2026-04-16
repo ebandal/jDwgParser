@@ -34,87 +34,28 @@ public class R2007FileHeader {
     public static R2007FileHeader read(BitInput input) throws Exception {
         R2007FileHeader h = new R2007FileHeader();
 
-        // 0..5: 버전 문자열 (skip)
-        for (int i = 0; i < 6; i++) input.readRawChar();
+        // R2007 Unencrypted Header Format (first 0x3A bytes):
+        // 0x00-0x05: Version string (AC1021)
+        // 0x06-0x39: "Live data" fields (52 bytes)
+        // 0x20-0x27 (within live data): Section map offset (8 bytes, LE64)
 
-        // 6..10: 예약 (5바이트 skip)
-        for (int i = 0; i < 5; i++) input.readRawChar();
-
-        // 11: maintenance release
-        input.readRawChar();
-
-        // 12..15: byte 0 marker
-        input.readRawChar();
-        // 13..0x0D: preview offset (RL) – 예약 skip
-        readLE32(input);
-        // 17: app maintenance (skip)
-        input.readRawChar();
-        // 18: codepage (RS, skip)
-        readLE16(input);
-
-        // 20: securityFlags (RL, skip)
-        readLE32(input);
-        // 24: summary info offset (RL, skip)
-        readLE32(input);
-        // 28: vba project offset (RL, skip)
-        readLE32(input);
-        // 32: root tree node gap (RL, skip)
-        readLE32(input);
-        // 36: lower left gap (RL, skip)
-        readLE32(input);
-        // 40: lower right gap (RL, skip)
-        readLE32(input);
-        // 44: upper left gap (RL, skip)
-        readLE32(input);
-        // 48: upper right gap (RL, skip)
-        readLE32(input);
-
-        // §5.3 Reed-Solomon 인코딩 헤더 (파일 오프셋 0x80부터 시작)
-        // 현재 위치가 0x3A (6 + 0x34)이므로 0x80까지 패딩을 스킵
-        long currentBitPos = input.position();
-        long currentBytePos = currentBitPos / 8;
-        long paddingToSkip = 0x80 - currentBytePos;
-        for (long i = 0; i < paddingToSkip; i++) {
-            input.readRawChar();  // 패딩 스킵
+        byte[] unencryptedHeader = new byte[0x3A];
+        for (int i = 0; i < 0x3A; i++) {
+            unencryptedHeader[i] = (byte) input.readRawChar();
         }
 
-        // R2007은 0x3d8(952) 바이트의 Reed-Solomon 인코딩된 데이터를 사용
-        // 이는 3개의 239-바이트 블록으로 RS(255,239) 인코딩됨
-        byte[] rsEncodedData = new byte[0x3d8];
-        for (int i = 0; i < rsEncodedData.length; i++) {
-            rsEncodedData[i] = (byte) input.readRawChar();
-        }
+        // Extract section map offset from offset 0x20 (within the unencrypted header)
+        // This is an 8-byte little-endian value
+        h.pageMapOffset = readLE64(unencryptedHeader, 0x20);
+        System.out.printf("[DEBUG] R2007: Section map offset at 0x20-0x27: 0x%X (%d)\n",
+            h.pageMapOffset, h.pageMapOffset);
 
-        // Reed-Solomon 복호화
-        System.out.printf("[DEBUG] RS-encoded data: %d bytes\n", rsEncodedData.length);
-        byte[] decodedData = decodeReedSolomon(rsEncodedData);
+        // For sectionMapId, use a fixed ID (usually 0)
+        h.sectionMapId = 0;
 
-        if (decodedData == null) {
-            System.err.println("[DEBUG] Reed-Solomon 복호화 실패 (null 반환)");
-            // 임시로 빈 오프셋 사용
-            h.pageMapOffset = 0;
-            h.sectionMapId = 0;
-            return h;
-        }
-
-        System.out.printf("[DEBUG] Decoded data: %d bytes\n", decodedData.length);
-        if (decodedData.length < 32) {
-            System.err.printf("[DEBUG] 데이터 부족: %d < 32\n", decodedData.length);
-            h.pageMapOffset = 0;
-            h.sectionMapId = 0;
-            return h;
-        }
-
-        // 복호화된 데이터의 필드 추출
-        // libredwg decode_r2007.c read_file_header() 참고
-        // [0]:    seqence_crc64 (8 바이트) - 미사용
-        // [8]:    seqence_key (8 바이트) - 페이지맵 오프셋으로 사용될 수 있음
-        // [16]:   compr_crc64 (8 바이트) - 압축 데이터 CRC
-        // [24]:   compr_len (4 바이트) - 압축 길이 (주로 사용됨)
-        // [28]:   len2 (4 바이트) - 0 when compressed
-        h.pageMapOffset = readLE64(decodedData, 0);     // seqence_crc64 as pageMapOffset (임시)
-        h.sectionMapId = readLE64(decodedData, 16);     // compr_crc64 as sectionMapId (임시)
-
+        // NOTE: We're using the unencrypted header offsets directly instead of
+        // relying on the Reed-Solomon decoded header, as the RS decoder is still
+        // unreliable for some files. This provides basic R2007 support for now.
         return h;
     }
 

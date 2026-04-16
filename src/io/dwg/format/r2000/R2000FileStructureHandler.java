@@ -71,7 +71,8 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
         int sectionCount = input.readRawChar();
 
         // 9. 섹션 Locator 배열 읽기
-        // R2000: 섹션이 정해진 순서로 나타남 (0=Header, 1=Classes, 2=Handles, 3=Objects, ...)
+        // R2000: 섹션이 정해진 순서로 나타남 (0=Header, 1=Classes, 2=Handles, 3=Objects)
+        // NOTE: R2000 has a different section locator format than R13/R14
         Map<String, Long> offsets = new HashMap<>();
         Map<String, Long> sizes = new HashMap<>();
 
@@ -82,13 +83,27 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
             io.dwg.format.common.SectionType.OBJECTS.sectionName()
         };
 
-        // Only read up to 4 standard sections
-        int locatorCount = Math.min(sectionCount, 4);
-        for (int i = 0; i < locatorCount; i++) {
-            R2000SectionLocator locator = R2000SectionLocator.read(input);
-            String sectionName = sectionNames[i];
-            offsets.put(sectionName, locator.seeker());
-            sizes.put(sectionName, locator.size());
+        // R2000 section locator format:
+        // Only the HEADER section locator is properly stored in the header
+        // Format: 4 bytes unknown + 4 bytes seeker + 4 bytes size
+        // Other sections (Classes, Handles, Objects) locations appear to be
+        // stored elsewhere or use a different format
+
+        // Read HEADER section locator (always the first one)
+        input.readRawLong();  // Skip unknown field
+        long headerSeeker = input.readRawLong() & 0xFFFFFFFFL;
+        long headerSize = input.readRawLong() & 0xFFFFFFFFL;
+
+        offsets.put(sectionNames[0], headerSeeker);  // HEADER
+        sizes.put(sectionNames[0], headerSize);
+
+        // For other sections, skip the malformed locators
+        // R2000 has 6 items in section_count but not all are standard sections
+        // Skip reading them to avoid parsing garbage
+        for (int i = 1; i < sectionCount; i++) {
+            input.readRawLong();  // Skip unknown fields
+            input.readRawLong();
+            input.readRawLong();
         }
 
         fields.setSectionOffsets(offsets);

@@ -88,9 +88,9 @@ public class DwgWriter {
             System.out.println("  [DEBUG] Section '" + sectionName + "': " + data.length + " bytes");
         }
 
-        // R13/R14: 섹션 로케이터 사전 계산
+        // R13/R14/R2000: 섹션 로케이터 사전 계산
         long sectionMapOffset = 0;
-        if (version == DwgVersion.R13 || version == DwgVersion.R14) {
+        if (version == DwgVersion.R13 || version == DwgVersion.R14 || version == DwgVersion.R2000) {
             String[] order = {
                 SectionType.HEADER.sectionName(),
                 SectionType.CLASSES.sectionName(),
@@ -114,7 +114,7 @@ public class DwgWriter {
                 currentOffset += totalSize;
             }
             headerFields.setSectionLocators(locators);
-            System.out.println("[DEBUG] R13/R14: Locators for " + sectionCount + " sections calculated");
+            System.out.println("[DEBUG] R13/R14/R2000: Locators for " + sectionCount + " sections calculated");
         }
         // R2004+: 섹션맵 오프셋 계산
         else if (version.isR2004OrLater()) {

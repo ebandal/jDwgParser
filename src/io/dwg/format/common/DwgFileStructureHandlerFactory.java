@@ -21,8 +21,9 @@ public class DwgFileStructureHandlerFactory {
             case R2004:
                 return new io.dwg.format.r2004.R2004FileStructureHandler();
             case R2007:
-            case R2010:
                 return new io.dwg.format.r2007.R2007FileStructureHandler();
+            case R2010:
+                return new io.dwg.format.r2010.R2010FileStructureHandler();
             case R2013:
                 return new io.dwg.format.r2007.R2013FileStructureHandler();
             case R2018:
