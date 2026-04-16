@@ -1,5 +1,6 @@
 package io.dwg.format.r2007;
 
+import io.dwg.core.util.ByteUtils;
 import io.dwg.core.util.Lz77Decompressor;
 
 import java.util.ArrayList;
@@ -31,8 +32,8 @@ public class R2007PageMap {
         int pos = 0;
         long runningOffset = 0x480; // 헤더 이후 시작 오프셋 (R2007 기본값)
         while (pos + 8 <= data.length) {
-            long pageId = readLE32(data, pos);  pos += 4;
-            long size   = readLE32(data, pos);  pos += 4;
+            long pageId = ByteUtils.readLE32(data, pos);  pos += 4;
+            long size   = ByteUtils.readLE32(data, pos);  pos += 4;
             if (pageId > 0) {
                 map.pageOffsets.put(pageId, runningOffset);
             }
@@ -48,12 +49,5 @@ public class R2007PageMap {
 
     public List<Long> pageIds() {
         return new ArrayList<>(pageOffsets.keySet());
-    }
-
-    private static long readLE32(byte[] data, int off) {
-        return ((long)(data[off] & 0xFF))
-             | ((long)(data[off+1] & 0xFF) << 8)
-             | ((long)(data[off+2] & 0xFF) << 16)
-             | ((long)(data[off+3] & 0xFF) << 24);
     }
 }

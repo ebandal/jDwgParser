@@ -1,6 +1,7 @@
 package io.dwg.format.r2007;
 
 import io.dwg.core.io.BitInput;
+import io.dwg.core.util.ByteUtils;
 import io.dwg.core.util.ReedSolomonDecoder;
 
 /**
@@ -46,7 +47,7 @@ public class R2007FileHeader {
 
         // Extract section map offset from offset 0x20 (within the unencrypted header)
         // This is an 8-byte little-endian value
-        h.pageMapOffset = readLE64(unencryptedHeader, 0x20);
+        h.pageMapOffset = ByteUtils.readLE64(unencryptedHeader, 0x20);
 
         // For sectionMapId, use a fixed ID (usually 0)
         h.sectionMapId = 0;
@@ -94,19 +95,4 @@ public class R2007FileHeader {
 
     public long pageMapOffset() { return pageMapOffset; }
     public long sectionMapId()  { return sectionMapId; }
-
-    // helpers
-    private static long readLE32(BitInput in) {
-        long v = 0;
-        for (int i = 0; i < 4; i++) v |= ((long)(in.readRawChar() & 0xFF)) << (i * 8);
-        return v;
-    }
-    private static int readLE16(BitInput in) {
-        return (in.readRawChar() & 0xFF) | ((in.readRawChar() & 0xFF) << 8);
-    }
-    private static long readLE64(byte[] data, int off) {
-        long v = 0;
-        for (int i = 0; i < 8; i++) v |= ((long)(data[off + i] & 0xFF)) << (i * 8);
-        return v;
-    }
 }

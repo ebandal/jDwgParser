@@ -3,6 +3,7 @@ package io.dwg.format.r2004;
 import io.dwg.core.io.BitInput;
 import io.dwg.core.io.BitOutput;
 import io.dwg.core.io.SectionInputStream;
+import io.dwg.core.util.ByteUtils;
 import io.dwg.core.util.CrcLookupTables;
 import io.dwg.core.util.Lz77Decompressor;
 import io.dwg.core.version.DwgVersion;
@@ -76,7 +77,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         liveOffset += 1;
 
         // 0x0D-0x10: Preview address (4 bytes, LE32)
-        int previewOffset = readLE32(liveDataFields, liveOffset);
+        int previewOffset = (int) ByteUtils.readLE32(liveDataFields, liveOffset);
         fields.setPreviewOffset(previewOffset & 0xFFFFFFFFL);
         liveOffset += 4;
 
@@ -87,7 +88,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         liveOffset += 1;
 
         // 0x13-0x14: Code page (2 bytes, LE16)
-        int codePage = readLE16(liveDataFields, liveOffset) & 0xFFFF;
+        int codePage = ByteUtils.readLE16(liveDataFields, liveOffset) & 0xFFFF;
         fields.setCodePage(codePage);
         liveOffset += 2;
 
@@ -95,7 +96,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         liveOffset += 3;
 
         // 0x18-0x1B: Security flags (4 bytes, LE32)
-        int securityFlags = readLE32(liveDataFields, liveOffset);
+        int securityFlags = (int) ByteUtils.readLE32(liveDataFields, liveOffset);
         fields.setSecurityFlags(securityFlags);
         liveOffset += 4;
 
@@ -103,12 +104,12 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         liveOffset += 4;
 
         // 0x20-0x23: Summary info offset (4 bytes, LE32)
-        int summaryInfoOffset = readLE32(liveDataFields, liveOffset);
+        int summaryInfoOffset = (int) ByteUtils.readLE32(liveDataFields, liveOffset);
         fields.setSummaryInfoOffset(summaryInfoOffset & 0xFFFFFFFFL);
         liveOffset += 4;
 
         // 0x24-0x27: VBA project offset (4 bytes, LE32)
-        int vbaOffset = readLE32(liveDataFields, liveOffset);
+        int vbaOffset = (int) ByteUtils.readLE32(liveDataFields, liveOffset);
         fields.setVbaProjectOffset(vbaOffset & 0xFFFFFFFFL);
         liveOffset += 4;
 
@@ -141,7 +142,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         System.out.printf("[DEBUG] file_ID_string: \"%s\" (should be \"AcFssFcAJMB\")\n", fileId);
 
         // 5. 복호화된 헤더에서 섹션맵 오프셋 추출 (0x54-0x5B)
-        sectionMapOffset = readLE64(decryptedHeader, 0x54) & 0xFFFFFFFFFFFFFFFFL;
+        sectionMapOffset = ByteUtils.readLE64(decryptedHeader, 0x54) & 0xFFFFFFFFFFFFFFFFL;
         System.out.printf("[DEBUG] Section map address at 0x54-0x5B: raw=0x%016X\n", sectionMapOffset);
 
         // 6. 복호화된 헤더 CRC 검증
@@ -172,7 +173,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
      */
     private void verifyCrc32(byte[] decryptedHeader) {
         // CRC32 값 추출 (0x68-0x6B)
-        int storedCrc32 = readLE32(decryptedHeader, 0x68);
+        int storedCrc32 = (int) ByteUtils.readLE32(decryptedHeader, 0x68);
 
         // CRC 검증을 위해 CRC 필드를 0으로 설정
         byte[] dataForCrc = decryptedHeader.clone();
@@ -486,20 +487,4 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
     }
 
 
-    // -------------------------------------------------------------------------
-    // Little-endian helpers
-    // -------------------------------------------------------------------------
-    private static int readLE32(byte[] data, int off) {
-        return (data[off] & 0xFF) | ((data[off+1] & 0xFF) << 8)
-             | ((data[off+2] & 0xFF) << 16) | ((data[off+3] & 0xFF) << 24);
-    }
-
-    private static int readLE16(byte[] data, int off) {
-        return (data[off] & 0xFF) | ((data[off+1] & 0xFF) << 8);
-    }
-
-    private static long readLE64(byte[] data, int off) {
-        return (readLE32(data, off) & 0xFFFFFFFFL)
-             | (((long) readLE32(data, off + 4)) << 32);
-    }
 }

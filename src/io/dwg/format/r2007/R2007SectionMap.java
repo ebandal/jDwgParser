@@ -1,5 +1,6 @@
 package io.dwg.format.r2007;
 
+import io.dwg.core.util.ByteUtils;
 import io.dwg.format.common.PageInfo;
 import io.dwg.format.common.SectionDescriptor;
 
@@ -21,7 +22,7 @@ public class R2007SectionMap {
         int pos = 0;
 
         if (decompressedData.length < 4) return map;
-        int sectionCount = (int) readLE32(decompressedData, pos); pos += 4;
+        int sectionCount = (int) ByteUtils.readLE32(decompressedData, pos); pos += 4;
 
         for (int i = 0; i < sectionCount; i++) {
             if (pos + 64 > decompressedData.length) break;
@@ -37,9 +38,9 @@ public class R2007SectionMap {
     private static int parseSectionDescriptor(byte[] data, int pos, R2007SectionMap map) {
         if (pos + 6 * 8 + 64 > data.length) return pos;
 
-        long dataSize           = readLE64(data, pos); pos += 8;
-        long maxDecompressedSize= readLE64(data, pos); pos += 8;
-        long unknown            = readLE64(data, pos); pos += 8;  // compression_type
+        long dataSize           = ByteUtils.readLE64(data, pos); pos += 8;
+        long maxDecompressedSize= ByteUtils.readLE64(data, pos); pos += 8;
+        long unknown            = ByteUtils.readLE64(data, pos); pos += 8;  // compression_type
         int  compressionType    = (int)(unknown & 0xFFFFFFFFL);
         pos += 8; // sectionId  – 예약
         pos += 8; // encrypted  – 예약
@@ -52,7 +53,7 @@ public class R2007SectionMap {
 
         // 페이지 수
         if (pos + 4 > data.length) return pos;
-        int pageCount = (int) readLE32(data, pos); pos += 4;
+        int pageCount = (int) ByteUtils.readLE32(data, pos); pos += 4;
 
         SectionDescriptor desc = new SectionDescriptor(name);
         desc.setCompressedSize(dataSize);
@@ -61,8 +62,8 @@ public class R2007SectionMap {
 
         for (int j = 0; j < pageCount; j++) {
             if (pos + 16 > data.length) break;
-            long pageId     = readLE64(data, pos); pos += 8;
-            long pageSize   = readLE64(data, pos); pos += 8;
+            long pageId     = ByteUtils.readLE64(data, pos); pos += 8;
+            long pageSize   = ByteUtils.readLE64(data, pos); pos += 8;
             desc.addPage(new PageInfo(0, pageSize, pageId));
         }
 
@@ -82,11 +83,4 @@ public class R2007SectionMap {
         return descriptors.stream().filter(d -> d.name().equals(name)).findFirst();
     }
 
-    private static long readLE32(byte[] d, int o) {
-        return ((long)(d[o]&0xFF)) | ((long)(d[o+1]&0xFF)<<8)
-             | ((long)(d[o+2]&0xFF)<<16) | ((long)(d[o+3]&0xFF)<<24);
-    }
-    private static long readLE64(byte[] d, int o) {
-        return readLE32(d, o) | (readLE32(d, o+4) << 32);
-    }
 }
