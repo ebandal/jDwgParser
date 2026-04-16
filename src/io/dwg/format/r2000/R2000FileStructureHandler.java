@@ -143,13 +143,97 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
 
     @Override
     public void writeHeader(BitOutput output, FileHeaderFields header) throws Exception {
-        // R2000 쓰기는 Phase 3에서 구현
-        throw new UnsupportedOperationException("R2000 write support not yet implemented");
+        // R2000 version string: AC1015
+        String versionStr = "AC1015";
+        for (byte b : versionStr.getBytes(java.nio.charset.StandardCharsets.US_ASCII)) {
+            output.writeRawChar(b & 0xFF);
+        }
+
+        // Reserved 6 bytes
+        for (int i = 0; i < 6; i++) {
+            output.writeRawChar(0);
+        }
+
+        // unknown_0 (RC)
+        output.writeRawChar(0);
+
+        // preview address (RL)
+        output.writeRawLong((int) header.previewOffset());
+
+        // dwg_version (RC)
+        output.writeRawChar(0);
+
+        // maint_version (RC)
+        output.writeRawChar(header.maintenanceVersion());
+
+        // codepage (RS)
+        output.writeRawShort((short) header.codePage());
+
+        // Section count (RC)
+        int sectionCount = 0;
+        String[] sectionNames = {
+            io.dwg.format.common.SectionType.HEADER.sectionName(),
+            io.dwg.format.common.SectionType.CLASSES.sectionName(),
+            io.dwg.format.common.SectionType.HANDLES.sectionName(),
+            io.dwg.format.common.SectionType.OBJECTS.sectionName()
+        };
+
+        // Determine section count (default to all 4 if offsets not set)
+        java.util.Map<String, Long> offsets = header.sectionOffsets();
+        if (offsets != null && !offsets.isEmpty()) {
+            for (String name : sectionNames) {
+                if (offsets.containsKey(name)) {
+                    sectionCount++;
+                }
+            }
+        } else {
+            // Default: all standard sections
+            sectionCount = sectionNames.length;
+        }
+        output.writeRawChar(sectionCount);
+
+        // Write section locators
+        if (header.sectionLocators() != null) {
+            for (io.dwg.format.r13.R13SectionLocator loc : header.sectionLocators()) {
+                loc.write(output);
+            }
+        }
+
+        // CRC (RS) - placeholder
+        output.writeRawShort((short) 0);
     }
 
     @Override
     public void writeSections(BitOutput output, Map<String, byte[]> sections, FileHeaderFields header) throws Exception {
-        // R2000 쓰기는 Phase 3에서 구현
-        throw new UnsupportedOperationException("R2000 write support not yet implemented");
+        // R2000 section layout: 16B sentinel + data + 16B sentinel + 2B CRC (same as R13)
+        String[] sectionOrder = {
+            io.dwg.format.common.SectionType.HEADER.sectionName(),
+            io.dwg.format.common.SectionType.CLASSES.sectionName(),
+            io.dwg.format.common.SectionType.HANDLES.sectionName(),
+            io.dwg.format.common.SectionType.OBJECTS.sectionName()
+        };
+
+        for (String sectionName : sectionOrder) {
+            byte[] data = sections.get(sectionName);
+            if (data == null) data = new byte[0];
+
+            // Write 16-byte start sentinel (zeros)
+            for (int i = 0; i < 16; i++) {
+                output.writeRawChar(0);
+            }
+
+            // Write section data
+            for (byte b : data) {
+                output.writeRawChar(b & 0xFF);
+            }
+
+            // Write 16-byte end sentinel (zeros)
+            for (int i = 0; i < 16; i++) {
+                output.writeRawChar(0);
+            }
+
+            // Write 2-byte CRC (placeholder)
+            output.writeRawShort((short) 0);
+        }
     }
 }
