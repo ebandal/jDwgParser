@@ -31,6 +31,7 @@ public class ObjectTypeResolver {
         resolver.register(new AttdefObjectReader());
         resolver.register(new AttribObjectReader());
         resolver.register(new SeqEndObjectReader());
+        resolver.register(new InsertObjectReader());
         resolver.register(new MinsertObjectReader());
         resolver.register(new Vertex2DObjectReader());
         resolver.register(new Vertex3DObjectReader());
@@ -72,6 +73,17 @@ public class ObjectTypeResolver {
         resolver.register(new HatchObjectReader());
         resolver.register(new BlockHeaderObjectReader());
         resolver.register(new BlockEndObjectReader());
+        resolver.register(new LayerObjectReader());
+        resolver.register(new LtypeObjectReader());
+        resolver.register(new StyleObjectReader());
+        resolver.register(new ViewObjectReader());
+        resolver.register(new UcsObjectReader());
+        resolver.register(new VportObjectReader());
+        resolver.register(new AppIdObjectReader());
+        resolver.register(new DimStyleObjectReader());
+        resolver.register(new MLineStyleObjectReader());
+        resolver.register(new LongTransactionObjectReader());
+        resolver.register(new LayoutObjectReader());
         resolver.register(new Ole2frameObjectReader());
         resolver.register(new DictionaryObjectReader());
         resolver.register(new GroupObjectReader());
