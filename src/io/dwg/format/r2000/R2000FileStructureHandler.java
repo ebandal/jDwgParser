@@ -69,7 +69,6 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
 
         // 8. RC (1 바이트): Number of sections
         int sectionCount = input.readRawChar();
-        System.out.printf("[DEBUG] R2000: Found %d sections\n", sectionCount);
 
         // 9. 섹션 Locator 배열 읽기
         // R2000: 섹션이 정해진 순서로 나타남 (0=Header, 1=Classes, 2=Handles, 3=Objects, ...)
@@ -80,27 +79,23 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
             io.dwg.format.common.SectionType.HEADER.sectionName(),
             io.dwg.format.common.SectionType.CLASSES.sectionName(),
             io.dwg.format.common.SectionType.HANDLES.sectionName(),
-            io.dwg.format.common.SectionType.OBJECTS.sectionName(),
-            "AcDb:AuxHeader",
-            "AcDb:AppInfoHeader"
+            io.dwg.format.common.SectionType.OBJECTS.sectionName()
         };
 
-        for (int i = 0; i < sectionCount && i < sectionNames.length; i++) {
+        // Only read up to 4 standard sections
+        int locatorCount = Math.min(sectionCount, 4);
+        for (int i = 0; i < locatorCount; i++) {
             R2000SectionLocator locator = R2000SectionLocator.read(input);
-            // R2000에서는 recordNumber를 무시하고 순서대로 처리
             String sectionName = sectionNames[i];
             offsets.put(sectionName, locator.seeker());
             sizes.put(sectionName, locator.size());
-            System.out.printf("[DEBUG] R2000 Section %d: name='%s', offset=0x%X, size=0x%X\n",
-                i, sectionName, locator.seeker(), locator.size());
         }
 
         fields.setSectionOffsets(offsets);
         fields.setSectionSizes(sizes);
 
-        // 10. RS (2 바이트): CRC
-        short crc = input.readRawShort();
-        System.out.printf("[DEBUG] R2000 Header CRC: 0x%04X\n", crc & 0xFFFF);
+        // 10. RS (2 바이트): CRC - skip
+        input.readRawShort();
 
         return fields;
     }
@@ -111,20 +106,12 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
         Map<String, Long> offsets = header.sectionOffsets();
         Map<String, Long> sizes = header.sectionSizes();
 
-        // DEBUG: Print actual sizes before processing
-        System.out.println("[DEBUG] Section sizes from header:");
-        for (String name : offsets.keySet()) {
-            long size = sizes.get(name);
-            System.out.printf("  %s: 0x%X (%d bytes)\n", name, size, size);
-        }
-
         for (String sectionName : offsets.keySet()) {
             long offset = offsets.get(sectionName);
             long size = sizes.get(sectionName);
 
             // Skip obviously invalid sections
             if (size > 0xF0000000L) {
-                System.out.printf("[WARN] Skipping %s: size too large (0x%X)\n", sectionName, size);
                 continue;
             }
 
