@@ -58,6 +58,7 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
 
         if (pageMapOffset == 0) return sections;
 
+
         Lz77Decompressor lz77 = new Lz77Decompressor();
 
         // ① Page Map 읽기
@@ -89,13 +90,31 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
             throws Exception {
         input.seek(offset * 8);
         // 페이지 맵 헤더: type(RS)+decompressedSize(RL)+compressedSize(RL)+checksum(RL)
-        input.readRawShort();               // type
+        if (input.isEof()) return R2007PageMap.read(new byte[0], 0);
+
+        int type = input.readRawShort();
         long decompressedSize = input.readRawLong() & 0xFFFFFFFFL;
         long compressedSize   = input.readRawLong() & 0xFFFFFFFFL;
-        input.readRawLong();                // checksum
+        long checksum = input.readRawLong();
 
-        byte[] compressed = new byte[(int) compressedSize];
-        for (int i = 0; i < compressed.length; i++) compressed[i] = (byte) input.readRawChar();
+        // Sanity check: compressed size should be reasonable
+        if (compressedSize > 0x1000000) {  // > 16MB seems unreasonable
+            return R2007PageMap.read(new byte[0], 0);
+        }
+
+        // Read compressed data, but stop at EOF
+        byte[] compressed = new byte[(int) Math.min(compressedSize, 0x10000)];  // Cap at 64KB for safety
+        int read = 0;
+        while (read < compressed.length && !input.isEof()) {
+            compressed[read++] = (byte) input.readRawChar();
+        }
+
+        if (read < compressed.length) {
+            // Couldn't read full amount, trim to what we got
+            byte[] trimmed = new byte[read];
+            System.arraycopy(compressed, 0, trimmed, 0, read);
+            compressed = trimmed;
+        }
 
         return R2007PageMap.read(compressed, decompressedSize);
     }

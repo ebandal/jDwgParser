@@ -47,8 +47,6 @@ public class R2007FileHeader {
         // Extract section map offset from offset 0x20 (within the unencrypted header)
         // This is an 8-byte little-endian value
         h.pageMapOffset = readLE64(unencryptedHeader, 0x20);
-        System.out.printf("[DEBUG] R2007: Section map offset at 0x20-0x27: 0x%X (%d)\n",
-            h.pageMapOffset, h.pageMapOffset);
 
         // For sectionMapId, use a fixed ID (usually 0)
         h.sectionMapId = 0;
