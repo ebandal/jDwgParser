@@ -41,24 +41,111 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
     public Map<Long, DwgObject> parse(SectionInputStream stream, DwgVersion version) throws Exception {
         Map<Long, DwgObject> result = new HashMap<>();
 
-        if (handles == null) return result;
+        // If we have handle registry (R13/R14), use offset-based parsing
+        if (handles != null && !handles.allHandles().isEmpty()) {
+            byte[] raw = stream.rawBytes();
+            for (Map.Entry<Long, Long> entry : sortedHandleOffsets()) {
+                long handle = entry.getKey();
+                long offset = entry.getValue();
 
-        byte[] raw = stream.rawBytes();
-        for (Map.Entry<Long, Long> entry : sortedHandleOffsets()) {
-            long handle = entry.getKey();
-            long offset = entry.getValue();
+                if (offset >= raw.length) continue;
 
-            if (offset >= raw.length) continue;
-
-            try {
-                DwgObject obj = parseObjectAt(raw, (int) offset, version, handle);
-                if (obj != null) {
-                    result.put(handle, obj);
+                try {
+                    DwgObject obj = parseObjectAt(raw, (int) offset, version, handle);
+                    if (obj != null) {
+                        result.put(handle, obj);
+                    }
+                } catch (Exception e) {
+                    // 파싱 실패 시 해당 객체 건너뜀
                 }
+            }
+        } else {
+            // R2000+에는 Handles 섹션이 없으므로 streaming parse 사용
+            System.out.printf("[DEBUG] ObjectsSectionParser: No HandleRegistry, using streaming parse for %s\n", version);
+            result = parseStreaming(stream, version);
+        }
+
+        return result;
+    }
+
+    private Map<Long, DwgObject> parseStreaming(SectionInputStream stream, DwgVersion version) throws Exception {
+        Map<Long, DwgObject> result = new HashMap<>();
+        byte[] raw = stream.rawBytes();
+        long nextHandle = 1;
+        int offset = 0;
+        int parsedCount = 0;
+
+        System.out.printf("[DEBUG] Streaming parse: stream size %d bytes\n", raw.length);
+
+        while (offset < raw.length - 4) {
+            try {
+                // Create reader for current offset
+                ByteBufferBitInput buf = new ByteBufferBitInput(
+                    java.nio.ByteBuffer.wrap(raw, offset, raw.length - offset));
+                BitStreamReader r = new BitStreamReader(buf, version);
+
+                // Read object size
+                int objSize = r.readModularShort();
+
+                // Sanity check
+                if (objSize <= 0 || objSize > 0x10000) {
+                    offset += 2;
+                    continue;
+                }
+
+                // Read type code
+                int typeCode = r.readBitShort();
+
+                // Sanity check
+                if (typeCode < 0 || typeCode > 1000) {
+                    offset += 2;
+                    continue;
+                }
+
+                // Create object
+                DwgObject obj = createObject(typeCode);
+                if (obj == null) {
+                    offset += 2;
+                    continue;
+                }
+
+                // Set object properties
+                ((AbstractDwgObject) obj).setHandle(nextHandle);
+                ((AbstractDwgObject) obj).setRawTypeCode(typeCode);
+
+                // Parse common header and type-specific data
+                try {
+                    parseCommonHeader(r, obj, version);
+                    resolver.resolve(typeCode).ifPresent(reader -> {
+                        try {
+                            reader.read(obj, r, version);
+                        } catch (Exception e) {
+                            // Type-specific parsing failed
+                        }
+                    });
+                } catch (Exception e) {
+                    // Common header parsing failed, but object is still valid
+                }
+
+                // Store object
+                result.put(nextHandle, obj);
+                parsedCount++;
+                nextHandle++;
+
+                // Move to next object (size field was 2 bytes)
+                offset += 2 + objSize;
+
+                if (parsedCount % 50 == 0) {
+                    System.out.printf("[DEBUG] Streaming: Parsed %d objects, offset=0x%X\n", parsedCount, offset);
+                }
+
             } catch (Exception e) {
-                // 파싱 실패 시 해당 객체 건너뜀
+                // Error at this offset, skip and continue
+                offset += 2;
             }
         }
+
+        System.out.printf("[DEBUG] Streaming parse complete: %d objects parsed\n", parsedCount);
         return result;
     }
 

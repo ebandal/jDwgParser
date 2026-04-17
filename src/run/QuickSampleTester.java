@@ -46,6 +46,23 @@ public class QuickSampleTester {
             }
         }
         System.out.printf("\nTotal: %d/%d (%.1f%%)\n", totalPass, totalCount, 100.0 * totalPass / totalCount);
+
+        // 추가: R2004 샘플에서 entity 개수 확인
+        System.out.println("\n=== R2004 Entity Count Analysis ===\n");
+        Path r2004Dir = Paths.get("samples");
+        Files.walk(r2004Dir)
+            .filter(p -> p.toString().contains("2004") && p.toString().endsWith(".dwg"))
+            .sorted()
+            .limit(3)
+            .forEach(filePath -> {
+                try {
+                    DwgDocument doc = DwgReader.defaultReader().open(filePath);
+                    int entityCount = doc.objectMap() != null ? doc.objectMap().size() : 0;
+                    System.out.printf("%s: %d entities\n", filePath.getFileName(), entityCount);
+                } catch (Exception e) {
+                    System.out.printf("%s: ERROR\n", filePath.getFileName());
+                }
+            });
     }
 
     static String extractVersion(Path p) {

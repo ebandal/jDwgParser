@@ -16,6 +16,7 @@ import io.dwg.sections.handles.HandlesSectionParser;
 import io.dwg.sections.header.HeaderSectionParser;
 import io.dwg.sections.header.HeaderVariables;
 import io.dwg.sections.objects.ObjectsSectionParser;
+import io.dwg.entities.DwgObject;
 
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -90,11 +91,16 @@ public class DwgReader {
 
         // ⑧ Objects 섹션 파싱
         SectionInputStream objectsStream = sections.get("AcDb:AcDbObjects");
+        System.out.printf("[DEBUG] DwgReader: objectsStream found: %b\n", objectsStream != null);
         if (objectsStream != null) {
+            System.out.printf("[DEBUG] DwgReader: objectsStream size: %d bytes\n", objectsStream.rawBytes().length);
             ObjectsSectionParser objParser = new ObjectsSectionParser();
             objParser.setHandleRegistry(handleRegistry);
             objParser.setClassRegistry(classRegistry);
-            doc.setObjectMap(objParser.parse(objectsStream, version));
+            System.out.printf("[DEBUG] DwgReader: handleRegistry empty: %b\n", handleRegistry.allHandles().isEmpty());
+            Map<Long, DwgObject> objectMap = objParser.parse(objectsStream, version);
+            System.out.printf("[DEBUG] DwgReader: parsed %d objects\n", objectMap.size());
+            doc.setObjectMap(objectMap);
         }
 
         return doc;
