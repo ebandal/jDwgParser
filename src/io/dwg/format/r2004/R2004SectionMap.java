@@ -20,49 +20,60 @@ public class R2004SectionMap {
 
         System.out.printf("[DEBUG] R2004SectionMap.read: sectionMapByteOffset=0x%X\n", sectionMapByteOffset);
 
-        // 두 가지 가능성: sectionMapByteOffset이 바이트 단위인지 비트 단위인지 확인
-        // 먼저 바이트 단위로 시도
-        long actualOffsetBytes = sectionMapByteOffset * 8;
-        input.seek(actualOffsetBytes);
+        // sectionMapByteOffset is in bytes, convert to bits
+        long actualOffset = sectionMapByteOffset * 8;
+        input.seek(actualOffset);
 
-        // 처음 32바이트 읽어서 확인
-        System.out.printf("[DEBUG] R2004SectionMap: trying byte offset 0x%X (bit offset 0x%X)\n", sectionMapByteOffset, actualOffsetBytes);
-        byte[] preview = new byte[32];
-        long savedPos = actualOffsetBytes;
-        for (int i = 0; i < 32 && i + savedPos < Long.MAX_VALUE; i++) {
-            preview[i] = (byte) input.readRawChar();
-        }
-        System.out.printf("[DEBUG] R2004SectionMap: First 32 bytes at offset: ");
-        for (int i = 0; i < 32; i++) {
-            System.out.printf("%02X ", preview[i] & 0xFF);
-        }
-        System.out.println();
-
-        // 다시 처음 위치로 돌아가기
-        input.seek(savedPos);
-
-        // 섹션 수 읽기 (RL = 4 bytes)
-        int sectionCount = input.readRawLong();
-        System.out.printf("[DEBUG] R2004SectionMap: sectionCount=%d (0x%X)\n", sectionCount, sectionCount);
-
-        // Sanity check
-        if (sectionCount <= 0 || sectionCount > 100) {
-            System.out.printf("[WARN] R2004SectionMap: unreasonable sectionCount %d\n", sectionCount);
-            // 대안: offset이 비트 단위라고 가정하고 다시 시도
-            System.out.printf("[DEBUG] R2004SectionMap: trying bit offset interpretation: 0x%X bits\n", sectionMapByteOffset);
-            input.seek(sectionMapByteOffset);
-            sectionCount = input.readRawLong();
-            System.out.printf("[DEBUG] R2004SectionMap (bit offset): sectionCount=%d (0x%X)\n", sectionCount, sectionCount);
-
-            if (sectionCount <= 0 || sectionCount > 100) {
-                System.out.printf("[WARN] R2004SectionMap: both interpretations failed, aborting\n");
-                return map;
+        // 섹션 맵 데이터를 직접 읽기 (압축되지 않았을 수 있음)
+        byte[] rawData = new byte[0x10000];
+        int readBytes = 0;
+        while (readBytes < rawData.length && !input.isEof()) {
+            try {
+                rawData[readBytes++] = (byte) input.readRawChar();
+            } catch (Exception e) {
+                break;
             }
         }
 
+        System.out.printf("[DEBUG] R2004SectionMap: Read %d bytes of raw data\n", readBytes);
+
+        // DEBUG: 처음 64바이트 출력
+        System.out.printf("[DEBUG] R2004SectionMap: First 64 bytes of raw data:\n");
+        for (int i = 0; i < Math.min(64, readBytes); i += 16) {
+            System.out.printf("  0x%02X: ", i);
+            for (int j = 0; j < 16 && i + j < readBytes; j++) {
+                System.out.printf("%02X ", rawData[i + j] & 0xFF);
+            }
+            System.out.println();
+        }
+
+        if (readBytes < 4) {
+            System.out.printf("[WARN] R2004SectionMap: read data too small (%d bytes)\n", readBytes);
+            return map;
+        }
+
+        // 섹션 수 읽기 (RL = 4 bytes, little-endian)
+        int sectionCount = (rawData[0] & 0xFF) |
+                           ((rawData[1] & 0xFF) << 8) |
+                           ((rawData[2] & 0xFF) << 16) |
+                           ((rawData[3] & 0xFF) << 24);
+        System.out.printf("[DEBUG] R2004SectionMap: sectionCount from offset 0=%d (0x%X)\n", sectionCount, sectionCount);
+
+        // Sanity check
+        if (sectionCount <= 0 || sectionCount > 100) {
+            System.out.printf("[WARN] R2004SectionMap: unreasonable sectionCount %d, aborting\n", sectionCount);
+            return map;
+        }
+
+        // 각 섹션 디스크립터 읽기 (rawData에서)
+        // Note: R2004DataSectionDescriptor.read()는 BitInput을 사용하므로 새로운 BitInput 생성 필요
+        int descriptorStartOffset = 4;
+        io.dwg.core.io.ByteBufferBitInput buf =
+            new io.dwg.core.io.ByteBufferBitInput(java.nio.ByteBuffer.wrap(rawData, descriptorStartOffset, readBytes - descriptorStartOffset));
+
         for (int i = 0; i < sectionCount; i++) {
             try {
-                SectionDescriptor desc = R2004DataSectionDescriptor.read(input);
+                SectionDescriptor desc = R2004DataSectionDescriptor.read(buf);
                 System.out.printf("[DEBUG] R2004SectionMap: [%d] name='%s'\n", i, desc.name());
                 map.descriptors.add(desc);
             } catch (Exception e) {

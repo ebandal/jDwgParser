@@ -128,9 +128,9 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         // 4. 암호화된 헤더 복호화
         byte[] decryptedHeader = decryptR2004Header(encryptedHeader);
 
-        // DEBUG: 복호화된 헤더 처음 0x40 바이트 출력
-        System.out.println("[DEBUG] Decrypted header (first 0x40 bytes):");
-        for (int i = 0; i < 0x40; i += 16) {
+        // DEBUG: 전체 복호화된 헤더 출력
+        System.out.println("[DEBUG] Decrypted header (full 0x6C bytes):");
+        for (int i = 0; i < Math.min(0x6C, decryptedHeader.length); i += 16) {
             System.out.printf("  0x%02X: ", i);
             for (int j = 0; j < 16 && i + j < decryptedHeader.length; j++) {
                 System.out.printf("%02X ", decryptedHeader[i + j] & 0xFF);
@@ -140,6 +140,16 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         // DEBUG: file_ID_string 확인
         String fileId = new String(decryptedHeader, 0, 12, StandardCharsets.US_ASCII);
         System.out.printf("[DEBUG] file_ID_string: \"%s\" (should be \"AcFssFcAJMB\")\n", fileId);
+
+        // DEBUG: 특정 오프셋의 값들 확인
+        System.out.printf("[DEBUG] decryptedHeader[0x24] = 0x%08X\n", ByteUtils.readLE32(decryptedHeader, 0x24) & 0xFFFFFFFFL);
+        System.out.printf("[DEBUG] decryptedHeader[0x28] = 0x%08X\n", ByteUtils.readLE32(decryptedHeader, 0x28) & 0xFFFFFFFFL);
+        System.out.printf("[DEBUG] decryptedHeader[0x2C] = 0x%08X\n", ByteUtils.readLE32(decryptedHeader, 0x2C) & 0xFFFFFFFFL);
+        System.out.printf("[DEBUG] decryptedHeader[0x50] = 0x%08X\n", ByteUtils.readLE32(decryptedHeader, 0x50) & 0xFFFFFFFFL);
+        System.out.printf("[DEBUG] decryptedHeader[0x54] = 0x%08X\n", ByteUtils.readLE32(decryptedHeader, 0x54) & 0xFFFFFFFFL);
+        System.out.printf("[DEBUG] decryptedHeader[0x58] = 0x%08X\n", ByteUtils.readLE32(decryptedHeader, 0x58) & 0xFFFFFFFFL);
+        System.out.printf("[DEBUG] decryptedHeader[0x5C] = 0x%08X\n", ByteUtils.readLE32(decryptedHeader, 0x5C) & 0xFFFFFFFFL);
+        System.out.printf("[DEBUG] decryptedHeader[0x60] = 0x%08X\n", ByteUtils.readLE32(decryptedHeader, 0x60) & 0xFFFFFFFFL);
 
         // 5. 복호화된 헤더에서 섹션맵 오프셋 추출 (0x54-0x5B)
         sectionMapOffset = ByteUtils.readLE64(decryptedHeader, 0x54) & 0xFFFFFFFFFFFFFFFFL;
