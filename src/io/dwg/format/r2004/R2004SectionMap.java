@@ -33,22 +33,35 @@ public class R2004SectionMap {
         long actualOffset = (sectionMapByteOffset + 0x100) * 8;
         input.seek(actualOffset);
 
-        // Read page header
-        int section_type = input.readRawLong();
-        System.out.printf("[DEBUG] R2004SectionMap: section_type=0x%08X\n", section_type);
+        // Read 32-byte page header (8 x RL = 32 bytes)
+        // Structure from encrypted_section_header:
+        //   uint32_t page_type;        (0x41630e3b)
+        //   uint32_t section_type;     (e.g., 0x41630e3b for section map)
+        //   uint32_t data_size;        (compressed size)
+        //   uint32_t page_size;        (decompressed size)
+        //   uint32_t address;          (start offset)
+        //   uint32_t unknown;          (padding)
+        //   uint32_t page_header_crc;  (checksum for header)
+        //   uint32_t data_crc;         (checksum for data)
 
-        if (section_type != 0x41630e3b) {
-            System.out.printf("[WARN] R2004SectionMap: Invalid section_type 0x%08X, expected 0x41630e3b\n", section_type);
+        int page_type = input.readRawLong();
+        System.out.printf("[DEBUG] R2004SectionMap: page_type=0x%08X\n", page_type);
+
+        if (page_type != 0x41630e3b) {
+            System.out.printf("[WARN] R2004SectionMap: Invalid page_type 0x%08X, expected 0x41630e3b\n", page_type);
             return map;
         }
 
-        int decomp_data_size = input.readRawLong();
+        int section_type = input.readRawLong();
         int comp_data_size = input.readRawLong();
-        int compression_type = input.readRawLong();
-        int checksum = input.readRawLong();
+        int decomp_data_size = input.readRawLong();
+        int address = input.readRawLong();
+        int unknown = input.readRawLong();
+        int page_header_crc = input.readRawLong();
+        int data_crc = input.readRawLong();
 
-        System.out.printf("[DEBUG] R2004SectionMap: decomp_size=%d, comp_size=%d, compression=%d, checksum=0x%X\n",
-            decomp_data_size, comp_data_size, compression_type, checksum);
+        System.out.printf("[DEBUG] R2004SectionMap: section_type=0x%08X, decomp_size=%d, comp_size=%d, address=0x%X\n",
+            section_type, decomp_data_size, comp_data_size, address);
 
         if (decomp_data_size <= 0 || decomp_data_size > 1000000) {
             System.out.printf("[WARN] R2004SectionMap: unreasonable decomp_data_size %d\n", decomp_data_size);
