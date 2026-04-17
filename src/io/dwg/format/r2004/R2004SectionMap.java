@@ -20,58 +20,102 @@ public class R2004SectionMap {
 
         System.out.printf("[DEBUG] R2004SectionMap.read: sectionMapByteOffset=0x%X\n", sectionMapByteOffset);
 
-        // sectionMapByteOffset is in bytes, convert to bits
-        long actualOffset = sectionMapByteOffset * 8;
+        // R2004 section map structure:
+        // At sectionMapByteOffset + 0x100:
+        //   RL section_type (must be 0x41630e3b)
+        //   RL decomp_data_size
+        //   RL comp_data_size
+        //   RL compression_type
+        //   RL checksum
+        // Then compressed section map data
+
+        // Seek to section map + 0x100 (page header is at offset 0)
+        long actualOffset = (sectionMapByteOffset + 0x100) * 8;
         input.seek(actualOffset);
 
-        // 섹션 맵 데이터를 직접 읽기 (압축되지 않았을 수 있음)
-        byte[] rawData = new byte[0x10000];
-        int readBytes = 0;
-        while (readBytes < rawData.length && !input.isEof()) {
-            try {
-                rawData[readBytes++] = (byte) input.readRawChar();
-            } catch (Exception e) {
-                break;
-            }
-        }
+        // Read page header
+        int section_type = input.readRawLong();
+        System.out.printf("[DEBUG] R2004SectionMap: section_type=0x%08X\n", section_type);
 
-        System.out.printf("[DEBUG] R2004SectionMap: Read %d bytes of raw data\n", readBytes);
-
-        // DEBUG: 처음 64바이트 출력
-        System.out.printf("[DEBUG] R2004SectionMap: First 64 bytes of raw data:\n");
-        for (int i = 0; i < Math.min(64, readBytes); i += 16) {
-            System.out.printf("  0x%02X: ", i);
-            for (int j = 0; j < 16 && i + j < readBytes; j++) {
-                System.out.printf("%02X ", rawData[i + j] & 0xFF);
-            }
-            System.out.println();
-        }
-
-        if (readBytes < 4) {
-            System.out.printf("[WARN] R2004SectionMap: read data too small (%d bytes)\n", readBytes);
+        if (section_type != 0x41630e3b) {
+            System.out.printf("[WARN] R2004SectionMap: Invalid section_type 0x%08X, expected 0x41630e3b\n", section_type);
             return map;
         }
 
-        // 섹션 수 읽기 (RL = 4 bytes, little-endian)
-        int sectionCount = (rawData[0] & 0xFF) |
-                           ((rawData[1] & 0xFF) << 8) |
-                           ((rawData[2] & 0xFF) << 16) |
-                           ((rawData[3] & 0xFF) << 24);
-        System.out.printf("[DEBUG] R2004SectionMap: sectionCount from offset 0=%d (0x%X)\n", sectionCount, sectionCount);
+        int decomp_data_size = input.readRawLong();
+        int comp_data_size = input.readRawLong();
+        int compression_type = input.readRawLong();
+        int checksum = input.readRawLong();
+
+        System.out.printf("[DEBUG] R2004SectionMap: decomp_size=%d, comp_size=%d, compression=%d, checksum=0x%X\n",
+            decomp_data_size, comp_data_size, compression_type, checksum);
+
+        if (decomp_data_size <= 0 || decomp_data_size > 1000000) {
+            System.out.printf("[WARN] R2004SectionMap: unreasonable decomp_data_size %d\n", decomp_data_size);
+            return map;
+        }
+
+        // Read compressed data
+        byte[] compressedData = new byte[comp_data_size];
+        for (int i = 0; i < comp_data_size; i++) {
+            compressedData[i] = (byte) input.readRawChar();
+        }
+
+        System.out.printf("[DEBUG] R2004SectionMap: Read %d bytes of compressed data\n", compressedData.length);
+
+        // Decompress using R2004 LZ77
+        byte[] decompressed;
+        try {
+            // Try using the Lz77Decompressor from core utilities
+            io.dwg.core.util.Lz77Decompressor decompressor = new io.dwg.core.util.Lz77Decompressor();
+            decompressed = decompressor.decompress(compressedData, decomp_data_size);
+            System.out.printf("[DEBUG] R2004SectionMap: Decompressed to %d bytes\n", decompressed.length);
+        } catch (Exception e) {
+            System.out.printf("[WARN] R2004SectionMap: Decompression failed: %s\n", e.getMessage());
+            e.printStackTrace();
+            return map;
+        }
+
+        // DEBUG: Print first 64 bytes of decompressed data
+        System.out.printf("[DEBUG] R2004SectionMap: First 64 bytes of decompressed (hex+ASCII):\n");
+        for (int i = 0; i < Math.min(64, decompressed.length); i += 16) {
+            System.out.printf("  0x%04X: ", i);
+            for (int j = 0; j < 16 && i + j < decompressed.length; j++) {
+                System.out.printf("%02X ", decompressed[i + j] & 0xFF);
+            }
+            System.out.print("  |");
+            for (int j = 0; j < 16 && i + j < decompressed.length; j++) {
+                byte b = decompressed[i + j];
+                System.out.print((b >= 32 && b < 127) ? (char)b : '.');
+            }
+            System.out.println("|");
+        }
+
+        if (decompressed.length < 20) {
+            System.out.printf("[WARN] R2004SectionMap: decompressed data too small for header (%d bytes)\n", decompressed.length);
+            return map;
+        }
+
+        // Read section map header (20 bytes total):
+        // RL num_desc, RL compressed, RLx max_size, RL encrypted, RL num_desc2
+        int num_desc = (decompressed[0] & 0xFF) |
+                       ((decompressed[1] & 0xFF) << 8) |
+                       ((decompressed[2] & 0xFF) << 16) |
+                       ((decompressed[3] & 0xFF) << 24);
+
+        System.out.printf("[DEBUG] R2004SectionMap: num_desc=%d (0x%08X)\n", num_desc, num_desc);
 
         // Sanity check
-        if (sectionCount <= 0 || sectionCount > 100) {
-            System.out.printf("[WARN] R2004SectionMap: unreasonable sectionCount %d, aborting\n", sectionCount);
+        if (num_desc <= 0 || num_desc > 100) {
+            System.out.printf("[WARN] R2004SectionMap: unreasonable num_desc %d, aborting\n", num_desc);
             return map;
         }
 
-        // 각 섹션 디스크립터 읽기 (rawData에서)
-        // Note: R2004DataSectionDescriptor.read()는 BitInput을 사용하므로 새로운 BitInput 생성 필요
-        int descriptorStartOffset = 4;
+        // Skip header (20 bytes) and read section descriptors
         io.dwg.core.io.ByteBufferBitInput buf =
-            new io.dwg.core.io.ByteBufferBitInput(java.nio.ByteBuffer.wrap(rawData, descriptorStartOffset, readBytes - descriptorStartOffset));
+            new io.dwg.core.io.ByteBufferBitInput(java.nio.ByteBuffer.wrap(decompressed, 20, decompressed.length - 20));
 
-        for (int i = 0; i < sectionCount; i++) {
+        for (int i = 0; i < num_desc; i++) {
             try {
                 SectionDescriptor desc = R2004DataSectionDescriptor.read(buf);
                 System.out.printf("[DEBUG] R2004SectionMap: [%d] name='%s'\n", i, desc.name());
