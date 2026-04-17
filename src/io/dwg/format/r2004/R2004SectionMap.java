@@ -70,20 +70,15 @@ public class R2004SectionMap {
         }
         System.out.println();
 
-        // Decompress using R2004 LZ77
-        // NOTE: Both Lz77Decompressor and DecoderR2004 produce unusable output
-        // This is a blocker - R2004 LZ77 variant is different from R2007+
-        System.out.printf("[DEBUG] R2004SectionMap: Attempting decompression (known to fail)\n");
-        System.out.printf("[TODO] Need to implement correct R2004 LZ77 decompressor\n");
-        System.out.printf("[TODO] Reference: LibreDWG decompress_R2004_section() in decode.c\n");
-
+        // Decompress using correct R2004 LZ77 algorithm (LibreDWG-based)
         byte[] sectionMapData;
         try {
-            io.dwg.core.util.Lz77Decompressor decompressor = new io.dwg.core.util.Lz77Decompressor();
+            io.dwg.core.util.R2004Lz77Decompressor decompressor = new io.dwg.core.util.R2004Lz77Decompressor();
             sectionMapData = decompressor.decompress(compressedData, decomp_data_size);
             System.out.printf("[DEBUG] R2004SectionMap: Decompressed to %d bytes\n", sectionMapData.length);
         } catch (Exception e) {
-            System.out.printf("[WARN] R2004SectionMap: Decompression failed, skipping: %s\n", e.getMessage());
+            System.out.printf("[WARN] R2004SectionMap: Decompression failed: %s\n", e.getMessage());
+            e.printStackTrace();
             return map;
         }
 
