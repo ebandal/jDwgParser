@@ -5,6 +5,7 @@ package io.dwg.format.common;
  */
 public class SectionDescriptor {
     private String name;
+    private long offset;  // R2004: byte offset in file
     private long compressedSize;
     private long uncompressedSize;
     private int compressionType;  // 0=none, 2=LZ77
@@ -17,6 +18,14 @@ public class SectionDescriptor {
 
     public String name() {
         return name;
+    }
+
+    public long offset() {
+        return offset;
+    }
+
+    public void setOffset(long offset) {
+        this.offset = offset;
     }
 
     public long compressedSize() {

@@ -90,7 +90,11 @@ public class DwgReader {
         doc.setHandleRegistry(handleRegistry);
 
         // ⑧ Objects 섹션 파싱
+        // Try both naming conventions (R2007+ uses AcDb:AcDbObjects, R2004 uses AcDb:Objects)
         SectionInputStream objectsStream = sections.get("AcDb:AcDbObjects");
+        if (objectsStream == null) {
+            objectsStream = sections.get("AcDb:Objects");
+        }
         System.out.printf("[DEBUG] DwgReader: objectsStream found: %b\n", objectsStream != null);
         if (objectsStream != null) {
             System.out.printf("[DEBUG] DwgReader: objectsStream size: %d bytes\n", objectsStream.rawBytes().length);

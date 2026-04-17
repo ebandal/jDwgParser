@@ -8,7 +8,6 @@ import io.dwg.core.util.CrcLookupTables;
 import io.dwg.core.version.DwgVersion;
 import io.dwg.format.common.AbstractFileStructureHandler;
 import io.dwg.format.common.FileHeaderFields;
-import io.dwg.format.common.PageInfo;
 import io.dwg.format.common.SectionDescriptor;
 
 import java.nio.charset.StandardCharsets;
@@ -230,37 +229,124 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
 
         if (sectionMapOffset == 0) return sections;
 
-        // Section Map 읽기
+        // Read R2004 Section Map
         R2004SectionMap sectionMap = R2004SectionMap.read(input, sectionMapOffset);
+        System.out.printf("[DEBUG] R2004: Section map loaded with %d sections\n", sectionMap.descriptors().size());
 
-        io.dwg.core.util.R2004Lz77Decompressor lz77 = new io.dwg.core.util.R2004Lz77Decompressor();
-
+        // Process each section
         for (SectionDescriptor desc : sectionMap.descriptors()) {
             try {
-                // 여러 페이지의 데이터를 순서대로 읽어 합침
-                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-                for (PageInfo page : desc.pages()) {
-                    input.seek(page.pageOffset() * 8);
-                    byte[] pageData = new byte[(int) page.dataSize()];
-                    for (int i = 0; i < pageData.length; i++) {
-                        pageData[i] = (byte) input.readRawChar();
+                if (desc.offset() == 0 || desc.uncompressedSize() == 0) continue;
+
+                long sectionSize = desc.uncompressedSize();
+
+                // Limit to reasonable size
+                if (sectionSize <= 0 || sectionSize > 10000000) {
+                    System.out.printf("[WARN] R2004: Section '%s' has unreasonable size %d, skipping\n",
+                        desc.name(), sectionSize);
+                    continue;
+                }
+
+                // Read raw section data from file
+                input.seek(desc.offset() * 8); // offset is in bytes, seek expects bits
+                byte[] data = new byte[(int) sectionSize];
+                for (int i = 0; i < sectionSize; i++) {
+                    try {
+                        data[i] = (byte) input.readRawChar();
+                    } catch (Exception e) {
+                        // Truncate if we can't read more
+                        byte[] trimmed = new byte[i];
+                        System.arraycopy(data, 0, trimmed, 0, i);
+                        data = trimmed;
+                        System.out.printf("[WARN] R2004: Section '%s' truncated at %d bytes\n", desc.name(), i);
+                        break;
                     }
-                    baos.write(pageData);
                 }
 
-                byte[] compressed = baos.toByteArray();
-                byte[] data;
+                System.out.printf("[DEBUG] R2004: Section '%s' - read %d bytes (0x%X to 0x%X)\n",
+                    desc.name(), data.length, desc.offset(), desc.offset() + sectionSize);
 
-                if (desc.compressionType() == 2 && desc.uncompressedSize() > 0) {
-                    data = lz77.decompress(compressed, (int) desc.uncompressedSize());
-                } else {
-                    data = compressed;
+                // R2004 sections are stored with 32-byte encrypted page headers
+                // Format: [32-byte encrypted header] [compressed/uncompressed data]
+                byte[] sectionData = data;
+
+                if (data.length >= 32) {
+                    // Decrypt page header
+                    long secMask = 0x4164536bL ^ (desc.offset() & 0xFFFFFFFFL);
+                    byte[] pageHeader = new byte[32];
+                    for (int i = 0; i < 32; i++) {
+                        pageHeader[i] = (byte)(data[i] ^ ((secMask >> ((i & 3) * 8)) & 0xFF));
+                    }
+
+                    // Parse page header
+                    int pageType = (int)(ByteUtils.readLE32(pageHeader, 0) & 0xFFFFFFFFL);
+                    int sectionNum = (int)(ByteUtils.readLE32(pageHeader, 4) & 0xFFFFFFFFL);
+                    int compSize = (int)(ByteUtils.readLE32(pageHeader, 8) & 0xFFFFFFFFL);
+                    int decompSize = (int)(ByteUtils.readLE32(pageHeader, 12) & 0xFFFFFFFFL);
+                    int startOffset = (int)(ByteUtils.readLE32(pageHeader, 16) & 0xFFFFFFFFL);
+
+                    System.out.printf("[DEBUG] R2004: '%s' page header - type=0x%X comp=%d decomp=%d\n",
+                        desc.name(), pageType, compSize, decompSize);
+
+                    if (pageType == 0x4163043B) { // Data section page
+                        // Extract compressed data (skip 32-byte header)
+                        byte[] compressedData = new byte[compSize];
+                        System.arraycopy(data, 32, compressedData, 0, Math.min(compSize, data.length - 32));
+
+                        // Try to decompress if needed
+                        if (compSize < decompSize) {
+                            try {
+                                System.out.printf("[DEBUG] R2004: '%s' decompressing %d->%d bytes\n", desc.name(), compSize, decompSize);
+                                io.dwg.core.util.R2004Lz77Decompressor decompressor = new io.dwg.core.util.R2004Lz77Decompressor();
+                                sectionData = decompressor.decompress(compressedData, decompSize);
+                                System.out.printf("[DEBUG] R2004: '%s' decompressed to %d bytes\n", desc.name(), sectionData.length);
+                            } catch (Exception e) {
+                                System.out.printf("[WARN] R2004: Failed to decompress '%s': %s\n", desc.name(), e.toString());
+                                e.printStackTrace();
+                                sectionData = compressedData;
+                            }
+                        } else {
+                            sectionData = compressedData;
+                        }
+                    } else {
+                        // Not a standard page, use all data after header
+                        sectionData = new byte[data.length - 32];
+                        System.arraycopy(data, 32, sectionData, 0, sectionData.length);
+                    }
                 }
 
-                sections.put(desc.name(), new SectionInputStream(data, desc.name()));
+                // Debug output for Classes section
+                if ("AcDb:Classes".equals(desc.name()) && sectionData.length > 0) {
+                    System.out.printf("[DEBUG] R2004: Classes section processed size: %d bytes\n", sectionData.length);
+                    System.out.printf("[DEBUG] R2004: Classes section first 64 bytes (processed):\n");
+                    for (int i = 0; i < Math.min(64, sectionData.length); i += 16) {
+                        System.out.printf("  0x%02X: ", i);
+                        for (int j = 0; j < 16 && i + j < sectionData.length; j++) {
+                            System.out.printf("%02X ", sectionData[i + j] & 0xFF);
+                        }
+                        System.out.println();
+                    }
+                    // Check for sentinel
+                    if (sectionData.length >= 16) {
+                        byte[] sentinel = {(byte)0x8D, (byte)0xA1, (byte)0xC4, (byte)0xB8, (byte)0xC4, (byte)0xA9, (byte)0xF8, (byte)0xC5,
+                                         (byte)0xC0, (byte)0xDC, (byte)0xF4, (byte)0x5F, (byte)0xE7, (byte)0xCF, (byte)0xB6, (byte)0x8A};
+                        boolean found = true;
+                        for (int i = 0; i < 16; i++) {
+                            if (sectionData[i] != sentinel[i]) {
+                                found = false;
+                                break;
+                            }
+                        }
+                        System.out.printf("[DEBUG] R2004: Classes sentinel found at offset 0: %b\n", found);
+                    }
+                }
+
+                sections.put(desc.name(), new SectionInputStream(sectionData, desc.name()));
+
             } catch (Exception e) {
                 System.out.printf("[WARN] R2004FileStructureHandler: Failed to read section '%s': %s\n",
                     desc.name(), e.getMessage());
+                e.printStackTrace();
             }
         }
 

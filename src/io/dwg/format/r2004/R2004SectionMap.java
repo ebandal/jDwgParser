@@ -82,9 +82,9 @@ public class R2004SectionMap {
             return map;
         }
 
-        // DEBUG: Print ALL decompressed data
-        System.out.printf("[DEBUG] R2004SectionMap: ALL %d bytes decompressed (hex):\n", sectionMapData.length);
-        for (int i = 0; i < sectionMapData.length; i += 16) {
+        // DEBUG: Print first 256 bytes of decompressed data
+        System.out.printf("[DEBUG] R2004SectionMap: First 256 bytes decompressed (hex):\n");
+        for (int i = 0; i < Math.min(256, sectionMapData.length); i += 16) {
             System.out.printf("  0x%04X: ", i);
             for (int j = 0; j < 16 && i + j < sectionMapData.length; j++) {
                 System.out.printf("%02X ", sectionMapData[i + j] & 0xFF);
@@ -97,82 +97,79 @@ public class R2004SectionMap {
             System.out.println("|");
         }
 
-        // Parse section descriptors (same format as R2007)
+        // Parse R2004 Section Map: Simple pairs of (SectionID, Size)
+        // Each entry is: [4 bytes Section ID] [4 bytes Size]
+        // Sections are stored sequentially starting at offset 0x100
+
         int pos = 0;
 
-        if (sectionMapData.length < 4) {
-            System.out.printf("[WARN] R2004SectionMap: Data too small for section count\n");
-            return map;
-        }
+        // Map section IDs to canonical names
+        java.util.Map<Integer, String> sectionNames = new java.util.HashMap<>();
+        sectionNames.put(0, "(Empty)");
+        sectionNames.put(1, "AcDb:Header");
+        sectionNames.put(2, "AcDb:AuxHeader");
+        sectionNames.put(3, "AcDb:Classes");
+        sectionNames.put(4, "AcDb:Handles");
+        sectionNames.put(5, "AcDb:Template");
+        sectionNames.put(6, "AcDb:ObjFreeSpace");
+        sectionNames.put(7, "(Gap)");
+        sectionNames.put(8, "AcDb:RevHistory");
+        sectionNames.put(9, "AcDb:Security");
+        sectionNames.put(10, "AcDb:SummaryInfo");
+        sectionNames.put(11, "AcDb:VBAProject");
+        sectionNames.put(12, "(Gap)");
+        sectionNames.put(13, "AcDb:Objects");
+        sectionNames.put(14, "AcDb:SecdInfo");
+        sectionNames.put(15, "(Gap)");
+        sectionNames.put(16, "(Gap)");
+        sectionNames.put(19, "(Gap)");
+        sectionNames.put(20, "(Gap)");
+        sectionNames.put(21, "AcDb:AppInfo");
+        sectionNames.put(27, "AcDb:Preview");
+        sectionNames.put(28, "AcDb:AppInfoHistory");
 
-        int sectionCount = (int)(io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL);
-        pos += 4;
-        System.out.printf("[DEBUG] R2004SectionMap: sectionCount=%d\n", sectionCount);
+        System.out.printf("[DEBUG] R2004SectionMap: Parsing %d bytes as (SectionID, Size) pairs\n", sectionMapData.length);
 
-        for (int i = 0; i < sectionCount && i < 100; i++) {
-            if (pos + 6 * 4 + 64 > sectionMapData.length) {
-                System.out.printf("[WARN] R2004SectionMap: Buffer overrun at section %d\n", i);
-                break;
-            }
+        long currentOffset = 0x100; // First section starts at 0x100
 
+        while (pos + 8 <= sectionMapData.length) {
             try {
-                long dataSize = io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL;
+                int sectionId = (int)(io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL);
                 pos += 4;
-                long maxDecompressedSize = io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL;
-                pos += 4;
-                long compressionType = io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL;
-                pos += 4;
-                // 3 more RL fields (reserved)
-                pos += 4;
-                pos += 4;
+                long sectionSize = io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL;
                 pos += 4;
 
-                // Section name (64 bytes UTF-16LE)
-                byte[] nameBytes = new byte[64];
-                System.arraycopy(sectionMapData, pos, nameBytes, 0, 64);
-                pos += 64;
-                String name = parseUtf16Name(nameBytes);
+                String name = sectionNames.getOrDefault(sectionId, "Unknown(" + sectionId + ")");
 
-                // Page count
-                int pageCount = (int)(io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL);
-                pos += 4;
+                System.out.printf("[DEBUG] R2004SectionMap: Section ID=%2d %-25s offset=0x%06X size=0x%X (%d)\n",
+                    sectionId, name, currentOffset, sectionSize, sectionSize);
 
-                System.out.printf("[DEBUG] R2004SectionMap: Section %d: \"%s\" (pageCount=%d, dataSize=0x%X, decomp=0x%X, compression=%d)\n",
-                    i, name.isEmpty() ? "(empty)" : name, pageCount, dataSize, maxDecompressedSize, compressionType);
-
-                SectionDescriptor desc = new SectionDescriptor(name);
-                desc.setCompressedSize(dataSize);
-                desc.setUncompressedSize(maxDecompressedSize);
-                desc.setCompressionType((int) compressionType);
-
-                // Parse page descriptors (pageId, dataSize, pageOffset in order)
-                for (int j = 0; j < pageCount && j < 100; j++) {
-                    if (pos + 12 > sectionMapData.length) {
-                        System.out.printf("[WARN] R2004SectionMap: Buffer overrun at page %d of section %d\n", j, i);
-                        break;
-                    }
-
-                    long pageId = io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL;
-                    pos += 4;
-                    long pageDataSize = io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL;
-                    pos += 4;
-                    long pageOffset = io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL;
-                    pos += 4;
-
-                    desc.addPage(new io.dwg.format.common.PageInfo(pageOffset, pageDataSize, pageId));
-                    System.out.printf("  [Page %d] id=0x%X, size=0x%X, offset=0x%X\n", j, pageId, dataSize, pageOffset);
+                // Only add non-zero, non-gap sections
+                if (sectionSize > 0 && !name.contains("(")) {
+                    SectionDescriptor desc = new SectionDescriptor(name);
+                    desc.setOffset(currentOffset);
+                    desc.setUncompressedSize(sectionSize);
+                    map.descriptors.add(desc);
                 }
 
-                map.descriptors.add(desc);
+                currentOffset += sectionSize;
 
             } catch (Exception e) {
-                System.out.printf("[ERROR] R2004SectionMap: Failed to parse section %d: %s\n", i, e.getMessage());
-                e.printStackTrace();
+                System.out.printf("[ERROR] R2004SectionMap: Failed to parse at offset %d: %s\n", pos, e.getMessage());
                 break;
             }
         }
 
         System.out.printf("[DEBUG] R2004SectionMap: Loaded %d sections\n", map.descriptors.size());
+
+        // Debug: Print all section offsets
+        System.out.println("[DEBUG] R2004SectionMap: All section offsets:");
+        for (SectionDescriptor desc : map.descriptors) {
+            if (desc.offset() > 0) {
+                System.out.printf("  %-25s offset=0x%06X\n", desc.name(), desc.offset());
+            }
+        }
+
         return map;
     }
 
