@@ -20,6 +20,21 @@ import java.util.Map;
  */
 public class R2004FileStructureHandler extends AbstractFileStructureHandler {
 
+    // Helper class to track section boundaries
+    private static class SectionBounds {
+        int sectionId;
+        long startOffset;
+        long endOffset;
+        SectionBounds(int id, long start) {
+            this.sectionId = id;
+            this.startOffset = start;
+            this.endOffset = start;
+        }
+        long getSize() {
+            return endOffset - startOffset;
+        }
+    }
+
     // readHeader → readSections 로 전달되는 section map 오프셋
     private long sectionMapOffset;
 
@@ -257,22 +272,92 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         } catch (Exception e) {
             // Reading error
         }
-        byte[] sectionData = sectionDataStream.toByteArray();
-        System.out.printf("[DEBUG] R2004: Read %d bytes of section data starting at 0x100\n", sectionData.length);
+        byte[] allData = sectionDataStream.toByteArray();
+        System.out.printf("[DEBUG] R2004: Read %d bytes of section data starting at 0x100\n", allData.length);
 
-        // Process sections
-        java.util.List<SectionDescriptor> validSections = new java.util.ArrayList<>();
-        for (SectionDescriptor desc : sectionMap.descriptors()) {
-            if (!desc.name().contains("(") || "( Gap)".equals(desc.name())) {
-                validSections.add(desc);
+        // FIRST PASS: Scan all pages to detect section boundaries
+        Map<Integer, SectionBounds> sectionBoundsMap = new HashMap<>();
+        int scanOffset = 0;
+        int scanPageCount = 0;
+        while (scanOffset + 32 <= allData.length) {
+            scanPageCount++;
+            long actualFileOffset = sectionDataStart + scanOffset;
+            long secMask = 0x4164536bL ^ (actualFileOffset & 0xFFFFFFFFL);
+
+            // Decrypt page header
+            byte[] pageHeader = new byte[32];
+            if (scanOffset + 32 > allData.length) break; // Safety check
+            for (int i = 0; i < 32; i++) {
+                pageHeader[i] = (byte)(allData[scanOffset + i] ^ ((secMask >> ((i & 3) * 8)) & 0xFF));
             }
-        }
 
-        // Process first valid section with the data we read
-        for (int secIdx = 0; secIdx < validSections.size(); secIdx++) {
-            SectionDescriptor desc = validSections.get(secIdx);
+            int pageType = (int)(ByteUtils.readLE32(pageHeader, 0) & 0xFFFFFFFFL);
+            int pageSecId = (int)(ByteUtils.readLE32(pageHeader, 4) & 0xFFFFFFFFL);
+            int compSize = (int)(ByteUtils.readLE32(pageHeader, 8) & 0xFFFFFFFFL);
+
+            // Validate compSize
+            if (compSize < 0 || compSize > 100000) {
+                System.out.printf("[WARN] R2004: Invalid compSize %d at scanOffset %d, stopping scan\n", compSize, scanOffset);
+                break;
+            }
+
+            // Track section boundaries for ALL valid section IDs (not just data pages)
+            // Valid section IDs are 0-28; ignore pages with invalid IDs
+            if (pageSecId >= 0 && pageSecId <= 28) {
+                if (!sectionBoundsMap.containsKey(pageSecId)) {
+                    sectionBoundsMap.put(pageSecId, new SectionBounds(pageSecId, scanOffset));
+                    System.out.printf("[DEBUG] R2004: Section %d started at scanOffset=0x%X, pageType=0x%X\n",
+                        pageSecId, scanOffset, pageType);
+                }
+                SectionBounds bounds = sectionBoundsMap.get(pageSecId);
+                bounds.endOffset = scanOffset + 32 + compSize;
+            }
+
+            scanOffset += 32 + compSize;
+            if (scanOffset >= allData.length) break; // Prevent buffer overrun
+        }
+        System.out.printf("[DEBUG] R2004: Detected %d sections from %d pages\n", sectionBoundsMap.size(), scanPageCount);
+
+        // Map section IDs to names for lookup
+        Map<Integer, String> sectionIdNames = new HashMap<>();
+        sectionIdNames.put(1, "AcDb:Header");
+        sectionIdNames.put(2, "AcDb:AuxHeader");
+        sectionIdNames.put(3, "AcDb:Classes");
+        sectionIdNames.put(5, "AcDb:Template");
+        sectionIdNames.put(7, "(Gap)");
+        sectionIdNames.put(10, "AcDb:SummaryInfo");
+        sectionIdNames.put(11, "AcDb:VBAProject");
+        sectionIdNames.put(13, "AcDb:Objects");
+        sectionIdNames.put(14, "AcDb:SecdInfo");
+
+        // SECOND PASS: Process each section
+        for (Integer sectionId : sectionBoundsMap.keySet()) {
+            SectionBounds bounds = sectionBoundsMap.get(sectionId);
+            String sectionName = sectionIdNames.getOrDefault(sectionId, "Unknown(" + sectionId + ")");
+            System.out.printf("[DEBUG] R2004: Section %d '%s': offset=0x%X, size=%d\n",
+                sectionId, sectionName, bounds.startOffset, bounds.getSize());
+
+            // Extract data for this section
+            byte[] sectionData = new byte[(int)bounds.getSize()];
+            System.arraycopy(allData, (int)bounds.startOffset, sectionData, 0, (int)bounds.getSize());
+
+            // Find or create section descriptor
+            SectionDescriptor desc = null;
+            for (SectionDescriptor d : sectionMap.descriptors()) {
+                if (d.name().equals(sectionName)) {
+                    desc = d;
+                    break;
+                }
+            }
+            if (desc == null) {
+                desc = new SectionDescriptor(sectionName);
+            }
+
             try {
-                System.out.printf("[DEBUG] R2004: Processing section %d: '%s'\n", secIdx, desc.name());
+                // Skip empty/gap sections for now
+                if (desc.name().contains("(") && !desc.name().equals("(Gap)")) continue;
+
+                System.out.printf("[DEBUG] R2004: Processing section %d: '%s'\n", sectionId, sectionName);
 
                 byte[] data = sectionData;
 
