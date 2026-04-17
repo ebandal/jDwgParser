@@ -29,39 +29,44 @@ public class R2004SectionMap {
         //   RL checksum
         // Then compressed section map data
 
-        // Seek to section map + 0x100 (page header is at offset 0)
-        long actualOffset = (sectionMapByteOffset + 0x100) * 8;
+        // Seek to section map page header (page 1 offset = section start + 0x100)
+        long pageHeaderOffset = sectionMapByteOffset + 0x100;
+        long actualOffset = pageHeaderOffset * 8;
         input.seek(actualOffset);
 
-        // Read 32-byte page header (8 x RL = 32 bytes)
-        // Structure from encrypted_section_header:
-        //   uint32_t page_type;        (0x41630e3b)
-        //   uint32_t section_type;     (e.g., 0x41630e3b for section map)
-        //   uint32_t data_size;        (compressed size)
-        //   uint32_t page_size;        (decompressed size)
-        //   uint32_t address;          (start offset)
-        //   uint32_t unknown;          (padding)
-        //   uint32_t page_header_crc;  (checksum for header)
-        //   uint32_t data_crc;         (checksum for data)
+        // Read page header (32 bytes) - appears to be unencrypted or pre-decrypted
+        byte[] pageHeader = new byte[32];
+        for (int i = 0; i < 32; i++) {
+            pageHeader[i] = (byte) input.readRawChar();
+        }
 
-        int page_type = input.readRawLong();
+        // Parse header as little-endian 32-bit integers
+        long page_type = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 0);
         System.out.printf("[DEBUG] R2004SectionMap: page_type=0x%08X\n", page_type);
 
-        if (page_type != 0x41630e3b) {
+        if (page_type != 0x41630e3bL) {
             System.out.printf("[WARN] R2004SectionMap: Invalid page_type 0x%08X, expected 0x41630e3b\n", page_type);
             return map;
         }
 
-        int section_type = input.readRawLong();
-        int comp_data_size = input.readRawLong();
-        int decomp_data_size = input.readRawLong();
-        int address = input.readRawLong();
-        int unknown = input.readRawLong();
-        int page_header_crc = input.readRawLong();
-        int data_crc = input.readRawLong();
+        // IMPORTANT: Section map page header uses different field order/meaning than regular sections
+        // Reading known values first:
+        // offset 0x00: page_type (0x41630E3B)
+        // offset 0x04: field at 0x04 (0x90 - unknown meaning)
+        // offset 0x08: comp_data_size (149 - matches data we actually read)
+        // offset 0x0C: field at 0x0C (0x02 - NOT decompressed size, too small)
+        // offset 0x1C: field at 0x1C (0x200 = 512 - might be actual decompressed size)
 
-        System.out.printf("[DEBUG] R2004SectionMap: section_type=0x%08X, decomp_size=%d, comp_size=%d, address=0x%X\n",
-            section_type, decomp_data_size, comp_data_size, address);
+        long field_0x04 = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 4);
+        long comp_data_size = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 8);
+        long field_0x0C = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 12);
+        long decomp_data_size = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 28);  // Try offset 0x1C instead
+        long address = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 16);
+        long unknown = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 20);
+        long page_header_crc = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 24);
+
+        System.out.printf("[DEBUG] R2004SectionMap: field_0x04=0x%08X, decomp_size=%d, comp_size=%d, address=0x%X\n",
+            field_0x04, decomp_data_size, comp_data_size, address);
 
         if (decomp_data_size <= 0 || decomp_data_size > 1000000) {
             System.out.printf("[WARN] R2004SectionMap: unreasonable decomp_data_size %d\n", decomp_data_size);
@@ -69,7 +74,7 @@ public class R2004SectionMap {
         }
 
         // Read compressed data
-        byte[] compressedData = new byte[comp_data_size];
+        byte[] compressedData = new byte[(int)comp_data_size];
         for (int i = 0; i < comp_data_size; i++) {
             compressedData[i] = (byte) input.readRawChar();
         }
@@ -87,7 +92,7 @@ public class R2004SectionMap {
         byte[] sectionMapData;
         try {
             io.dwg.core.util.R2004Lz77Decompressor decompressor = new io.dwg.core.util.R2004Lz77Decompressor();
-            sectionMapData = decompressor.decompress(compressedData, decomp_data_size);
+            sectionMapData = decompressor.decompress(compressedData, (int)decomp_data_size);
             System.out.printf("[DEBUG] R2004SectionMap: Decompressed to %d bytes\n", sectionMapData.length);
         } catch (Exception e) {
             System.out.printf("[WARN] R2004SectionMap: Decompression failed: %s\n", e.getMessage());
