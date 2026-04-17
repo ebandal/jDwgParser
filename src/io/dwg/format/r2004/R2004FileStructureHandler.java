@@ -234,42 +234,53 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         R2004SectionMap sectionMap = R2004SectionMap.read(input, sectionMapOffset);
         System.out.printf("[DEBUG] R2004: Section map loaded with %d sections\n", sectionMap.descriptors().size());
 
-        // Process each section
+        // For now, process first section (Header) which always starts at 0x100
+        // This is a simplified approach - full multi-section support requires tracking
+        // section boundaries from page headers
+        long sectionDataStart = 0x100;
+        input.seek(sectionDataStart * 8);
+
+        // Read data for the first section (Header)
+        // Try reading a reasonable amount (e.g., up to 1MB to capture all pages)
+        long maxSectionSize = 1000000;
+        ByteArrayOutputStream sectionDataStream = new ByteArrayOutputStream();
+        try {
+            for (long i = 0; i < maxSectionSize; i++) {
+                try {
+                    int b = input.readRawChar() & 0xFF;
+                    sectionDataStream.write(b);
+                } catch (Exception e) {
+                    // End of file
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            // Reading error
+        }
+        byte[] sectionData = sectionDataStream.toByteArray();
+        System.out.printf("[DEBUG] R2004: Read %d bytes of section data starting at 0x100\n", sectionData.length);
+
+        // Process sections
+        java.util.List<SectionDescriptor> validSections = new java.util.ArrayList<>();
         for (SectionDescriptor desc : sectionMap.descriptors()) {
+            if (!desc.name().contains("(") || "( Gap)".equals(desc.name())) {
+                validSections.add(desc);
+            }
+        }
+
+        // Process first valid section with the data we read
+        for (int secIdx = 0; secIdx < validSections.size(); secIdx++) {
+            SectionDescriptor desc = validSections.get(secIdx);
             try {
-                if (desc.offset() == 0 || desc.uncompressedSize() == 0) continue;
+                System.out.printf("[DEBUG] R2004: Processing section %d: '%s'\n", secIdx, desc.name());
 
-                long sectionSize = desc.uncompressedSize();
+                byte[] data = sectionData;
 
-                // Limit to reasonable size
-                if (sectionSize <= 0 || sectionSize > 10000000) {
-                    System.out.printf("[WARN] R2004: Section '%s' has unreasonable size %d, skipping\n",
-                        desc.name(), sectionSize);
-                    continue;
-                }
-
-                // Read raw section data from file
-                input.seek(desc.offset() * 8); // offset is in bytes, seek expects bits
-                byte[] data = new byte[(int) sectionSize];
-                for (int i = 0; i < sectionSize; i++) {
-                    try {
-                        data[i] = (byte) input.readRawChar();
-                    } catch (Exception e) {
-                        // Truncate if we can't read more
-                        byte[] trimmed = new byte[i];
-                        System.arraycopy(data, 0, trimmed, 0, i);
-                        data = trimmed;
-                        System.out.printf("[WARN] R2004: Section '%s' truncated at %d bytes\n", desc.name(), i);
-                        break;
-                    }
-                }
-
-                System.out.printf("[DEBUG] R2004: Section '%s' - read %d bytes (0x%X to 0x%X)\n",
-                    desc.name(), data.length, desc.offset(), desc.offset() + sectionSize);
+                System.out.printf("[DEBUG] R2004: Section '%s' - processing %d bytes starting at 0x100\n",
+                    desc.name(), data.length);
 
                 // R2004 sections are stored with 32-byte encrypted page headers
                 // Format: [32-byte encrypted header] [compressed/uncompressed data] [repeat for multiple pages]
-                byte[] sectionData = data;
 
                 // Check if this section spans multiple pages
                 System.out.printf("[DEBUG] R2004: Processing section '%s' (%d bytes total)\n", desc.name(), data.length);
@@ -282,7 +293,8 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
                     pageCount++;
                     System.out.printf("[DEBUG] R2004: Reading page %d at offset %d\n", pageCount, pageOffset);
                     // Decrypt page header - secMask based on ACTUAL file offset
-                    long actualFileOffset = desc.offset() + pageOffset;
+                    // First section starts at 0x100, subsequent sections at unknown offsets
+                    long actualFileOffset = sectionDataStart + pageOffset;
                     long secMask = 0x4164536bL ^ (actualFileOffset & 0xFFFFFFFFL);
                     System.out.printf("[DEBUG] R2004: File offset=0x%X, secMask=0x%X\n", actualFileOffset, secMask);
                     byte[] pageHeader = new byte[32];
