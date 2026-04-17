@@ -150,27 +150,36 @@ public class R2004SectionMap {
 
         long currentOffset = 0x100; // First section starts at 0x100
 
+        // Each section map entry is 8 bytes:
+        // [0-1]: section ID (2 bytes LE)
+        // [2-3]: possibly page count or size indicator (2 bytes LE)
+        // [4-7]: other data (4 bytes)
         while (pos + 8 <= sectionMapData.length) {
             try {
-                int sectionId = (int)(io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL);
-                pos += 4;
-                long sectionSize = io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL;
-                pos += 4;
+                // Read section ID as 16-bit value from first 2 bytes
+                long id_field = io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos);
+                int sectionId = (int)(id_field & 0xFFFF);
+
+                // Try reading bytes 2-3 as a potential size indicator
+                int size_field = (int)((id_field >> 16) & 0xFFFF);
+
+                // Skip to next entry (8 bytes)
+                pos += 8;
 
                 String name = sectionNames.getOrDefault(sectionId, "Unknown(" + sectionId + ")");
 
-                System.out.printf("[DEBUG] R2004SectionMap: Section ID=%2d %-25s offset=0x%06X size=0x%X (%d)\n",
-                    sectionId, name, currentOffset, sectionSize, sectionSize);
+                System.out.printf("[DEBUG] R2004SectionMap: Section ID=%2d %-25s offset=0x%06X size_field=0x%X\n",
+                    sectionId, name, currentOffset, size_field);
 
-                // Only add non-zero, non-gap sections
-                if (sectionSize > 0 && !name.contains("(")) {
+                // Add to map (size to be determined from section headers)
+                // Skip empty/gap sections for now
+                if (!name.contains("(") || sectionId <= 27) {
                     SectionDescriptor desc = new SectionDescriptor(name);
                     desc.setOffset(currentOffset);
-                    desc.setUncompressedSize(sectionSize);
+                    // Size will be determined later when reading actual section headers
+                    desc.setUncompressedSize(0);
                     map.descriptors.add(desc);
                 }
-
-                currentOffset += sectionSize;
 
             } catch (Exception e) {
                 System.out.printf("[ERROR] R2004SectionMap: Failed to parse at offset %d: %s\n", pos, e.getMessage());
