@@ -82,9 +82,9 @@ public class R2004SectionMap {
             return map;
         }
 
-        // DEBUG: Print first 64 bytes
-        System.out.printf("[DEBUG] R2004SectionMap: First 64 bytes of decompressed (hex+ASCII):\n");
-        for (int i = 0; i < Math.min(64, sectionMapData.length); i += 16) {
+        // DEBUG: Print ALL decompressed data
+        System.out.printf("[DEBUG] R2004SectionMap: ALL %d bytes decompressed (hex):\n", sectionMapData.length);
+        for (int i = 0; i < sectionMapData.length; i += 16) {
             System.out.printf("  0x%04X: ", i);
             for (int j = 0; j < 16 && i + j < sectionMapData.length; j++) {
                 System.out.printf("%02X ", sectionMapData[i + j] & 0xFF);
@@ -97,42 +97,82 @@ public class R2004SectionMap {
             System.out.println("|");
         }
 
-        if (sectionMapData.length < 20) {
-            System.out.printf("[WARN] R2004SectionMap: decompressed data too small for header (%d bytes)\n", sectionMapData.length);
+        // Parse section descriptors (same format as R2007)
+        int pos = 0;
+
+        if (sectionMapData.length < 4) {
+            System.out.printf("[WARN] R2004SectionMap: Data too small for section count\n");
             return map;
         }
 
-        // Read section map header (20 bytes total):
-        // RL num_desc, RL compressed, RLx max_size, RL encrypted, RL num_desc2
-        int num_desc = (sectionMapData[0] & 0xFF) |
-                       ((sectionMapData[1] & 0xFF) << 8) |
-                       ((sectionMapData[2] & 0xFF) << 16) |
-                       ((sectionMapData[3] & 0xFF) << 24);
+        int sectionCount = (int)(io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL);
+        pos += 4;
+        System.out.printf("[DEBUG] R2004SectionMap: sectionCount=%d\n", sectionCount);
 
-        System.out.printf("[DEBUG] R2004SectionMap: num_desc=%d (0x%08X)\n", num_desc, num_desc);
+        for (int i = 0; i < sectionCount && i < 100; i++) {
+            if (pos + 6 * 4 + 64 > sectionMapData.length) {
+                System.out.printf("[WARN] R2004SectionMap: Buffer overrun at section %d\n", i);
+                break;
+            }
 
-        // Sanity check
-        if (num_desc <= 0 || num_desc > 100) {
-            System.out.printf("[WARN] R2004SectionMap: unreasonable num_desc %d, aborting\n", num_desc);
-            return map;
-        }
-
-        // Skip header (20 bytes) and read section descriptors
-        io.dwg.core.io.ByteBufferBitInput buf =
-            new io.dwg.core.io.ByteBufferBitInput(java.nio.ByteBuffer.wrap(sectionMapData, 20, sectionMapData.length - 20));
-
-        for (int i = 0; i < num_desc; i++) {
             try {
-                SectionDescriptor desc = R2004DataSectionDescriptor.read(buf);
-                System.out.printf("[DEBUG] R2004SectionMap: [%d] name='%s'\n", i, desc.name());
+                long dataSize = io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL;
+                pos += 4;
+                long maxDecompressedSize = io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL;
+                pos += 4;
+                long compressionType = io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL;
+                pos += 4;
+                // 3 more RL fields (reserved)
+                pos += 4;
+                pos += 4;
+                pos += 4;
+
+                // Section name (64 bytes UTF-16LE)
+                byte[] nameBytes = new byte[64];
+                System.arraycopy(sectionMapData, pos, nameBytes, 0, 64);
+                pos += 64;
+                String name = parseUtf16Name(nameBytes);
+
+                // Page count
+                int pageCount = (int)(io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL);
+                pos += 4;
+
+                System.out.printf("[DEBUG] R2004SectionMap: Section %d: \"%s\" (pageCount=%d, dataSize=0x%X, decomp=0x%X, compression=%d)\n",
+                    i, name.isEmpty() ? "(empty)" : name, pageCount, dataSize, maxDecompressedSize, compressionType);
+
+                SectionDescriptor desc = new SectionDescriptor(name);
+                desc.setCompressedSize(dataSize);
+                desc.setUncompressedSize(maxDecompressedSize);
+                desc.setCompressionType((int) compressionType);
+
+                // Parse page descriptors (pageId, dataSize, pageOffset in order)
+                for (int j = 0; j < pageCount && j < 100; j++) {
+                    if (pos + 12 > sectionMapData.length) {
+                        System.out.printf("[WARN] R2004SectionMap: Buffer overrun at page %d of section %d\n", j, i);
+                        break;
+                    }
+
+                    long pageId = io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL;
+                    pos += 4;
+                    long pageDataSize = io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL;
+                    pos += 4;
+                    long pageOffset = io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos) & 0xFFFFFFFFL;
+                    pos += 4;
+
+                    desc.addPage(new io.dwg.format.common.PageInfo(pageOffset, pageDataSize, pageId));
+                    System.out.printf("  [Page %d] id=0x%X, size=0x%X, offset=0x%X\n", j, pageId, dataSize, pageOffset);
+                }
+
                 map.descriptors.add(desc);
+
             } catch (Exception e) {
-                System.out.printf("[WARN] R2004SectionMap: Failed to read descriptor [%d]: %s\n", i, e.getMessage());
+                System.out.printf("[ERROR] R2004SectionMap: Failed to parse section %d: %s\n", i, e.getMessage());
+                e.printStackTrace();
                 break;
             }
         }
 
-        System.out.printf("[DEBUG] R2004SectionMap: Total descriptors loaded: %d\n", map.descriptors.size());
+        System.out.printf("[DEBUG] R2004SectionMap: Loaded %d sections\n", map.descriptors.size());
         return map;
     }
 
@@ -142,5 +182,13 @@ public class R2004SectionMap {
 
     public Optional<SectionDescriptor> find(String name) {
         return descriptors.stream().filter(d -> d.name().equals(name)).findFirst();
+    }
+
+    private static String parseUtf16Name(byte[] bytes) {
+        int len = 0;
+        while (len + 1 < bytes.length && (bytes[len] != 0 || bytes[len + 1] != 0)) {
+            len += 2;
+        }
+        return new String(bytes, 0, len, java.nio.charset.StandardCharsets.UTF_16LE);
     }
 }
