@@ -63,45 +63,44 @@ public class R2004SectionMap {
 
         System.out.printf("[DEBUG] R2004SectionMap: Read %d bytes of compressed data\n", compressedData.length);
 
-        // Decompress using R2004 LZ77
-        byte[] decompressed;
-        try {
-            // Try using the Lz77Decompressor from core utilities
-            io.dwg.core.util.Lz77Decompressor decompressor = new io.dwg.core.util.Lz77Decompressor();
-            decompressed = decompressor.decompress(compressedData, decomp_data_size);
-            System.out.printf("[DEBUG] R2004SectionMap: Decompressed to %d bytes\n", decompressed.length);
-        } catch (Exception e) {
-            System.out.printf("[WARN] R2004SectionMap: Decompression failed: %s\n", e.getMessage());
-            e.printStackTrace();
-            return map;
+        // DEBUG: Print first 32 bytes of compressed data
+        System.out.printf("[DEBUG] R2004SectionMap: First 32 bytes of compressed (hex):\n  ");
+        for (int i = 0; i < Math.min(32, compressedData.length); i++) {
+            System.out.printf("%02X ", compressedData[i] & 0xFF);
         }
+        System.out.println();
 
-        // DEBUG: Print first 64 bytes of decompressed data
-        System.out.printf("[DEBUG] R2004SectionMap: First 64 bytes of decompressed (hex+ASCII):\n");
-        for (int i = 0; i < Math.min(64, decompressed.length); i += 16) {
+        // Try using compressed data directly as section map (maybe not actually compressed for R2004)
+        System.out.printf("[DEBUG] R2004SectionMap: Trying to parse compressed data as section map directly\n");
+
+        byte[] sectionMapData = compressedData;
+
+        // DEBUG: Print first 64 bytes
+        System.out.printf("[DEBUG] R2004SectionMap: First 64 bytes (hex+ASCII):\n");
+        for (int i = 0; i < Math.min(64, sectionMapData.length); i += 16) {
             System.out.printf("  0x%04X: ", i);
-            for (int j = 0; j < 16 && i + j < decompressed.length; j++) {
-                System.out.printf("%02X ", decompressed[i + j] & 0xFF);
+            for (int j = 0; j < 16 && i + j < sectionMapData.length; j++) {
+                System.out.printf("%02X ", sectionMapData[i + j] & 0xFF);
             }
             System.out.print("  |");
-            for (int j = 0; j < 16 && i + j < decompressed.length; j++) {
-                byte b = decompressed[i + j];
+            for (int j = 0; j < 16 && i + j < sectionMapData.length; j++) {
+                byte b = sectionMapData[i + j];
                 System.out.print((b >= 32 && b < 127) ? (char)b : '.');
             }
             System.out.println("|");
         }
 
-        if (decompressed.length < 20) {
-            System.out.printf("[WARN] R2004SectionMap: decompressed data too small for header (%d bytes)\n", decompressed.length);
+        if (sectionMapData.length < 20) {
+            System.out.printf("[WARN] R2004SectionMap: section map data too small for header (%d bytes)\n", sectionMapData.length);
             return map;
         }
 
         // Read section map header (20 bytes total):
         // RL num_desc, RL compressed, RLx max_size, RL encrypted, RL num_desc2
-        int num_desc = (decompressed[0] & 0xFF) |
-                       ((decompressed[1] & 0xFF) << 8) |
-                       ((decompressed[2] & 0xFF) << 16) |
-                       ((decompressed[3] & 0xFF) << 24);
+        int num_desc = (sectionMapData[0] & 0xFF) |
+                       ((sectionMapData[1] & 0xFF) << 8) |
+                       ((sectionMapData[2] & 0xFF) << 16) |
+                       ((sectionMapData[3] & 0xFF) << 24);
 
         System.out.printf("[DEBUG] R2004SectionMap: num_desc=%d (0x%08X)\n", num_desc, num_desc);
 
@@ -113,7 +112,7 @@ public class R2004SectionMap {
 
         // Skip header (20 bytes) and read section descriptors
         io.dwg.core.io.ByteBufferBitInput buf =
-            new io.dwg.core.io.ByteBufferBitInput(java.nio.ByteBuffer.wrap(decompressed, 20, decompressed.length - 20));
+            new io.dwg.core.io.ByteBufferBitInput(java.nio.ByteBuffer.wrap(sectionMapData, 20, sectionMapData.length - 20));
 
         for (int i = 0; i < num_desc; i++) {
             try {
