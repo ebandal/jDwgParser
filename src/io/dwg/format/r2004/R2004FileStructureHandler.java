@@ -5,7 +5,6 @@ import io.dwg.core.io.BitOutput;
 import io.dwg.core.io.SectionInputStream;
 import io.dwg.core.util.ByteUtils;
 import io.dwg.core.util.CrcLookupTables;
-import io.dwg.core.util.Lz77Decompressor;
 import io.dwg.core.version.DwgVersion;
 import io.dwg.format.common.AbstractFileStructureHandler;
 import io.dwg.format.common.FileHeaderFields;
@@ -234,42 +233,38 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         // Section Map 읽기
         R2004SectionMap sectionMap = R2004SectionMap.read(input, sectionMapOffset);
 
-        Lz77Decompressor lz77 = new Lz77Decompressor();
+        io.dwg.core.util.R2004Lz77Decompressor lz77 = new io.dwg.core.util.R2004Lz77Decompressor();
 
         for (SectionDescriptor desc : sectionMap.descriptors()) {
             try {
-                byte[] data = assembleSectionData(input, desc, lz77);
+                // 여러 페이지의 데이터를 순서대로 읽어 합침
+                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                for (PageInfo page : desc.pages()) {
+                    input.seek(page.pageOffset() * 8);
+                    byte[] pageData = new byte[(int) page.dataSize()];
+                    for (int i = 0; i < pageData.length; i++) {
+                        pageData[i] = (byte) input.readRawChar();
+                    }
+                    baos.write(pageData);
+                }
+
+                byte[] compressed = baos.toByteArray();
+                byte[] data;
+
+                if (desc.compressionType() == 2 && desc.uncompressedSize() > 0) {
+                    data = lz77.decompress(compressed, (int) desc.uncompressedSize());
+                } else {
+                    data = compressed;
+                }
+
                 sections.put(desc.name(), new SectionInputStream(data, desc.name()));
             } catch (Exception e) {
-                // 개별 섹션 실패는 무시
+                System.out.printf("[WARN] R2004FileStructureHandler: Failed to read section '%s': %s\n",
+                    desc.name(), e.getMessage());
             }
         }
 
         return sections;
-    }
-
-    /**
-     * 여러 페이지의 데이터를 순서대로 읽어 합치고 압축 해제.
-     */
-    private byte[] assembleSectionData(BitInput input, SectionDescriptor desc,
-            Lz77Decompressor lz77) throws Exception {
-        // 전체 압축 데이터 누적
-        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-        for (PageInfo page : desc.pages()) {
-            input.seek(page.pageOffset() * 8);
-            byte[] pageData = new byte[(int) page.dataSize()];
-            for (int i = 0; i < pageData.length; i++) {
-                pageData[i] = (byte) input.readRawChar();
-            }
-            baos.write(pageData);
-        }
-
-        byte[] compressed = baos.toByteArray();
-
-        if (desc.compressionType() == 2 && desc.uncompressedSize() > 0) {
-            return lz77.decompress(compressed, (int) desc.uncompressedSize());
-        }
-        return compressed;
     }
 
     // -------------------------------------------------------------------------
