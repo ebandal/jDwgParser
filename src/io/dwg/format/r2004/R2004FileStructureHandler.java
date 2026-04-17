@@ -281,8 +281,10 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
                 while (pageOffset < data.length && pageOffset + 32 <= data.length) {
                     pageCount++;
                     System.out.printf("[DEBUG] R2004: Reading page %d at offset %d\n", pageCount, pageOffset);
-                    // Decrypt page header
-                    long secMask = 0x4164536bL ^ ((desc.offset() + pageOffset) & 0xFFFFFFFFL);
+                    // Decrypt page header - secMask based on ACTUAL file offset
+                    long actualFileOffset = desc.offset() + pageOffset;
+                    long secMask = 0x4164536bL ^ (actualFileOffset & 0xFFFFFFFFL);
+                    System.out.printf("[DEBUG] R2004: File offset=0x%X, secMask=0x%X\n", actualFileOffset, secMask);
                     byte[] pageHeader = new byte[32];
                     for (int i = 0; i < 32; i++) {
                         pageHeader[i] = (byte)(data[pageOffset + i] ^ ((secMask >> ((i & 3) * 8)) & 0xFF));
@@ -315,6 +317,18 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
                         byte[] compressedData = new byte[compSize];
                         int availableBytes = Math.min(compSize, data.length - pageOffset - 32);
                         System.arraycopy(data, pageOffset + 32, compressedData, 0, availableBytes);
+
+                        // Debug first bytes of compressed data for AuxHeader
+                        if ("AcDb:AuxHeader".equals(desc.name()) && availableBytes > 0) {
+                            System.out.printf("[DEBUG] R2004: AuxHeader compressed data first 64 bytes (hex):\n");
+                            for (int i = 0; i < Math.min(64, availableBytes); i += 16) {
+                                System.out.printf("  0x%02X: ", i);
+                                for (int j = 0; j < 16 && i + j < availableBytes; j++) {
+                                    System.out.printf("%02X ", compressedData[i + j] & 0xFF);
+                                }
+                                System.out.println();
+                            }
+                        }
 
                         // Try to decompress if needed
                         if (compSize < decompSize) {
