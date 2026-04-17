@@ -68,7 +68,11 @@ public class R2004Lz77Decompressor {
                 compBytes = expectedSize - dstIdx;
             }
             if (compOffset > dstIdx) {
-                throw new Exception("Invalid offset: " + compOffset + " > " + dstIdx);
+                // Invalid offset - this may indicate corrupted data or an unsupported pattern
+                // For now, return partial decompression
+                System.out.printf("[WARN] R2004Lz77: Invalid offset %d > %d at srcIdx=%d, returning partial decomp (%d bytes)\n",
+                    compOffset, dstIdx, srcIdx, dstIdx);
+                return java.util.Arrays.copyOf(output, dstIdx);
             }
 
             copyBytes(output, dstIdx, compBytes, compOffset);
