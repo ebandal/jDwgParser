@@ -146,38 +146,37 @@ public class R2004SectionMap {
         sectionNames.put(27, "AcDb:Preview");
         sectionNames.put(28, "AcDb:AppInfoHistory");
 
-        System.out.printf("[DEBUG] R2004SectionMap: Parsing %d bytes as (SectionID, Size) pairs\n", sectionMapData.length);
-
-        long currentOffset = 0x100; // First section starts at 0x100
+        System.out.printf("[DEBUG] R2004SectionMap: Parsing %d bytes as section entries\n", sectionMapData.length);
 
         // Each section map entry is 8 bytes:
         // [0-1]: section ID (2 bytes LE)
-        // [2-3]: possibly page count or size indicator (2 bytes LE)
-        // [4-7]: other data (4 bytes)
+        // [2-7]: other data (6 bytes) - purpose TBD, will determine from section headers
         while (pos + 8 <= sectionMapData.length) {
             try {
-                // Read section ID as 16-bit value from first 2 bytes
-                long id_field = io.dwg.core.util.ByteUtils.readLE32(sectionMapData, pos);
-                int sectionId = (int)(id_field & 0xFFFF);
+                // Read all 8 bytes
+                byte[] entryBytes = new byte[8];
+                for (int i = 0; i < 8; i++) {
+                    entryBytes[i] = sectionMapData[pos + i];
+                }
 
-                // Try reading bytes 2-3 as a potential size indicator
-                int size_field = (int)((id_field >> 16) & 0xFFFF);
+                // Parse section ID (bytes 0-1, LE)
+                int sectionId = (entryBytes[0] & 0xFF) | ((entryBytes[1] & 0xFF) << 8);
 
-                // Skip to next entry (8 bytes)
+                // Read remaining 6 bytes as hex for analysis
+                System.out.printf("[DEBUG] R2004SectionMap entry: ID=%2d  data=%02X %02X %02X %02X %02X %02X\n",
+                    sectionId,
+                    entryBytes[2] & 0xFF, entryBytes[3] & 0xFF, entryBytes[4] & 0xFF,
+                    entryBytes[5] & 0xFF, entryBytes[6] & 0xFF, entryBytes[7] & 0xFF);
+
                 pos += 8;
 
                 String name = sectionNames.getOrDefault(sectionId, "Unknown(" + sectionId + ")");
 
-                System.out.printf("[DEBUG] R2004SectionMap: Section ID=%2d %-25s offset=0x%06X size_field=0x%X\n",
-                    sectionId, name, currentOffset, size_field);
-
-                // Add to map (size to be determined from section headers)
-                // Skip empty/gap sections for now
-                if (!name.contains("(") || sectionId <= 27) {
+                // Create descriptor without size (will be determined from actual section headers)
+                if (sectionId >= 0 && sectionId <= 28) {
                     SectionDescriptor desc = new SectionDescriptor(name);
-                    desc.setOffset(currentOffset);
-                    // Size will be determined later when reading actual section headers
-                    desc.setUncompressedSize(0);
+                    desc.setOffset(0); // Offset will be set when reading section data
+                    desc.setUncompressedSize(0); // Size will be determined from section headers
                     map.descriptors.add(desc);
                 }
 
@@ -189,12 +188,10 @@ public class R2004SectionMap {
 
         System.out.printf("[DEBUG] R2004SectionMap: Loaded %d sections\n", map.descriptors.size());
 
-        // Debug: Print all section offsets
-        System.out.println("[DEBUG] R2004SectionMap: All section offsets:");
+        // Debug: Print extracted section names
+        System.out.println("[DEBUG] R2004SectionMap: Extracted sections:");
         for (SectionDescriptor desc : map.descriptors) {
-            if (desc.offset() > 0) {
-                System.out.printf("  %-25s offset=0x%06X\n", desc.name(), desc.offset());
-            }
+            System.out.printf("  %-25s\n", desc.name());
         }
 
         return map;

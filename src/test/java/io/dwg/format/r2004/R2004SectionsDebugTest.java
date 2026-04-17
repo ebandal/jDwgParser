@@ -24,7 +24,7 @@ public class R2004SectionsDebugTest {
         System.out.println("=".repeat(80));
         System.out.println();
 
-        String filePath = "samples/example_2004.dwg";
+        String filePath = "samples/2004/Arc.dwg";
         byte[] data = Files.readAllBytes(Paths.get(filePath));
 
         DwgVersion version = DwgVersion.R2004;
