@@ -285,6 +285,18 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
                     int decompSize = (int)(ByteUtils.readLE32(pageHeader, 12) & 0xFFFFFFFFL);
                     int startOffset = (int)(ByteUtils.readLE32(pageHeader, 16) & 0xFFFFFFFFL);
 
+                    // Debug: Show decrypted page header bytes for Header
+                    if ("AcDb:Header".equals(desc.name())) {
+                        System.out.printf("[DEBUG] R2004: Header decrypted page header bytes:\n");
+                        for (int i = 0; i < 32; i += 8) {
+                            System.out.printf("  0x%02X: ", i);
+                            for (int j = 0; j < 8; j++) {
+                                System.out.printf("%02X ", pageHeader[i + j] & 0xFF);
+                            }
+                            System.out.println();
+                        }
+                    }
+
                     System.out.printf("[DEBUG] R2004: '%s' page header - type=0x%X comp=%d decomp=%d\n",
                         desc.name(), pageType, compSize, decompSize);
 
@@ -292,6 +304,18 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
                         // Extract compressed data (skip 32-byte header)
                         byte[] compressedData = new byte[compSize];
                         System.arraycopy(data, 32, compressedData, 0, Math.min(compSize, data.length - 32));
+
+                        // Debug: Show all bytes of compressed data for Header
+                        if ("AcDb:Header".equals(desc.name())) {
+                            System.out.printf("[DEBUG] R2004: Header compressed data (%d bytes, hex dump):\n", compressedData.length);
+                            for (int i = 0; i < compressedData.length; i += 16) {
+                                System.out.printf("  0x%02X: ", i);
+                                for (int j = 0; j < 16 && i + j < compressedData.length; j++) {
+                                    System.out.printf("%02X ", compressedData[i + j] & 0xFF);
+                                }
+                                System.out.println();
+                            }
+                        }
 
                         // Try to decompress if needed
                         if (compSize < decompSize) {
