@@ -14,39 +14,45 @@ import java.util.List;
 public class R2004DataSectionDescriptor {
 
     public static SectionDescriptor read(BitInput input) {
-        long compressedSize   = input.readRawLong() & 0xFFFFFFFFL;
-        long uncompressedSize = input.readRawLong() & 0xFFFFFFFFL;
-        int  compressionType  = input.readRawLong();  // 0=none, 2=LZ77
-        // unknown, encrypt flags, unknown2 – 예약 필드 skip
-        input.readRawLong();
-        input.readRawLong();
-        input.readRawLong();
+        try {
+            long compressedSize   = input.readRawLong() & 0xFFFFFFFFL;
+            long uncompressedSize = input.readRawLong() & 0xFFFFFFFFL;
+            int  compressionType  = input.readRawLong();  // 0=none, 2=LZ77
+            // unknown, encrypt flags, unknown2 – 예약 필드 skip
+            input.readRawLong();
+            input.readRawLong();
+            input.readRawLong();
 
-        // 섹션 이름 (64바이트 고정 길이 UTF-16LE)
-        byte[] nameBytes = new byte[64];
-        for (int i = 0; i < 64; i++) nameBytes[i] = (byte) input.readRawChar();
-        String name = parseUtf16Name(nameBytes);
+            // 섹션 이름 (64바이트 고정 길이 UTF-16LE)
+            byte[] nameBytes = new byte[64];
+            for (int i = 0; i < 64; i++) nameBytes[i] = (byte) input.readRawChar();
+            String name = parseUtf16Name(nameBytes);
 
-        int pageCount = input.readRawLong();
+                int pageCount = input.readRawLong();
 
-        // DEBUG
-        System.out.printf("[DEBUG] Section: \"%s\" (pageCount=%d, compSize=0x%X, decompSize=0x%X, compress=%d)\n",
-            name.isEmpty() ? "(empty)" : name, pageCount, compressedSize, uncompressedSize, compressionType);
+            // DEBUG
+            System.out.printf("[DEBUG] Section: \"%s\" (pageCount=%d, compSize=0x%X, decompSize=0x%X, compress=%d)\n",
+                name.isEmpty() ? "(empty)" : name, pageCount, compressedSize, uncompressedSize, compressionType);
 
-        List<PageInfo> pages = new ArrayList<>();
-        for (int i = 0; i < pageCount; i++) {
-            R2004PageDescriptor pd = R2004PageDescriptor.read(input);
-            pages.add(new PageInfo(pd.pageOffset(), pd.dataSize(), pd.pageId()));
-            System.out.printf("  [Page %d] offset=0x%X, size=0x%X, id=0x%X\n",
-                i, pd.pageOffset(), pd.dataSize(), pd.pageId());
+            List<PageInfo> pages = new ArrayList<>();
+            for (int i = 0; i < pageCount; i++) {
+                R2004PageDescriptor pd = R2004PageDescriptor.read(input);
+                pages.add(new PageInfo(pd.pageOffset(), pd.dataSize(), pd.pageId()));
+                System.out.printf("  [Page %d] offset=0x%X, size=0x%X, id=0x%X\n",
+                    i, pd.pageOffset(), pd.dataSize(), pd.pageId());
+            }
+
+            SectionDescriptor desc = new SectionDescriptor(name);
+            desc.setCompressedSize(compressedSize);
+            desc.setUncompressedSize(uncompressedSize);
+            desc.setCompressionType(compressionType);
+            pages.forEach(desc::addPage);
+            return desc;
+        } catch (Exception e) {
+            System.out.printf("[ERROR] Failed to read section descriptor: %s\n", e.getMessage());
+            e.printStackTrace();
+            return null;
         }
-
-        SectionDescriptor desc = new SectionDescriptor(name);
-        desc.setCompressedSize(compressedSize);
-        desc.setUncompressedSize(uncompressedSize);
-        desc.setCompressionType(compressionType);
-        pages.forEach(desc::addPage);
-        return desc;
     }
 
     private static String parseUtf16Name(byte[] bytes) {
