@@ -1,219 +1,197 @@
 package io.dwg.core.util;
 
-import io.dwg.core.io.BitInput;
-import io.dwg.core.io.ByteBufferBitInput;
-
-import java.nio.ByteBuffer;
-
 /**
- * R2004 LZ77 Section Data Decompression
- * Based on OpenDesign Specification v5.4.1 Section 4.7
+ * R2004/R2007 LZ77 Decompression
+ * Based on libredwg decompress_r2007() function from decode_r2007.c
  */
 public class R2004Lz77Decompressor {
 
-    private static class EOFException extends RuntimeException {}
-
     public byte[] decompress(byte[] compressed, int expectedSize) throws Exception {
         byte[] output = new byte[expectedSize];
-        ByteBufferBitInput src = new ByteBufferBitInput(ByteBuffer.wrap(compressed));
+        int srcPos = 0;
+        int dstPos = 0;
+        int length = 0;
 
-        int outPos = 0;
+        // Read first opcode
+        if (srcPos >= compressed.length) throw new Exception("No data");
+        int opcode = compressed[srcPos++] & 0xFF;
 
-        try {
-            // Decompression loop (handle any opcode uniformly)
-            while (outPos < expectedSize) {
-                if (src.position() >= compressed.length * 8) {
-                    System.out.printf("[DEBUG] R2004Lz77: EOF at outPos=%d (expected %d)\n", outPos, expectedSize);
-                    break;
+        // Special handling for opcode & 0xF0 == 0x20
+        if ((opcode & 0xF0) == 0x20) {
+            srcPos += 2;
+            if (srcPos > compressed.length) throw new Exception("EOF reading 0x20 opcode");
+            length = compressed[srcPos++] & 0x07;
+            if (length == 0) throw new Exception("Zero length at opcode 0x20");
+        }
+
+        // Main decompression loop
+        while (srcPos < compressed.length) {
+            // Copy literal bytes
+            if (length == 0) {
+                int[] result = readLiteralLength(compressed, srcPos, opcode);
+                length = result[0];
+                srcPos = result[1];
+            }
+
+            // Check bounds for literal copy
+            if (dstPos + length > expectedSize) {
+                throw new Exception("Destination overflow during literal copy");
+            }
+            if (srcPos + length > compressed.length) {
+                // Partial copy on EOF
+                int available = compressed.length - srcPos;
+                System.arraycopy(compressed, srcPos, output, dstPos, available);
+                dstPos += available;
+                break;
+            }
+
+            System.arraycopy(compressed, srcPos, output, dstPos, length);
+            dstPos += length;
+            srcPos += length;
+            length = 0;
+
+            if (srcPos >= compressed.length) break;
+
+            opcode = compressed[srcPos++] & 0xFF;
+            int[] instrResult = readInstructions(compressed, srcPos, opcode, output, dstPos);
+            int offset = instrResult[0];
+            length = instrResult[1];
+            opcode = instrResult[2];
+            srcPos = instrResult[3];
+
+            // Copy previously decompressed bytes
+            while (true) {
+                if (dstPos + length > expectedSize) {
+                    throw new Exception("Destination overflow during reference copy");
+                }
+                if (offset > dstPos) {
+                    throw new Exception("Invalid offset: " + offset + " > " + dstPos);
                 }
 
-                int opcode = readByte(src);
-                System.out.printf("[DEBUG] R2004Lz77: Opcode=0x%02X at position %d, outPos=%d\n", opcode, src.position() / 8, outPos);
+                copyBytes(output, dstPos, length, offset);
+                dstPos += length;
 
-                if (opcode == 0x11) {
-                    System.out.printf("[DEBUG] R2004Lz77: Terminator at outPos=%d\n", outPos);
-                    break;
+                length = opcode & 0x07;
+                if (length != 0 || srcPos >= compressed.length) break;
+
+                opcode = compressed[srcPos++] & 0xFF;
+                if ((opcode >> 4) == 0) break;
+
+                if ((opcode >> 4) == 0x0F) {
+                    opcode &= 0x0F;
                 }
 
-                if ((opcode & 0xF0) == 0) {
-                    // Literal length opcode
-                    int litLength = readLiteralLength(src, opcode);
-                    System.out.printf("[DEBUG] R2004Lz77: Literal length=%d\n", litLength);
-                    outPos += copyLiteralBytes(src, litLength, output, outPos, compressed.length);
-                } else if (opcode < 0x10) {
-                    // Invalid range 0x01-0x0F
-                    System.out.printf("[WARN] R2004Lz77: Invalid opcode 0x%02X in range 0x01-0x0F\n", opcode);
-                    break;
-                } else if (opcode == 0x10) {
-                    // Long compression offset
-                    int compBytes = readLongCompressionOffset(src) + 9;
-                    int[] offsetRef = new int[1];
-                    int litCount = readTwoByteOffset(src, 0x3FFF, offsetRef);
-                    int compOffset = offsetRef[0];
-                    System.out.printf("[DEBUG] R2004Lz77: Mode 0x10: bytes=%d offset=%d litCount=%d\n", compBytes, compOffset, litCount);
-                    outPos += copyCompressedBytes(output, outPos, compBytes, compOffset);
-                    outPos += copyLiteralBytes(src, litCount, output, outPos, compressed.length);
-                } else if (opcode >= 0x12 && opcode <= 0x1F) {
-                    // Two-byte offset method (0x12-0x1F)
-                    int compBytes = (opcode & 0x0F) + 2;
-                    int[] offsetRef = new int[1];
-                    int litCount = readTwoByteOffset(src, 0x3FFF, offsetRef);
-                    int compOffset = offsetRef[0];
-                    System.out.printf("[DEBUG] R2004Lz77: Mode 0x12-0x1F: bytes=%d offset=%d litCount=%d\n", compBytes, compOffset, litCount);
-                    outPos += copyCompressedBytes(output, outPos, compBytes, compOffset);
-                    outPos += copyLiteralBytes(src, litCount, output, outPos, compressed.length);
-                } else if (opcode == 0x20) {
-                    // Long compression offset + two-byte offset
-                    int compBytes = readLongCompressionOffset(src) + 0x21;
-                    int[] offsetRef = new int[1];
-                    int litCount = readTwoByteOffset(src, 0, offsetRef);
-                    int compOffset = offsetRef[0];
-                    System.out.printf("[DEBUG] R2004Lz77: Mode 0x20: bytes=%d offset=%d litCount=%d\n", compBytes, compOffset, litCount);
-                    outPos += copyCompressedBytes(output, outPos, compBytes, compOffset);
-                    outPos += copyLiteralBytes(src, litCount, output, outPos, compressed.length);
-                } else if (opcode >= 0x21 && opcode <= 0x3F) {
-                    // Two-byte offset method (0x21-0x3F)
-                    int compBytes = opcode - 0x1E;
-                    int[] offsetRef = new int[1];
-                    int litCount = readTwoByteOffset(src, 0, offsetRef);
-                    int compOffset = offsetRef[0];
-                    System.out.printf("[DEBUG] R2004Lz77: Mode 0x21-0x3F: bytes=%d offset=%d litCount=%d\n", compBytes, compOffset, litCount);
-                    outPos += copyCompressedBytes(output, outPos, compBytes, compOffset);
-                    outPos += copyLiteralBytes(src, litCount, output, outPos, compressed.length);
-                } else if (opcode >= 0x40) {
-                    // Single byte offset method (0x40-0xFF)
-                    int compBytes = ((opcode >> 4) & 0x0F) - 1;
-                    int opcode2 = readByte(src);
-                    int compOffset = (int)(((opcode2 << 2) & 0xFFFFFFFFL) | ((opcode & 0x0C) >> 2));
-                    compOffset += 1; // Add 1 to offset
-                    int litCount = opcode & 0x03;
-                    System.out.printf("[DEBUG] R2004Lz77: Mode 0x40+: bytes=%d offset=%d litCount=%d\n", compBytes, compOffset, litCount);
-                    outPos += copyCompressedBytes(output, outPos, compBytes, compOffset);
-                    outPos += copyLiteralBytes(src, litCount, output, outPos, compressed.length);
+                instrResult = readInstructions(compressed, srcPos, opcode, output, dstPos);
+                offset = instrResult[0];
+                length = instrResult[1];
+                opcode = instrResult[2];
+                srcPos = instrResult[3];
+            }
+        }
+
+        return java.util.Arrays.copyOf(output, dstPos);
+    }
+
+    // Returns [length, newSrcPos]
+    private int[] readLiteralLength(byte[] src, int srcPos, int opcode) {
+        int length = opcode + 8;
+
+        if (length == 0x17) {  // opcode == 0x0F
+            if (srcPos >= src.length) return new int[]{length, srcPos};
+
+            int n = src[srcPos++] & 0xFF;
+            length += n;
+
+            if (n == 0xFF) {
+                while (srcPos + 1 < src.length) {
+                    int b0 = src[srcPos++] & 0xFF;
+                    int b1 = src[srcPos++] & 0xFF;
+                    n = b0 | (b1 << 8);
+
+                    length += n;
+                    if (n != 0xFFFF) break;
                 }
             }
-        } catch (EOFException e) {
-            System.out.printf("[DEBUG] R2004Lz77: EOF during decompression at outPos=%d (expected %d)\n", outPos, expectedSize);
         }
 
-        // Return only the valid decompressed portion
-        byte[] result = new byte[outPos];
-        System.arraycopy(output, 0, result, 0, outPos);
-        return result;
+        return new int[]{length, srcPos};
     }
 
-    /**
-     * Read a single byte from input, throwing EOFException on EOF
-     */
-    private int readByte(BitInput input) throws EOFException {
-        try {
-            return input.readRawChar() & 0xFF;
-        } catch (Exception e) {
-            throw new EOFException();
+    // Returns [offset, length, opcode, newSrcPos]
+    private int[] readInstructions(byte[] src, int srcPos, int opcode, byte[] output, int dstPos) {
+        int offset = 0;
+        int length = 0;
+        int origOpcode = opcode;
+
+        switch (opcode >> 4) {
+            case 0:  // 0x00-0x0F
+                length = (opcode & 0x0F) + 0x13;
+                if (srcPos >= src.length) throw new RuntimeException("EOF in read_instructions");
+                offset = src[srcPos++] & 0xFF;
+                if (srcPos >= src.length) throw new RuntimeException("EOF in read_instructions");
+                opcode = src[srcPos++] & 0xFF;
+                System.out.printf("[DEBUG] Case 0: opcode1=0x%02X, byte1=0x%02X, opcode2=0x%02X\n", origOpcode, offset & 0xFF, opcode);
+                length = (((opcode >> 3) & 0x10) + length) & 0xFFFF;
+                offset = (((opcode & 0x78) << 5) + 1 + offset) & 0xFFFF;
+                System.out.printf("[DEBUG] Case 0 result: length=%d, offset=%d, dstPos=%d\n", length, offset, dstPos);
+                break;
+
+            case 1:  // 0x10-0x1F
+                length = (opcode & 0x0F) + 3;
+                if (srcPos >= src.length) throw new RuntimeException("EOF in read_instructions");
+                offset = src[srcPos++] & 0xFF;
+                if (srcPos >= src.length) throw new RuntimeException("EOF in read_instructions");
+                opcode = src[srcPos++] & 0xFF;
+                offset = ((opcode & 0xF8) << 5) + 1 + offset;
+                break;
+
+            case 2:  // 0x20-0x2F
+            case 3:  // 0x30-0x3F
+                length = (opcode & 0x0F) + 3;
+                if (srcPos + 1 >= src.length) throw new RuntimeException("EOF in read_instructions");
+                offset = (src[srcPos++] & 0xFF) | ((src[srcPos++] & 0xFF) << 8);
+                if (srcPos >= src.length) throw new RuntimeException("EOF in read_instructions");
+                opcode = src[srcPos++] & 0xFF;
+                break;
+
+            case 4:  // 0x40-0x4F
+            case 5:  // 0x50-0x5F
+                length = (opcode & 0x0F) + 0x13;
+                if (srcPos + 1 >= src.length) throw new RuntimeException("EOF in read_instructions");
+                offset = (src[srcPos++] & 0xFF) | ((src[srcPos++] & 0xFF) << 8);
+                if (srcPos >= src.length) throw new RuntimeException("EOF in read_instructions");
+                opcode = src[srcPos++] & 0xFF;
+                break;
+
+            case 6:  // 0x60-0x6F
+            case 7:  // 0x70-0x7F
+                length = (opcode & 0x0F) + 3;
+                if (srcPos + 3 >= src.length) throw new RuntimeException("EOF in read_instructions");
+                offset = (src[srcPos++] & 0xFF) | ((src[srcPos++] & 0xFF) << 8) |
+                        ((src[srcPos++] & 0xFF) << 16);
+                opcode = src[srcPos++] & 0xFF;
+                break;
+
+            case 8:  // 0x80-0x8F
+            case 9:  // 0x90-0x9F
+                length = (opcode & 0x0F) + 0x13;
+                if (srcPos + 3 >= src.length) throw new RuntimeException("EOF in read_instructions");
+                offset = (src[srcPos++] & 0xFF) | ((src[srcPos++] & 0xFF) << 8) |
+                        ((src[srcPos++] & 0xFF) << 16);
+                opcode = src[srcPos++] & 0xFF;
+                break;
+
+            default:
+                throw new RuntimeException("Invalid opcode nibble: " + (opcode >> 4));
         }
+
+        return new int[]{offset, length, opcode, srcPos};
     }
 
-    /**
-     * Read literal length from opcode (spec section 4.7)
-     * 0x01-0x0E: value + 3
-     * 0x00: read bytes until non-zero
-     */
-    private int readLiteralLength(BitInput input, int opcode) throws EOFException {
-        int lowbits = opcode & 0x0F;
-
-        if (lowbits == 0) {
-            // Read bytes until we get a non-zero one
-            int total = 0x0F;
-            int nextByte;
-            while ((nextByte = readByte(input)) == 0) {
-                total += 0xFF;
-            }
-            total += nextByte;
-            return total + 3;
-        } else if (lowbits == 0x0F) {
-            // 0xF0 - high nibble set, this is actually an opcode
-            return 0; // No literal length, the opcode is ready to process
-        } else {
-            // 0x01-0x0E
-            return lowbits + 3;
+    private void copyBytes(byte[] dst, int dstPos, int length, int offset) {
+        int srcPos = dstPos - offset;
+        for (int i = 0; i < length; i++) {
+            dst[dstPos + i] = dst[srcPos + i];
         }
-    }
-
-    /**
-     * Read long compression offset (spec section 4.7)
-     * 0x01-0xFF: value as-is
-     * 0x00: accumulate 0xFF values until non-zero byte
-     */
-    private int readLongCompressionOffset(BitInput input) throws EOFException {
-        int firstByte = readByte(input);
-
-        if (firstByte == 0) {
-            // Accumulate 0xFF values
-            int total = 0xFF;
-            int nextByte;
-            while ((nextByte = readByte(input)) == 0) {
-                total += 0xFF;
-            }
-            total += nextByte;
-            return total;
-        } else {
-            return firstByte;
-        }
-    }
-
-    /**
-     * Read two-byte offset (spec section 4.7)
-     * Returns litCount, sets offset in offsetRef array
-     */
-    private int readTwoByteOffset(BitInput input, int plus, int[] offsetRef) throws EOFException {
-        int firstByte = readByte(input);
-        int secondByte = readByte(input);
-
-        // offset = (firstByte >> 2) | (secondByte << 6)
-        int offset = ((firstByte >> 2) & 0xFF) | ((secondByte & 0xFF) << 6);
-        offsetRef[0] = offset + plus;
-
-        // litCount = firstByte & 0x03
-        return firstByte & 0x03;
-    }
-
-    /**
-     * Copy compressed (referenced) bytes from earlier in the output
-     */
-    private int copyCompressedBytes(byte[] output, int outPos, int count, int offset) {
-        if (offset <= 0 || offset > outPos) {
-            System.out.printf("[WARN] R2004Lz77: Invalid offset %d at outPos %d\n", offset, outPos);
-            return 0;
-        }
-
-        int refPos = outPos - offset;
-        int copied = 0;
-
-        for (int i = 0; i < count && outPos + i < output.length; i++) {
-            output[outPos + i] = output[refPos + i];
-            copied++;
-        }
-
-        return copied;
-    }
-
-    /**
-     * Copy literal bytes from input stream
-     */
-    private int copyLiteralBytes(BitInput input, int count, byte[] output, int outPos, int compressedSize) throws EOFException {
-        int copied = 0;
-
-        for (int i = 0; i < count && outPos + i < output.length; i++) {
-            try {
-                output[outPos + i] = (byte) readByte(input);
-                copied++;
-            } catch (EOFException e) {
-                // EOF reached
-                System.out.printf("[DEBUG] R2004Lz77: EOF while copying literal bytes, copied %d of %d\n", copied, count);
-                throw e; // Re-throw to let the main loop know
-            }
-        }
-
-        return copied;
     }
 }
