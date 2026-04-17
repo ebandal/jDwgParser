@@ -10,6 +10,7 @@ import io.dwg.format.common.AbstractFileStructureHandler;
 import io.dwg.format.common.FileHeaderFields;
 import io.dwg.format.common.SectionDescriptor;
 
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -267,15 +268,24 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
                     desc.name(), data.length, desc.offset(), desc.offset() + sectionSize);
 
                 // R2004 sections are stored with 32-byte encrypted page headers
-                // Format: [32-byte encrypted header] [compressed/uncompressed data]
+                // Format: [32-byte encrypted header] [compressed/uncompressed data] [repeat for multiple pages]
                 byte[] sectionData = data;
 
-                if (data.length >= 32) {
+                // Check if this section spans multiple pages
+                System.out.printf("[DEBUG] R2004: Processing section '%s' (%d bytes total)\n", desc.name(), data.length);
+
+                ByteArrayOutputStream combinedDecompressed = new ByteArrayOutputStream();
+                int pageOffset = 0;
+                int pageCount = 0;
+
+                while (pageOffset < data.length && pageOffset + 32 <= data.length) {
+                    pageCount++;
+                    System.out.printf("[DEBUG] R2004: Reading page %d at offset %d\n", pageCount, pageOffset);
                     // Decrypt page header
-                    long secMask = 0x4164536bL ^ (desc.offset() & 0xFFFFFFFFL);
+                    long secMask = 0x4164536bL ^ ((desc.offset() + pageOffset) & 0xFFFFFFFFL);
                     byte[] pageHeader = new byte[32];
                     for (int i = 0; i < 32; i++) {
-                        pageHeader[i] = (byte)(data[i] ^ ((secMask >> ((i & 3) * 8)) & 0xFF));
+                        pageHeader[i] = (byte)(data[pageOffset + i] ^ ((secMask >> ((i & 3) * 8)) & 0xFF));
                     }
 
                     // Parse page header
@@ -303,40 +313,41 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
                     if (pageType == 0x4163043B) { // Data section page
                         // Extract compressed data (skip 32-byte header)
                         byte[] compressedData = new byte[compSize];
-                        System.arraycopy(data, 32, compressedData, 0, Math.min(compSize, data.length - 32));
-
-                        // Debug: Show all bytes of compressed data for Header
-                        if ("AcDb:Header".equals(desc.name())) {
-                            System.out.printf("[DEBUG] R2004: Header compressed data (%d bytes, hex dump):\n", compressedData.length);
-                            for (int i = 0; i < compressedData.length; i += 16) {
-                                System.out.printf("  0x%02X: ", i);
-                                for (int j = 0; j < 16 && i + j < compressedData.length; j++) {
-                                    System.out.printf("%02X ", compressedData[i + j] & 0xFF);
-                                }
-                                System.out.println();
-                            }
-                        }
+                        int availableBytes = Math.min(compSize, data.length - pageOffset - 32);
+                        System.arraycopy(data, pageOffset + 32, compressedData, 0, availableBytes);
 
                         // Try to decompress if needed
                         if (compSize < decompSize) {
                             try {
-                                System.out.printf("[DEBUG] R2004: '%s' decompressing %d->%d bytes\n", desc.name(), compSize, decompSize);
+                                System.out.printf("[DEBUG] R2004: '%s' page at offset %d: decompressing %d->%d bytes\n",
+                                    desc.name(), pageOffset, compSize, decompSize);
                                 io.dwg.core.util.R2004Lz77Decompressor decompressor = new io.dwg.core.util.R2004Lz77Decompressor();
-                                sectionData = decompressor.decompress(compressedData, decompSize);
-                                System.out.printf("[DEBUG] R2004: '%s' decompressed to %d bytes\n", desc.name(), sectionData.length);
+                                byte[] pageDecompressed = decompressor.decompress(compressedData, decompSize);
+                                combinedDecompressed.write(pageDecompressed);
+                                System.out.printf("[DEBUG] R2004: Page decompressed to %d bytes\n", pageDecompressed.length);
                             } catch (Exception e) {
-                                System.out.printf("[WARN] R2004: Failed to decompress '%s': %s\n", desc.name(), e.toString());
-                                e.printStackTrace();
-                                sectionData = compressedData;
+                                System.out.printf("[WARN] R2004: Failed to decompress page: %s\n", e.toString());
+                                combinedDecompressed.write(compressedData, 0, availableBytes);
                             }
                         } else {
-                            sectionData = compressedData;
+                            combinedDecompressed.write(compressedData, 0, availableBytes);
                         }
                     } else {
-                        // Not a standard page, use all data after header
-                        sectionData = new byte[data.length - 32];
-                        System.arraycopy(data, 32, sectionData, 0, sectionData.length);
+                        // Not a standard page, skip it
+                        System.out.printf("[DEBUG] R2004: Non-data page type 0x%X, skipping\n", pageType);
                     }
+
+                    // Move to next page (32-byte header + compSize bytes of data)
+                    pageOffset += 32 + compSize;
+                }
+
+                // Use combined decompressed data from all pages
+                if (combinedDecompressed.size() > 0) {
+                    sectionData = combinedDecompressed.toByteArray();
+                    System.out.printf("[DEBUG] R2004: Section '%s' total decompressed: %d bytes from %d input bytes\n",
+                        desc.name(), sectionData.length, data.length);
+                } else {
+                    sectionData = data;  // Fallback to raw data if no pages decompressed
                 }
 
                 // Debug output for Classes section
