@@ -70,13 +70,25 @@ public class R2004SectionMap {
         }
         System.out.println();
 
-        // Try using compressed data directly as section map (maybe not actually compressed for R2004)
-        System.out.printf("[DEBUG] R2004SectionMap: Trying to parse compressed data as section map directly\n");
+        // Decompress using R2004 LZ77
+        // NOTE: Both Lz77Decompressor and DecoderR2004 produce unusable output
+        // This is a blocker - R2004 LZ77 variant is different from R2007+
+        System.out.printf("[DEBUG] R2004SectionMap: Attempting decompression (known to fail)\n");
+        System.out.printf("[TODO] Need to implement correct R2004 LZ77 decompressor\n");
+        System.out.printf("[TODO] Reference: LibreDWG decompress_R2004_section() in decode.c\n");
 
-        byte[] sectionMapData = compressedData;
+        byte[] sectionMapData;
+        try {
+            io.dwg.core.util.Lz77Decompressor decompressor = new io.dwg.core.util.Lz77Decompressor();
+            sectionMapData = decompressor.decompress(compressedData, decomp_data_size);
+            System.out.printf("[DEBUG] R2004SectionMap: Decompressed to %d bytes\n", sectionMapData.length);
+        } catch (Exception e) {
+            System.out.printf("[WARN] R2004SectionMap: Decompression failed, skipping: %s\n", e.getMessage());
+            return map;
+        }
 
         // DEBUG: Print first 64 bytes
-        System.out.printf("[DEBUG] R2004SectionMap: First 64 bytes (hex+ASCII):\n");
+        System.out.printf("[DEBUG] R2004SectionMap: First 64 bytes of decompressed (hex+ASCII):\n");
         for (int i = 0; i < Math.min(64, sectionMapData.length); i += 16) {
             System.out.printf("  0x%04X: ", i);
             for (int j = 0; j < 16 && i + j < sectionMapData.length; j++) {
@@ -91,7 +103,7 @@ public class R2004SectionMap {
         }
 
         if (sectionMapData.length < 20) {
-            System.out.printf("[WARN] R2004SectionMap: section map data too small for header (%d bytes)\n", sectionMapData.length);
+            System.out.printf("[WARN] R2004SectionMap: decompressed data too small for header (%d bytes)\n", sectionMapData.length);
             return map;
         }
 
