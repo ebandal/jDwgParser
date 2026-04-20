@@ -9,10 +9,10 @@ import decode.DwgParseException;
 
 public class TestDwgDecode {
     public static void main(String[] args) throws Exception {
-        // Enable info logging
+        // Enable fine logging to see ObjectReader activity
         Logger root = Logger.getLogger("");
-        root.setLevel(Level.INFO);
-        for (java.util.logging.Handler h : root.getHandlers()) h.setLevel(Level.INFO);
+        root.setLevel(Level.FINE);
+        for (java.util.logging.Handler h : root.getHandlers()) h.setLevel(Level.FINE);
 
         String path = args.length > 0 ? args[0] : "samples/2004/Arc.dwg";
         File f = new File(path);

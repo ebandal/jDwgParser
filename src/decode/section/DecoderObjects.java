@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Logger;
 
+import decode.reader.ObjectReaderRegistry;
 import structure.DwgVersion;
 import structure.entities.*;
 
@@ -118,39 +119,63 @@ public final class DecoderObjects {
     }
 
     private static DwgObject instantiateObject(ObjectStream stream, DwgObjectType type, DwgVersion ver) {
+        DwgObject obj = null;
+
         switch (type) {
             case LINE:
-                return new DwgLine();
+                obj = new DwgLine();
+                break;
             case CIRCLE:
-                return new DwgCircle();
+                obj = new DwgCircle();
+                break;
             case ARC:
-                return new DwgArc();
+                obj = new DwgArc();
+                break;
             case TEXT:
-                return new DwgText();
+                obj = new DwgText();
+                break;
             case INSERT:
-                return new DwgInsert();
+                obj = new DwgInsert();
+                break;
             case LAYER:
-                return new DwgLayer();
+                obj = new DwgLayer();
+                break;
             case ELLIPSE:
-                return new DwgEllipse();
+                obj = new DwgEllipse();
+                break;
             case POINT:
-                return new DwgPoint();
+                obj = new DwgPoint();
+                break;
             case RAY:
-                return new DwgRay();
+                obj = new DwgRay();
+                break;
             case BLOCK_HEADER:
-                return new DwgBlockHeader();
+                obj = new DwgBlockHeader();
+                break;
             case BLOCK_END:
-                return new DwgBlockEnd();
+                obj = new DwgBlockEnd();
+                break;
             case LTYPE:
-                return new DwgLtype();
+                obj = new DwgLtype();
+                break;
             case STYLE:
-                return new DwgStyle();
+                obj = new DwgStyle();
+                break;
             case DICTIONARY:
-                return new DwgDictionary();
+                obj = new DwgDictionary();
+                break;
             default:
                 log.fine("Unhandled object type: " + type);
-                return new DwgLayer(); // Fallback
+                obj = new DwgLayer(); // Fallback
+                break;
         }
+
+        // Populate fields using ObjectReader if available
+        if (obj != null && stream.data != null && stream.data.length > 0) {
+            ObjectReaderRegistry.readObject(obj, stream.data, 0, ver);
+        }
+
+        return obj;
     }
 
     private static int readModularShort(byte[] buf, int off) {
