@@ -70,7 +70,15 @@ public final class DecoderObjects {
                     int typeCode = reader.readBitShort();
 
                     // Create and populate object with fields read from BitStreamReader
+                    long startFieldPos = reader.position();
                     DwgObject obj = instantiateAndReadObject(typeCode, ver, reader);
+                    long endFieldPos = reader.position();
+
+                    // Log field reading for debugging
+                    if (typeCode >= 0x11 && typeCode <= 0x23) {
+                        log.info(String.format("Entity 0x%X: read %d bits (%d bytes)",
+                            typeCode, endFieldPos - startFieldPos, (endFieldPos - startFieldPos + 7) / 8));
+                    }
 
                     // Skip CRC (BS = 16 bits)
                     reader.readBitShort();
@@ -299,23 +307,43 @@ public final class DecoderObjects {
 
     // Field reading methods - read fields from BitStreamReader
     private static void readLineFields(DwgLine obj, BitStreamReader r) throws Exception {
-        double[] start = r.read3BitDouble();
-        double[] end = r.read3BitDouble();
-        if (obj instanceof structure.entities.AbstractDwgObject) {
-            // Just read fields to advance stream position, don't set them yet
-        }
+        // R2000+: Complex format for Line (not simple 3BD)
+        boolean zAreZero = r.getInput().readBit();
+        double sx = r.getInput().readRawDouble();
+        double ex = r.getInput().readRawDouble();
+        double sy = r.getInput().readRawDouble();
+        double ey = r.getInput().readRawDouble();
+        double sz = zAreZero ? 0.0 : r.getInput().readRawDouble();
+        double ez = zAreZero ? 0.0 : r.getInput().readRawDouble();
+
+        log.info(String.format("Line: start=(%.2f,%.2f,%.2f) end=(%.2f,%.2f,%.2f)",
+            sx, sy, sz, ex, ey, ez));
+
+        r.readBitThickness();
+        r.readBitExtrusion();
     }
 
     private static void readCircleFields(DwgCircle obj, BitStreamReader r) throws Exception {
         double[] center = r.read3BitDouble();
         double radius = r.readBitDouble();
+        r.readBitThickness();
+        r.readBitExtrusion();
+
+        log.info(String.format("Circle: center=(%.2f,%.2f,%.2f) radius=%.2f",
+            center[0], center[1], center[2], radius));
     }
 
     private static void readArcFields(DwgArc obj, BitStreamReader r) throws Exception {
         double[] center = r.read3BitDouble();
         double radius = r.readBitDouble();
+        r.readBitThickness();
+        r.readBitExtrusion();
         double startAngle = r.readBitDouble();
         double endAngle = r.readBitDouble();
+
+        log.info(String.format("Arc: center=(%.2f,%.2f,%.2f) radius=%.2f angle=[%.2f,%.2f]",
+            center[0], center[1], center[2], radius, startAngle, endAngle));
+
         obj.setCenter(new structure.entities.Point3D(center[0], center[1], center[2]));
         obj.setRadius(radius);
         obj.setStartAngle(startAngle);
@@ -329,6 +357,10 @@ public final class DecoderObjects {
         double ratio = r.readBitDouble();
         double startParam = r.readBitDouble();
         double endParam = r.readBitDouble();
+
+        log.info(String.format("Ellipse: center=(%.2f,%.2f,%.2f) major=(%.2f,%.2f,%.2f) ratio=%.2f",
+            center[0], center[1], center[2], major[0], major[1], major[2], ratio));
+
         obj.setCenter(new structure.entities.Point3D(center[0], center[1], center[2]));
         obj.setMajorAxisVec(new structure.entities.Point3D(major[0], major[1], major[2]));
         obj.setExtrusion(extrusion);
@@ -351,11 +383,14 @@ public final class DecoderObjects {
 
     private static void readPointFields(DwgPoint obj, BitStreamReader r) throws Exception {
         double[] point = r.read3BitDouble();
+        log.info(String.format("Point: (%.2f,%.2f,%.2f)", point[0], point[1], point[2]));
     }
 
     private static void readRayFields(DwgRay obj, BitStreamReader r) throws Exception {
         double[] point = r.read3BitDouble();
         double[] direction = r.read3BitDouble();
+        log.info(String.format("Ray: point=(%.2f,%.2f,%.2f) dir=(%.2f,%.2f,%.2f)",
+            point[0], point[1], point[2], direction[0], direction[1], direction[2]));
     }
 
     private static void readBlockHeaderFields(DwgBlockHeader obj, BitStreamReader r) throws Exception {
