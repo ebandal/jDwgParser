@@ -4,4 +4,6 @@ import structure.sectionpage.header.DataSectionPageHeader;
 
 public class DataSectionPage {
     public DataSectionPageHeader header;
+    public byte[] compressedData;
+    public byte[] decompressedData;
 }

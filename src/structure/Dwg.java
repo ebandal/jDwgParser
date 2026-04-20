@@ -24,6 +24,7 @@ import decode.DecodeCallback;
 import decode.DecoderR14;
 import decode.DecoderR2004;
 import decode.DecoderR2007;
+import decode.DwgCrcMismatchException;
 import decode.DwgParseException;
 import structure.header.FileHeader;
 import structure.sectionpage.DataSectionPage;
@@ -79,7 +80,8 @@ public class Dwg {
         switch(header.versionId) {
         case "AC1012":
             header.ver = DwgVersion.R13;
-            throw new DwgParseException();
+            offset += DecoderR14.readData(raf, this);
+            break;
         case "AC1014":
             header.ver = DwgVersion.R14;
             offset += DecoderR14.readData(raf, this);
@@ -124,7 +126,9 @@ public class Dwg {
         switch(fileHeader.versionId) {
         case "AC1012":
             fileHeader.ver = DwgVersion.R13;
-            throw new DwgParseException();
+            offset = 6;
+            offset += DecoderR14.readFileHeader(raf, offset, fileHeader);
+            break;
         case "AC1014":
             fileHeader.ver = DwgVersion.R14;
             offset = 6;
@@ -139,7 +143,11 @@ public class Dwg {
             buf = new byte[0x100];
             offset += 6;
             readLen = raf.read(buf, offset, 0x100-6);
-            // offset += DecoderR2004.readFileHeader(buf, offset, fileHeader);
+            try {
+                offset += DecoderR2004.readFileHeader(buf, offset, fileHeader);
+            } catch (DwgCrcMismatchException e) {
+                log.warning("R2004 header CRC mismatch: " + e.getMessage());
+            }
             break;
         case "AC1021":
             fileHeader.ver = DwgVersion.R2007;
@@ -151,12 +159,27 @@ public class Dwg {
             break;
         case "AC1024":
             fileHeader.ver = DwgVersion.R2010;
+            buf = new byte[0x480];
+            offset = 6;
+            readLen = raf.read(buf, offset, 0x480-6);
+            offset += DecoderR2007.readMetaData(buf, offset, fileHeader);
+            offset += DecoderR2007.readFileHeader(buf, offset, fileHeader);
             break;
         case "AC1027":
             fileHeader.ver = DwgVersion.R2013;
+            buf = new byte[0x480];
+            offset = 6;
+            readLen = raf.read(buf, offset, 0x480-6);
+            offset += DecoderR2007.readMetaData(buf, offset, fileHeader);
+            offset += DecoderR2007.readFileHeader(buf, offset, fileHeader);
             break;
         case "AC1032":
             fileHeader.ver = DwgVersion.R2018;
+            buf = new byte[0x480];
+            offset = 6;
+            readLen = raf.read(buf, offset, 0x480-6);
+            offset += DecoderR2007.readMetaData(buf, offset, fileHeader);
+            offset += DecoderR2007.readFileHeader(buf, offset, fileHeader);
             break;
         }
         
@@ -1225,7 +1248,8 @@ public class Dwg {
     	} else if (ver.from(DwgVersion.R18)) {
 
             // section is compressed, contains the standard 32byte section header
-            byte[] decomBuf = DecoderR2004.decompressR18(buf, offset.get());
+            byte[] sliced = Arrays.copyOfRange(buf, offset.get(), buf.length);
+            byte[] decomBuf = decode.util.R2004Lz77.decompress(sliced, sliced.length * 4);
             AtomicInteger decomOffset = new AtomicInteger(0);
             
             DecodeCallback cb = new DecodeCallback() {
@@ -1364,7 +1388,8 @@ public class Dwg {
              * (starting with offset 0 at the beginning of this logical section).
              */
             try {
-                byte[] decomBuf = DecoderR2004.decompressR18(buf, offset.get());
+                byte[] sliced = Arrays.copyOfRange(buf, offset.get(), buf.length);
+                byte[] decomBuf = decode.util.R2004Lz77.decompress(sliced, sliced.length * 4);
                 AtomicInteger decomOffset = new AtomicInteger(0);
 
                 // 32byte section header

@@ -42,6 +42,14 @@ public class FileHeader {
     public int sectionPageArraySize;                // R2004
     public int gapArraySize;                        // R2004
     public int crc32;                               // R2004
+
+    // R2007+ RS-decoded header fields
+    public long pageMapOffset;                      // R2007+
+    public long pageMapSize;                        // R2007+
+    public long pagesMapId;                         // R2007+
+    public long sectionsMapId;                      // R2007+
+    public long numDescriptions;                    // R2007+
+    public byte[] rs_decoded_header;                // R2007+ 717-byte RS-decoded header
     
     public SystemSectionPageHeader ssph;            // R2004
     public DataSectionPageHeader dsph;              // R2004
