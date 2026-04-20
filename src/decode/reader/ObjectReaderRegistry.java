@@ -116,7 +116,8 @@ public class ObjectReaderRegistry {
                 reader.read(obj, data, offset, version);
                 log.fine("Read " + obj.getClass().getSimpleName() + " (type 0x" + Integer.toHexString(typeCode) + ", data=" + data.length + " bytes)");
             } catch (Exception e) {
-                log.warning("Failed to read object type 0x" + Integer.toHexString(typeCode) + ": " + e.getMessage());
+                log.warning("Failed to read object type 0x" + Integer.toHexString(typeCode) + ": " + e.getClass().getSimpleName() + ": " + e.getMessage());
+                e.printStackTrace();
             }
         } else {
             log.fine("No ObjectReader for type 0x" + Integer.toHexString(typeCode) + " (" + obj.getClass().getSimpleName() + ")");
