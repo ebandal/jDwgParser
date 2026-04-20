@@ -93,6 +93,7 @@ public class Dwg {
         case "AC1018":
             header.ver = DwgVersion.R2004;
             offset += DecoderR2004.readSectionPage(raf, this);
+            DecoderR2004.parseSections(this);
             break;
         case "AC1021":
             header.ver = DwgVersion.R2007;

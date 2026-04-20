@@ -9,6 +9,10 @@ import java.util.ArrayList;
 import java.util.logging.Logger;
 
 import decode.util.R2004Lz77;
+import decode.section.DecoderClasses;
+import decode.section.DecoderHandles;
+import decode.section.DecoderHeader;
+import decode.section.DecoderObjects;
 import structure.Dwg;
 import structure.header.FileHeader;
 import structure.sectionpage.DataSectionPage;
@@ -386,6 +390,74 @@ public class DecoderR2004 {
         // not implemented yet
 
         return hdr.crc32;
+    }
+
+    public static void parseSections(Dwg dwg) {
+        if (dwg.systemSectionPageList != null && !dwg.systemSectionPageList.isEmpty()) {
+            for (SystemSectionPage section : dwg.systemSectionPageList) {
+                if (section.decompressedData != null && section.decompressedData.length > 0) {
+                    parseSystemSection(section, dwg);
+                }
+            }
+        }
+
+        if (dwg.dataSectionPageList != null && !dwg.dataSectionPageList.isEmpty()) {
+            for (DataSectionPage section : dwg.dataSectionPageList) {
+                if (section.decompressedData != null && section.decompressedData.length > 0) {
+                    parseDataSection(section, dwg);
+                }
+            }
+        }
+    }
+
+    private static void parseSystemSection(SystemSectionPage section, Dwg dwg) {
+        byte[] data = section.decompressedData;
+        if (data.length < 16) {
+            log.fine("System section too small: " + data.length);
+            return;
+        }
+
+        try {
+            // System section typically contains multiple subsections
+            // Try to parse as Header section (starts with sentinel)
+            if (data[0] == (byte)0xCF) {
+                log.fine("Parsing as Header section");
+                var headerVars = DecoderHeader.readHeader(data, 0, dwg.header.ver);
+                if (headerVars != null && !headerVars.isEmpty()) {
+                    dwg.headerVariables = new structure.sectionpage.HeaderVariables();
+                    log.info("Header section parsed: " + headerVars.size() + " variables");
+                }
+            }
+
+            // Try to parse as Classes section (starts with different sentinel)
+            if (data[0] == (byte)0x8D) {
+                log.fine("Parsing as Classes section");
+                var classes = DecoderClasses.readClasses(data, 0, dwg.header.ver);
+                if (classes != null && !classes.isEmpty()) {
+                    log.info("Classes section parsed: " + classes.size() + " classes");
+                }
+            }
+        } catch (Exception e) {
+            log.fine("System section parsing error: " + e.getMessage());
+        }
+    }
+
+    private static void parseDataSection(DataSectionPage section, Dwg dwg) {
+        byte[] data = section.decompressedData;
+        if (data.length < 4) {
+            log.fine("Data section too small: " + data.length);
+            return;
+        }
+
+        try {
+            // Try to parse as Objects section
+            var objects = DecoderObjects.readObjects(data, 0, dwg.header.ver, null);
+            if (objects != null && !objects.isEmpty()) {
+                log.info("Data section parsed: " + objects.size() + " objects");
+            }
+        } catch (Exception e) {
+            log.fine("Data section parsing error: " + e.getMessage());
+        }
     }
 
 }
