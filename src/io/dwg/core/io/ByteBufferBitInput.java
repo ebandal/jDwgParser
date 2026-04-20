@@ -53,22 +53,34 @@ public class ByteBufferBitInput implements BitInput {
 
     @Override
     public int readRawChar() {
-        return buffer.get() & 0xFF;
+        alignToByteOffset();
+        int value = buffer.get() & 0xFF;
+        bitOffset += 8;
+        return value;
     }
 
     @Override
     public short readRawShort() {
-        return buffer.getShort();
+        alignToByteOffset();
+        short value = buffer.getShort();
+        bitOffset += 16;
+        return value;
     }
 
     @Override
     public int readRawLong() {
-        return buffer.getInt();
+        alignToByteOffset();
+        int value = buffer.getInt();
+        bitOffset += 32;
+        return value;
     }
 
     @Override
     public double readRawDouble() {
-        return buffer.getDouble();
+        alignToByteOffset();
+        double value = buffer.getDouble();
+        bitOffset += 64;
+        return value;
     }
 
     @Override
@@ -120,6 +132,16 @@ public class ByteBufferBitInput implements BitInput {
         } else {
             currentByte = 0;
             bitsRemainingInByte = 0;
+        }
+    }
+
+    private void alignToByteOffset() {
+        if (bitsRemainingInByte > 0 && bitsRemainingInByte < 8) {
+            // We're in the middle of a byte, skip to next byte
+            bitOffset += bitsRemainingInByte;
+            bitsRemainingInByte = 0;
+            currentByte = 0;
+            // buffer.position() already moved forward by loadNextByte(), no need to adjust
         }
     }
 }
