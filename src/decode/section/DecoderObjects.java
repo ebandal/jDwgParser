@@ -83,6 +83,12 @@ public final class DecoderObjects {
                     // Skip CRC
                     offset += 2;
 
+                    // Debug: log Arc/Ellipse sizes
+                    if (typeCode == 0x11 || typeCode == 0x23) {
+                        log.info(String.format("Parse: type=0x%X, objSize=%d, sizeBytes=%d, dataSize=%d, actualData=%d",
+                                typeCode, objectSize, sizeBytes, dataSize, data != null ? data.length : 0));
+                    }
+
                     // Create object
                     ObjectStream stream = new ObjectStream();
                     stream.objectSize = objectSize;

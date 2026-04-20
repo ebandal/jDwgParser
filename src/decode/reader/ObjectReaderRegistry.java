@@ -90,6 +90,11 @@ public class ObjectReaderRegistry {
             typeCode = abstractObj.rawTypeCode();
         }
 
+        // Debug: log all non-Layer objects
+        if (!(obj instanceof structure.entities.DwgLayer) && typeCode > 0) {
+            log.info("ObjectReader: " + obj.getClass().getSimpleName() + " (type=0x" + Integer.toHexString(typeCode) + "), data=" + data.length + " bytes");
+        }
+
         if (typeCode == -1 || typeCode == 0) {
             log.fine("Cannot determine object type for " + obj.getClass().getSimpleName());
             return;
@@ -98,8 +103,18 @@ public class ObjectReaderRegistry {
         ObjectReader reader = readers.get(typeCode);
         if (reader != null) {
             try {
+                // Debug: log data for Arc/Circle/Line/Ellipse entities (type codes 0x11, 0x12, 0x13, 0x23)
+                if ((typeCode == 0x11 || typeCode == 0x12 || typeCode == 0x13 || typeCode == 0x23) && data.length > 0) {
+                    StringBuilder hex = new StringBuilder();
+                    for (int i = 0; i < Math.min(48, data.length); i++) {
+                        hex.append(String.format("%02x ", data[i] & 0xFF));
+                    }
+                    log.fine(String.format("Reading %s (type 0x%X) data: %s",
+                        obj.getClass().getSimpleName(), typeCode, hex.toString()));
+                }
+
                 reader.read(obj, data, offset, version);
-                log.fine("Read " + obj.getClass().getSimpleName() + " (type 0x" + Integer.toHexString(typeCode) + ")");
+                log.fine("Read " + obj.getClass().getSimpleName() + " (type 0x" + Integer.toHexString(typeCode) + ", data=" + data.length + " bytes)");
             } catch (Exception e) {
                 log.warning("Failed to read object type 0x" + Integer.toHexString(typeCode) + ": " + e.getMessage());
             }

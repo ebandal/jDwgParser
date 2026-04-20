@@ -487,8 +487,25 @@ public class DecoderR2004 {
         }
 
         try {
+            // Debug: Check section structure
+            int startOffset = 0;
+
+            // Log first 64 bytes to analyze structure
+            log.fine("Objects section raw data:");
+            StringBuilder hex = new StringBuilder();
+            for (int i = 0; i < Math.min(64, data.length); i++) {
+                hex.append(String.format("%02x ", data[i] & 0xFF));
+                if ((i + 1) % 16 == 0) {
+                    log.fine("  [" + (i - 15) + "-" + i + "]: " + hex.toString());
+                    hex = new StringBuilder();
+                }
+            }
+            if (hex.length() > 0) {
+                log.fine("  [" + (Math.min(64, data.length) - (Math.min(64, data.length) % 16)) + "-" + (Math.min(64, data.length) - 1) + "]: " + hex.toString());
+            }
+
             // Parse Objects section with handle map to locate objects
-            var objects = DecoderObjects.readObjects(data, 0, dwg.header.ver, handleMap, dwg);
+            var objects = DecoderObjects.readObjects(data, startOffset, dwg.header.ver, handleMap, dwg);
             if (objects != null && !objects.isEmpty()) {
                 log.info("Objects section parsed: " + objects.size() + " objects");
                 dwg.parsedObjects.putAll(objects);
