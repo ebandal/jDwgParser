@@ -23,8 +23,17 @@ public class R2004Lz77Decompressor {
             return new byte[0];
         }
 
+        // DEBUG: Show first bytes of compressed data
+        System.out.printf("[LZ77] Decompressing %d bytes (expected %d output)\n", compressed.length, expectedSize);
+        System.out.print("[LZ77] First 32 bytes: ");
+        for (int i = 0; i < Math.min(32, compressed.length); i++) {
+            System.out.printf("%02X ", compressed[i] & 0xFF);
+        }
+        System.out.println();
+
         // Read first opcode
         int opcode1 = readRC();
+        System.out.printf("[LZ77] Initial opcode=0x%02X\n", opcode1);
 
         // If (opcode1 & 0xF0) == 0, handle as initial literal run
         // copy_bytes returns the next byte as the new opcode

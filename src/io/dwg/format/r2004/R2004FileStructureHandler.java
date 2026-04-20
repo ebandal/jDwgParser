@@ -25,10 +25,12 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         int sectionId;
         long startOffset;
         long endOffset;
+        long fileOffset;  // Actual file offset for page header decryption
         SectionBounds(int id, long start) {
             this.sectionId = id;
             this.startOffset = start;
             this.endOffset = start;
+            this.fileOffset = start;
         }
         long getSize() {
             return endOffset - startOffset;
@@ -378,8 +380,8 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
                     pageCount++;
                     System.out.printf("[DEBUG] R2004: Reading page %d at offset %d\n", pageCount, pageOffset);
                     // Decrypt page header - secMask based on ACTUAL file offset
-                    // First section starts at 0x100, subsequent sections at unknown offsets
-                    long actualFileOffset = sectionDataStart + pageOffset;
+                    // Section starts at bounds.fileOffset, so actual offset = section file offset + page offset within section
+                    long actualFileOffset = sectionDataStart + bounds.fileOffset + pageOffset;
                     long secMask = 0x4164536bL ^ (actualFileOffset & 0xFFFFFFFFL);
                     System.out.printf("[DEBUG] R2004: File offset=0x%X, secMask=0x%X\n", actualFileOffset, secMask);
                     byte[] pageHeader = new byte[32];
