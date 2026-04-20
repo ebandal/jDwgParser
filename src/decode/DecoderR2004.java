@@ -6,6 +6,8 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.logging.Logger;
 
 import decode.util.R2004Lz77;
@@ -401,10 +403,24 @@ public class DecoderR2004 {
             }
         }
 
+        // Two-pass data section parsing:
+        // Pass 1: Parse Handles section (5) to build handle->offset map
+        Map<Long, Long> handleMap = new HashMap<>();
         if (dwg.dataSectionPageList != null && !dwg.dataSectionPageList.isEmpty()) {
             for (DataSectionPage section : dwg.dataSectionPageList) {
-                if (section.decompressedData != null && section.decompressedData.length > 0) {
-                    parseDataSection(section, dwg);
+                if (section.header.sectionNumber == 5 && section.decompressedData != null && section.decompressedData.length > 0) {
+                    handleMap = parseHandlesSection(section, dwg);
+                    break;
+                }
+            }
+        }
+
+        // Pass 2: Parse ALL Objects section (7) pages with the handle map
+        // (Objects section may span multiple pages)
+        if (dwg.dataSectionPageList != null && !dwg.dataSectionPageList.isEmpty()) {
+            for (DataSectionPage section : dwg.dataSectionPageList) {
+                if (section.header.sectionNumber == 7 && section.decompressedData != null && section.decompressedData.length > 0) {
+                    parseObjectsSection(section, dwg, handleMap);
                 }
             }
         }
@@ -442,21 +458,43 @@ public class DecoderR2004 {
         }
     }
 
-    private static void parseDataSection(DataSectionPage section, Dwg dwg) {
+    private static Map<Long, Long> parseHandlesSection(DataSectionPage section, Dwg dwg) {
+        byte[] data = section.decompressedData;
+        Map<Long, Long> handleMap = new HashMap<>();
+
+        if (data.length < 4) {
+            log.fine("Handles section too small: " + data.length);
+            return handleMap;
+        }
+
+        try {
+            handleMap = DecoderHandles.readHandles(data, 0, dwg.header.ver);
+            if (handleMap != null && !handleMap.isEmpty()) {
+                log.info("Handles section parsed: " + handleMap.size() + " handle mappings");
+            }
+        } catch (Exception e) {
+            log.fine("Handles section parsing error: " + e.getMessage());
+        }
+
+        return handleMap;
+    }
+
+    private static void parseObjectsSection(DataSectionPage section, Dwg dwg, Map<Long, Long> handleMap) {
         byte[] data = section.decompressedData;
         if (data.length < 4) {
-            log.fine("Data section too small: " + data.length);
+            log.fine("Objects section too small: " + data.length);
             return;
         }
 
         try {
-            // Try to parse as Objects section
-            var objects = DecoderObjects.readObjects(data, 0, dwg.header.ver, null);
+            // Parse Objects section with handle map to locate objects
+            var objects = DecoderObjects.readObjects(data, 0, dwg.header.ver, handleMap, dwg);
             if (objects != null && !objects.isEmpty()) {
-                log.info("Data section parsed: " + objects.size() + " objects");
+                log.info("Objects section parsed: " + objects.size() + " objects");
+                dwg.parsedObjects.putAll(objects);
             }
         } catch (Exception e) {
-            log.fine("Data section parsing error: " + e.getMessage());
+            log.fine("Objects section parsing error: " + e.getMessage());
         }
     }
 

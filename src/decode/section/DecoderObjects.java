@@ -25,7 +25,7 @@ public final class DecoderObjects {
     }
 
     public static Map<Long, DwgObject> readObjects(byte[] buf, int off, DwgVersion ver,
-                                                     Map<Long, Long> handleMap) {
+                                                     Map<Long, Long> handleMap, structure.Dwg dwg) {
         Map<Long, DwgObject> objects = new HashMap<>();
 
         // If we have a handle map (R13/R14), use offset-based reading
@@ -46,9 +46,8 @@ public final class DecoderObjects {
                 }
             }
         } else {
-            // R2000+: streaming parse (no handle map)
+            // R2000+: streaming parse (no handle map) - use global counter from dwg
             int offset = off;
-            int count = 0;
 
             while (offset < buf.length - 4) {
                 try {
@@ -60,8 +59,8 @@ public final class DecoderObjects {
 
                     DwgObject obj = instantiateObject(stream, DwgObjectType.fromCode(stream.typeCode), ver);
                     if (obj != null) {
-                        objects.put((long) count, obj);
-                        count++;
+                        long globalCount = dwg != null ? dwg.globalObjectCounter.getAndIncrement() : 0;
+                        objects.put(globalCount, obj);
                     }
 
                     offset += stream.objectSize;
@@ -108,9 +107,11 @@ public final class DecoderObjects {
         stream.typeCode = (buf[offset] & 0xFF) | ((buf[offset + 1] & 0xFF) << 8);
         offset += 2;
 
-        // Remaining data
-        int dataSize = stream.objectSize - (offset - (offset - sizeBytes - 2));
-        if (dataSize > 0 && offset + dataSize <= buf.length) {
+        // Remaining data: objectSize includes size field + type code + data + CRC(2)
+        // Total to read: sizeBytes (for size field) + 2 (type code) + data + 2 (CRC)
+        // So: dataSize = objectSize - 2 (type code) - 2 (CRC)
+        int dataSize = stream.objectSize - 2 - 2;
+        if (dataSize > 0 && offset + dataSize + 2 <= buf.length) {
             stream.data = new byte[dataSize];
             System.arraycopy(buf, offset, stream.data, 0, dataSize);
         }

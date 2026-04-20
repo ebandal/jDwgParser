@@ -36,11 +36,13 @@ public class Dwg {
     
     public FileHeader header;
     public HeaderVariables headerVariables;
-    
+
     public List<SystemSectionPage> systemSectionPageList;
     public List<DataSectionPage> dataSectionPageList;
     public Map<Integer, DrawingClass> drawingClassMap;
-    
+    public Map<Long, structure.entities.DwgObject> parsedObjects = new HashMap<>();  // Parsed entity objects
+    public AtomicInteger globalObjectCounter = new AtomicInteger(0);  // Global counter for unique object keys
+
     public Map<Long, Long> data_AcDb_Handles;       // R13-R15, R18
     public String data_AcDb_Tempate;                // R13-R15, R18+
 

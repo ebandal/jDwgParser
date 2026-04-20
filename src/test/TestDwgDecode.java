@@ -46,5 +46,32 @@ public class TestDwgDecode {
                         + " got=" + (p.decompressedData == null ? 0 : p.decompressedData.length));
             }
         }
+
+        // Entity parsing results
+        System.out.println("\n=== Parsed Entities ===");
+        System.out.println("parsedObjects is: " + (dwg.parsedObjects == null ? "null" : "not null"));
+        if (dwg.parsedObjects != null) {
+            System.out.println("parsedObjects size: " + dwg.parsedObjects.size());
+        }
+
+        if (dwg.parsedObjects != null && !dwg.parsedObjects.isEmpty()) {
+            int totalCount = 0;
+            java.util.Map<String, Integer> typeCount = new java.util.HashMap<>();
+
+            for (structure.entities.DwgObject obj : dwg.parsedObjects.values()) {
+                if (obj != null) {
+                    String typeName = obj.getClass().getSimpleName();
+                    typeCount.put(typeName, typeCount.getOrDefault(typeName, 0) + 1);
+                    totalCount++;
+                }
+            }
+
+            System.out.println("Total objects: " + totalCount);
+            typeCount.entrySet().stream()
+                    .sorted((a, b) -> b.getValue().compareTo(a.getValue()))
+                    .forEach(e -> System.out.println("  " + e.getKey() + ": " + e.getValue()));
+        } else {
+            System.out.println("No objects decoded");
+        }
     }
 }
