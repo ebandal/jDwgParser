@@ -12,6 +12,9 @@ public record Point2D(double x, double y) {
         return Math.sqrt(dx * dx + dy * dy);
     }
 
+    public double getX() { return x; }
+    public double getY() { return y; }
+
     public static final Point2D ORIGIN = new Point2D(0.0, 0.0);
 
     @Override

@@ -10,6 +10,10 @@ public record Point3D(double x, double y, double z) {
         return new Point2D(x, y);
     }
 
+    public double getX() { return x; }
+    public double getY() { return y; }
+    public double getZ() { return z; }
+
     public static final Point3D ORIGIN = new Point3D(0.0, 0.0, 0.0);
     public static final Point3D Z_AXIS = new Point3D(0.0, 0.0, 1.0);
 
