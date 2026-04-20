@@ -2,114 +2,186 @@ package io.dwg.core.util;
 
 /**
  * R2004 LZ77 Decompression
- * Based on libredwg decompress_R2004_section() from decode.c
+ * Direct port of libredwg decompress_R2004_section() from decode.c
  *
- * Opcode structure:
- * - Bits 0-3: literal length code (-3)
- * - Bits 4-7: compressed length code (-2)
- * - Special: 0x11 = EOF marker
+ * Reference: libredwg/src/decode.c (lines 1125-1331)
  */
 public class R2004Lz77Decompressor {
-    private static final boolean DEBUG = false;
+
+    private byte[] src;
+    private int srcIdx;
+    private byte[] dst;
+    private int dstIdx;
 
     public byte[] decompress(byte[] compressed, int expectedSize) throws Exception {
-        byte[] output = new byte[expectedSize];
-        int srcIdx = 0;
-        int dstIdx = 0;
-        int iterations = 0;
-        final int MAX_ITERATIONS = 100000;
+        this.src = compressed;
+        this.srcIdx = 0;
+        this.dst = new byte[expectedSize];
+        this.dstIdx = 0;
 
-        while (srcIdx < compressed.length && dstIdx < expectedSize && iterations < MAX_ITERATIONS) {
-            iterations++;
+        if (srcIdx > src.length) {
+            return new byte[0];
+        }
 
-            if (srcIdx >= compressed.length) break;
+        // Read first opcode
+        int opcode1 = readRC();
 
-            // Read opcode
-            int opcode = compressed[srcIdx++] & 0xFF;
+        // If (opcode1 & 0xF0) == 0, handle as initial literal run
+        // copy_bytes returns the next byte as the new opcode
+        if ((opcode1 & 0xF0) == 0) {
+            int litLen = readLiteralLength(opcode1);
+            opcode1 = copyBytes(litLen);
+        }
 
-            if (DEBUG && iterations <= 10) {
-                System.out.printf("[R2004LZ77] Iter %d: opcode=0x%02X srcIdx=%d dstIdx=%d\n",
-                    iterations, opcode, srcIdx - 1, dstIdx);
+        // Main decompression loop
+        while (srcIdx < src.length && dstIdx < expectedSize && opcode1 != 0x11) {
+            int compBytes = 0;
+            int compOffset = 0;
+
+            if (opcode1 < 0x10 || opcode1 >= 0x40) {
+                // Mode 1: single byte offset (0x00-0x0F or 0x40-0xFF)
+                compBytes = (opcode1 >> 4) - 1;
+                int opcode2 = readRC();
+                compOffset = (((opcode1 >> 2) & 3) | (opcode2 << 2)) + 1;
+            } else if (opcode1 < 0x20) {
+                // Mode 2: 0x12-0x1F (0x10, 0x11 handled elsewhere)
+                compBytes = readCompressedBytes(opcode1, 7);
+                int[] offsetRef = new int[]{(opcode1 & 8) << 11};
+                opcode1 = twoByteOffset(0x4000, offsetRef);
+                compOffset = offsetRef[0];
+            } else {
+                // Mode 3: 0x20+
+                compBytes = readCompressedBytes(opcode1, 0x1F);
+                int[] offsetRef = new int[]{0};
+                opcode1 = twoByteOffset(1, offsetRef);
+                compOffset = offsetRef[0];
             }
 
-            // Special case: opcode == 0x11 means EOF
-            if (opcode == 0x11) {
-                if (DEBUG) System.out.printf("[R2004LZ77] EOF at iteration %d, dstIdx=%d\n", iterations, dstIdx);
+            // Copy previously output bytes
+            int pos = dstIdx;
+            int end = pos + compBytes;
+            if (end >= dst.length) {
+                compBytes = dst.length - pos;
+                end = pos + compBytes;
+                opcode1 = 0x11;
+            }
+
+            // Validate offset before copying
+            if (compOffset < 0 || pos - compOffset < 0) {
                 break;
             }
 
-            // Decode literal length from low nibble
-            int literalLen = (opcode & 0x0F) + 3;
-            if ((opcode & 0x0F) == 0x0F) {
-                // Extended literal length
-                while (srcIdx < compressed.length) {
-                    int b = compressed[srcIdx++] & 0xFF;
-                    literalLen += b;
-                    if (b != 0xFF) break;
+            // LZ77 run-length extension (handles overlapping refs)
+            for (; pos < end; pos++) {
+                dst[pos] = dst[pos - compOffset];
+            }
+            dstIdx = end;
+
+            // Read "literal data" length from lower 2 bits of opcode1
+            int litLength = opcode1 & 3;
+            if (litLength == 0) {
+                if (srcIdx >= src.length) break;
+                opcode1 = readRC();
+                if ((opcode1 & 0xF0) == 0) {
+                    litLength = readLiteralLength(opcode1);
                 }
             }
 
-            // Copy literal bytes
-            int litCopied = 0;
-            for (int i = 0; i < literalLen && srcIdx < compressed.length && dstIdx < expectedSize; i++) {
-                output[dstIdx++] = compressed[srcIdx++];
-                litCopied++;
-            }
-
-            if (DEBUG && iterations <= 10) {
-                System.out.printf("[R2004LZ77] Literal: len=%d copied=%d dstIdx=%d\n",
-                    literalLen, litCopied, dstIdx);
-            }
-
-            if (dstIdx >= expectedSize || srcIdx >= compressed.length) break;
-
-            // Decode compressed length from high nibble
-            int compLen = ((opcode >> 4) & 0x0F) + 2;
-            if (((opcode >> 4) & 0x0F) == 0) {
-                // Extended compressed length
-                while (srcIdx < compressed.length) {
-                    int b = compressed[srcIdx++] & 0xFF;
-                    compLen += b;
-                    if (b != 0xFF) break;
+            if (litLength > 0) {
+                if (dstIdx + litLength <= dst.length) {
+                    opcode1 = copyBytes(litLength);
+                } else {
+                    break;
                 }
             }
-
-            // Read 2-byte offset
-            if (srcIdx + 1 >= compressed.length) {
-                if (DEBUG) System.out.printf("[R2004LZ77] Not enough bytes for offset at srcIdx=%d\n", srcIdx);
-                break;
-            }
-            int b0 = compressed[srcIdx++] & 0xFF;
-            int b1 = compressed[srcIdx++] & 0xFF;
-            int compOffset = ((b0 | (b1 << 8)) >> 2) + 1;
-
-            // Cap compLen to output space remaining
-            if (dstIdx + compLen > expectedSize) {
-                compLen = expectedSize - dstIdx;
-            }
-
-            // Validate offset
-            if (compOffset <= 0 || compOffset > dstIdx) {
-                if (DEBUG) System.out.printf("[R2004LZ77] Invalid offset %d at dstIdx=%d\n", compOffset, dstIdx);
-                break;
-            }
-
-            // Copy referenced bytes (handles overlapping with source offset)
-            int srcOff = dstIdx - compOffset;
-            for (int i = 0; i < compLen; i++) {
-                output[dstIdx++] = output[srcOff + i];
-            }
-
-            if (DEBUG && iterations <= 10) {
-                System.out.printf("[R2004LZ77] Compressed: len=%d offset=%d dstIdx=%d\n",
-                    compLen, compOffset, dstIdx);
-            }
         }
 
-        if (iterations >= MAX_ITERATIONS) {
-            System.out.printf("[WARN] R2004Lz77: Max iterations reached, stopping at dstIdx=%d\n", dstIdx);
-        }
+        return java.util.Arrays.copyOf(dst, dstIdx);
+    }
 
-        return java.util.Arrays.copyOf(output, dstIdx);
+    /**
+     * Read one byte from src (bit_read_RC equivalent).
+     * Returns -1 on EOF but casts to 0xFF for safety.
+     */
+    private int readRC() {
+        if (srcIdx >= src.length) return 0;
+        return src[srcIdx++] & 0xFF;
+    }
+
+    /**
+     * Copy lit_length bytes from src to dst, then read and return next byte.
+     * Direct port of libredwg copy_bytes().
+     */
+    private int copyBytes(int litLength) {
+        for (int i = 0; i < litLength; i++) {
+            if (srcIdx >= src.length || dstIdx >= dst.length) break;
+            dst[dstIdx++] = src[srcIdx++];
+        }
+        // copy_bytes returns the next byte as next opcode
+        return readRC();
+    }
+
+    /**
+     * Read R2004 encoded literal length.
+     * Direct port of libredwg read_literal_length().
+     *
+     * If (opcode & 0xF) == 0:
+     *   Accumulate 0xFF for each zero byte read
+     *   Add 0xF + lastbyte (non-zero byte)
+     * Result is lowbits + 3.
+     */
+    private int readLiteralLength(int opcode) {
+        int lowbits = opcode & 0xF;
+        if (lowbits == 0) {
+            int lastbyte = 0;
+            while (srcIdx < src.length) {
+                lastbyte = src[srcIdx++] & 0xFF;
+                if (lastbyte != 0) break;
+                lowbits += 0xFF;
+            }
+            lowbits += 0xF + lastbyte;
+        }
+        return lowbits + 3;
+    }
+
+    /**
+     * Read R2004 encoded number of compressed bytes.
+     * Direct port of libredwg read_compressed_bytes().
+     *
+     * If (opcode & bits) == 0:
+     *   Accumulate 0xFF for each zero byte read
+     *   Add lastbyte + bits
+     * Result is compressed_bytes + 2.
+     */
+    private int readCompressedBytes(int opcode, int bits) {
+        int compressedBytes = opcode & bits;
+        if (compressedBytes == 0) {
+            int lastbyte = 0;
+            while (srcIdx < src.length) {
+                lastbyte = src[srcIdx++] & 0xFF;
+                if (lastbyte != 0) break;
+                compressedBytes += 0xFF;
+            }
+            compressedBytes += lastbyte + bits;
+        }
+        return compressedBytes + 2;
+    }
+
+    /**
+     * Read R2004 two-byte offset.
+     * Direct port of libredwg two_byte_offset().
+     *
+     * offset |= (firstByte >> 2)
+     * offset |= secondByte << 6
+     * offset += plus
+     * Returns firstByte (becomes next opcode).
+     */
+    private int twoByteOffset(int plus, int[] offsetRef) {
+        int firstByte = readRC();
+        int secondByte = readRC();
+        offsetRef[0] |= (firstByte >> 2);
+        offsetRef[0] |= (secondByte << 6);
+        offsetRef[0] += plus;
+        return firstByte;
     }
 }
