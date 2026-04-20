@@ -51,19 +51,50 @@ public final class DecoderObjects {
 
             while (offset < buf.length - 4) {
                 try {
-                    ObjectStream stream = parseObjectStream(buf, offset);
-                    if (stream == null || stream.objectSize <= 0) {
+                    int startOffset = offset;
+
+                    // Read size (MS - modular short)
+                    int sizeBytes = getModularShortSize(buf, offset);
+                    int objectSize = readModularShort(buf, offset);
+                    offset += sizeBytes;
+
+                    if (objectSize <= 0 || offset + 2 > buf.length) {
                         offset += 2;
                         continue;
                     }
 
-                    DwgObject obj = instantiateObject(stream, DwgObjectType.fromCode(stream.typeCode), ver);
+                    // Read type code (BS - bit short)
+                    int typeCode = (buf[offset] & 0xFF) | ((buf[offset + 1] & 0xFF) << 8);
+                    offset += 2;
+
+                    // Read data
+                    int dataSize = objectSize - 2 - 2;
+                    if (dataSize < 0) {
+                        dataSize = objectSize - sizeBytes - 2 - 2;
+                    }
+
+                    byte[] data = null;
+                    if (dataSize > 0 && offset + dataSize + 2 <= buf.length) {
+                        data = new byte[dataSize];
+                        System.arraycopy(buf, offset, data, 0, dataSize);
+                        offset += dataSize;
+                    }
+
+                    // Skip CRC
+                    offset += 2;
+
+                    // Create object
+                    ObjectStream stream = new ObjectStream();
+                    stream.objectSize = objectSize;
+                    stream.typeCode = typeCode;
+                    stream.data = data;
+
+                    DwgObject obj = instantiateObject(stream, DwgObjectType.fromCode(typeCode), ver);
                     if (obj != null) {
                         long globalCount = dwg != null ? dwg.globalObjectCounter.getAndIncrement() : 0;
                         objects.put(globalCount, obj);
                     }
 
-                    offset += stream.objectSize;
                 } catch (Exception e) {
                     log.fine("Object parse failed at offset " + offset);
                     offset += 2;
@@ -107,10 +138,19 @@ public final class DecoderObjects {
         stream.typeCode = (buf[offset] & 0xFF) | ((buf[offset + 1] & 0xFF) << 8);
         offset += 2;
 
-        // Remaining data: objectSize includes size field + type code + data + CRC(2)
-        // Total to read: sizeBytes (for size field) + 2 (type code) + data + 2 (CRC)
-        // So: dataSize = objectSize - 2 (type code) - 2 (CRC)
+        // According to spec: Object Record = Size (MS) + Type (BS) + Data + CRC (RS)
+        // Size typically includes everything except the size field itself
+        // So: Total = sizeBytes + 2(type) + dataSize + 2(CRC)
+        // dataSize = objectSize - 2(type) - 2(CRC)
+        // But objectSize might NOT include sizeBytes
         int dataSize = stream.objectSize - 2 - 2;
+
+        // Safety check: dataSize should be non-negative and fit in buffer
+        if (dataSize < 0) {
+            // Try alternative: objectSize might include sizeBytes
+            dataSize = stream.objectSize - sizeBytes - 2 - 2;
+        }
+
         if (dataSize > 0 && offset + dataSize + 2 <= buf.length) {
             stream.data = new byte[dataSize];
             System.arraycopy(buf, offset, stream.data, 0, dataSize);
