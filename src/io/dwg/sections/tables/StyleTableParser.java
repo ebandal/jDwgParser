@@ -9,99 +9,35 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Text Style Table Parser - Extracts text style definitions from tables.
+ * @deprecated Text Style 테이블 파서 (Phase 4).
  *
- * Text styles define font, height, width factor, oblique angle, and other
- * text formatting properties that can be applied to text and attributes.
+ * 이 파서는 fake section name "AcDb:Styles"를 사용하며, handler.readSections()에서 절대 나타나지 않습니다.
+ * 실제 STYLE 객체들은 ObjectsSectionParser가 이미 파싱해 DwgDocument.objectMap에 저장합니다.
+ *
+ * 대신 다음 메서드를 사용하세요:
+ * - DwgDocument.styles() - 모든 텍스트 스타일 목록
+ * - DwgDocument.style(String name) - 이름으로 스타일 검색
+ * - DwgDocument.tables().styleByName(String name) - 테이블 로케이터 사용
  */
+@Deprecated(since = "Phase 5", forRemoval = true)
 public class StyleTableParser extends AbstractSectionParser<List<DwgStyle>> {
 
     @Override
     public String sectionName() {
-        return "AcDb:Styles";  // Pseudo-section for text styles
+        return "AcDb:Styles";
     }
 
     @Override
     public boolean supports(DwgVersion version) {
-        return true;  // All versions support text styles
+        return true;
     }
 
     @Override
     public List<DwgStyle> parse(SectionInputStream stream, DwgVersion version) throws Exception {
-        List<DwgStyle> styles = new ArrayList<>();
-
-        if (stream == null || stream.rawBytes().length == 0) {
-            System.out.printf("[DEBUG] Styles: Empty stream\n");
-            return styles;
-        }
-
-        byte[] data = stream.rawBytes();
-        BitStreamReader reader = reader(stream, version);
-
-        System.out.printf("[DEBUG] Styles: Parsing %d bytes\n", data.length);
-
-        int styleCount = 0;
-        while (reader.position() < data.length * 8 - 16) {
-            try {
-                DwgStyle style = parseOneStyle(reader, version);
-                if (style != null) {
-                    styles.add(style);
-                    styleCount++;
-
-                    if (styleCount <= 5 || styleCount % 50 == 0) {
-                        System.out.printf("[DEBUG] Styles: Parsed style %d\n", styleCount);
-                    }
-                }
-            } catch (Exception e) {
-                System.out.printf("[DEBUG] Styles: Parse error at style %d: %s\n",
-                    styleCount, e.getMessage());
-                break;
-            }
-        }
-
-        System.out.printf("[DEBUG] Styles: Total parsed: %d\n", styleCount);
-        return styles;
-    }
-
-    private DwgStyle parseOneStyle(BitStreamReader reader, DwgVersion version) throws Exception {
-        // Text style structure (from spec):
-        // - name: T (text string)
-        // - flags: BS (bit short)
-        // - fixed_text_height: BD (double) - height in units
-        // - width_factor: BD (double) - width scaling
-        // - oblique_angle: BD (double) - slant in degrees
-        // - generation_flags: BS (bit short) - mirroring/backwards
-        // - font_name: T (primary font name)
-        // - big_font_name: T (shape file name or CJK font)
-
-        String name = reader.readText();
-        if (name == null || name.isEmpty()) {
-            return null;
-        }
-
-        int flags = reader.readBitShort();
-        double fixedHeight = reader.readBitDouble();
-        double widthFactor = reader.readBitDouble();
-        double obliqueAngle = reader.readBitDouble();
-        int genFlags = reader.readBitShort();
-
-        String fontName = reader.readText();
-        String bigFontName = reader.readText();
-
-        DwgStyle style = new DwgStyle();
-        style.setName(name);
-        style.setFlags(flags);
-        style.setWidth(widthFactor);  // Width scaling factor
-        style.setOblique(obliqueAngle);  // Oblique angle in degrees
-
-        if (fontName != null && !fontName.isEmpty()) {
-            style.setFontFilename(fontName);
-        }
-
-        if (bigFontName != null && !bigFontName.isEmpty()) {
-            style.setBigFontFilename(bigFontName);
-        }
-
-        return style;
+        throw new UnsupportedOperationException(
+            "StyleTableParser는 더 이상 지원되지 않습니다.\n" +
+            "대신 DwgDocument.styles() 또는 DwgDocument.tables().styles()를 사용하세요.\n" +
+            "ObjectsSectionParser가 이미 모든 STYLE 객체를 파싱합니다."
+        );
     }
 }

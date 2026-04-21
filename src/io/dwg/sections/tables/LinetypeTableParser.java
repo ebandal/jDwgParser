@@ -10,99 +10,35 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Linetype Table Parser - Extracts linetype definitions from tables.
+ * @deprecated Linetype 테이블 파서 (Phase 4).
  *
- * Linetypes define the dash/dot pattern for lines, arcs, circles, etc.
- * Each linetype has a name, description, pattern, and scaling information.
+ * 이 파서는 fake section name "AcDb:Linetypes"를 사용하며, handler.readSections()에서 절대 나타나지 않습니다.
+ * 실제 LTYPE 객체들은 ObjectsSectionParser가 이미 파싱해 DwgDocument.objectMap에 저장합니다.
+ *
+ * 대신 다음 메서드를 사용하세요:
+ * - DwgDocument.linetypes() - 모든 선종류 목록
+ * - DwgDocument.linetype(String name) - 이름으로 선종류 검색
+ * - DwgDocument.tables().linetypeByName(String name) - 테이블 로케이터 사용
  */
+@Deprecated(since = "Phase 5", forRemoval = true)
 public class LinetypeTableParser extends AbstractSectionParser<List<Map<String, Object>>> {
 
     @Override
     public String sectionName() {
-        return "AcDb:Linetypes";  // Pseudo-section for linetypes table
+        return "AcDb:Linetypes";
     }
 
     @Override
     public boolean supports(DwgVersion version) {
-        return true;  // All versions support linetypes
+        return true;
     }
 
     @Override
     public List<Map<String, Object>> parse(SectionInputStream stream, DwgVersion version) throws Exception {
-        List<Map<String, Object>> linetypes = new ArrayList<>();
-
-        if (stream == null || stream.rawBytes().length == 0) {
-            System.out.printf("[DEBUG] Linetypes: Empty stream\n");
-            return linetypes;
-        }
-
-        byte[] data = stream.rawBytes();
-        BitStreamReader reader = reader(stream, version);
-
-        System.out.printf("[DEBUG] Linetypes: Parsing %d bytes\n", data.length);
-
-        int linetypeCount = 0;
-        while (reader.position() < data.length * 8 - 16) {
-            try {
-                Map<String, Object> lt = parseOneLinetype(reader, version);
-                if (lt != null) {
-                    linetypes.add(lt);
-                    linetypeCount++;
-
-                    if (linetypeCount <= 5 || linetypeCount % 50 == 0) {
-                        System.out.printf("[DEBUG] Linetypes: Parsed linetype %d (%s)\n",
-                            linetypeCount, lt.get("name"));
-                    }
-                }
-            } catch (Exception e) {
-                System.out.printf("[DEBUG] Linetypes: Parse error at linetype %d: %s\n",
-                    linetypeCount, e.getMessage());
-                break;
-            }
-        }
-
-        System.out.printf("[DEBUG] Linetypes: Total parsed: %d\n", linetypeCount);
-        return linetypes;
-    }
-
-    private Map<String, Object> parseOneLinetype(BitStreamReader reader, DwgVersion version) throws Exception {
-        // Linetype structure (from spec):
-        // - name: T (text string)
-        // - description: T (descriptive string)
-        // - flags: BS (bit short)
-        // - num_dashes: BS (number of dash segments)
-        // - total_pattern_length: BD (double)
-        // - dashes: array of BDs
-
-        String name = reader.readText();
-        if (name == null || name.isEmpty()) {
-            return null;
-        }
-
-        String description = reader.readText();
-        int flags = reader.readBitShort();
-        int numDashes = reader.readBitShort();
-        double totalLength = reader.readBitDouble();
-
-        Map<String, Object> lt = new HashMap<>();
-        lt.put("name", name);
-        lt.put("description", description != null ? description : "");
-        lt.put("flags", flags);
-        lt.put("dashCount", numDashes);
-        lt.put("totalLength", totalLength);
-
-        // Read dashes array
-        List<Double> dashes = new ArrayList<>();
-        for (int i = 0; i < numDashes && i < 100; i++) {  // Safety limit
-            try {
-                double dash = reader.readBitDouble();
-                dashes.add(dash);
-            } catch (Exception e) {
-                break;
-            }
-        }
-        lt.put("dashes", dashes);
-
-        return lt;
+        throw new UnsupportedOperationException(
+            "LinetypeTableParser는 더 이상 지원되지 않습니다.\n" +
+            "대신 DwgDocument.linetypes() 또는 DwgDocument.tables().linetypes()를 사용하세요.\n" +
+            "ObjectsSectionParser가 이미 모든 LTYPE 객체를 파싱합니다."
+        );
     }
 }

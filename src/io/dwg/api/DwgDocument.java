@@ -4,6 +4,8 @@ import io.dwg.core.version.DwgVersion;
 import io.dwg.entities.DwgEntity;
 import io.dwg.entities.DwgObject;
 import io.dwg.entities.concrete.DwgLayer;
+import io.dwg.entities.concrete.DwgLtype;
+import io.dwg.entities.concrete.DwgStyle;
 import io.dwg.sections.classes.DwgClassDefinition;
 import io.dwg.sections.classes.DwgClassRegistry;
 import io.dwg.sections.handles.HandleRegistry;
@@ -65,6 +67,32 @@ public class DwgDocument {
         return layers().stream().filter(l -> l.name().equals(name)).findFirst();
     }
 
+    /** 선종류 목록 */
+    public List<DwgLtype> linetypes() {
+        return objectMap.values().stream()
+            .filter(o -> o instanceof DwgLtype)
+            .map(o -> (DwgLtype) o)
+            .collect(Collectors.toList());
+    }
+
+    /** 이름으로 선종류 조회 */
+    public Optional<DwgLtype> linetype(String name) {
+        return linetypes().stream().filter(lt -> lt.name().equals(name)).findFirst();
+    }
+
+    /** 텍스트 스타일 목록 */
+    public List<DwgStyle> styles() {
+        return objectMap.values().stream()
+            .filter(o -> o instanceof DwgStyle)
+            .map(o -> (DwgStyle) o)
+            .collect(Collectors.toList());
+    }
+
+    /** 이름으로 텍스트 스타일 조회 */
+    public Optional<DwgStyle> style(String name) {
+        return styles().stream().filter(s -> s.name().equals(name)).findFirst();
+    }
+
     /** 핸들로 객체 조회 */
     public <T extends DwgObject> Optional<T> objectByHandle(long handle, Class<T> type) {
         DwgObject obj = objectMap.get(handle);
@@ -78,5 +106,10 @@ public class DwgDocument {
             .filter(type::isInstance)
             .map(type::cast)
             .collect(Collectors.toList());
+    }
+
+    /** 테이블 접근 API 제공 */
+    public DwgTableLocator tables() {
+        return new DwgTableLocator(this);
     }
 }
