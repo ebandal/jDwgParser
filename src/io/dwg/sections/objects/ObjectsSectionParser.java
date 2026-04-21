@@ -209,13 +209,22 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
         // 객체 크기 (MS)
         int objSize = r.readModularShort();
-        if (objSize <= 0) return null;
+        if (objSize <= 0) {
+            System.out.printf("[DEBUG] Handle 0x%X offset %d: objSize=%d INVALID\n", handle, byteOffset, objSize);
+            return null;
+        }
 
         // 타입 코드 (BS)
         int typeCode = r.readBitShort();
 
         DwgObject obj = createObject(typeCode);
-        if (obj == null) return null;
+        if (obj == null) {
+            System.out.printf("[DEBUG] Handle 0x%X offset %d: typeCode=%d NO OBJECT FACTORY\n",
+                handle, byteOffset, typeCode);
+            return null;
+        }
+        System.out.printf("[DEBUG] Handle 0x%X offset %d: objSize=%d typeCode=%d OK\n",
+            handle, byteOffset, objSize, typeCode);
 
         ((AbstractDwgObject) obj).setHandle(handle);
         ((AbstractDwgObject) obj).setRawTypeCode(typeCode);

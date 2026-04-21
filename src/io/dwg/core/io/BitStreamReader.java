@@ -18,12 +18,13 @@ public class BitStreamReader {
     /**
      * §2.2: BitShort (BS) 읽기
      * 2비트 opcode + 조건부 데이터
+     * 비트 레벨 읽기: byte alignment 강제 안 함
      */
     public int readBitShort() {
         int opcode = input.readBits(2);
         switch (opcode) {
-            case 0b00: return input.readRawShort() & 0xFFFF;
-            case 0b01: return input.readRawChar() & 0xFF;
+            case 0b00: return input.readBits(16) & 0xFFFF;
+            case 0b01: return input.readBits(8) & 0xFF;
             case 0b10: return 0;
             case 0b11: return 256;
             default: throw new IllegalStateException();
@@ -33,16 +34,25 @@ public class BitStreamReader {
     /**
      * §2.3: BitLong (BL) 읽기
      * 2비트 opcode + 조건부 데이터
+     * 비트 레벨 읽기: byte alignment 강제 안 함
      */
     public int readBitLong() {
         int opcode = input.readBits(2);
         switch (opcode) {
-            case 0b00: return input.readRawLong();
-            case 0b01: return input.readRawChar() & 0xFF;
+            case 0b00: return readBits32();  // Read 32 bits
+            case 0b01: return input.readBits(8) & 0xFF;
             case 0b10: return 0;
             case 0b11: throw new IllegalStateException("Invalid BL opcode 11");
             default: throw new IllegalStateException();
         }
+    }
+
+    private int readBits32() {
+        int result = 0;
+        for (int i = 0; i < 4; i++) {
+            result |= (input.readBits(8) & 0xFF) << (i * 8);
+        }
+        return result;
     }
 
     /**
@@ -60,7 +70,7 @@ public class BitStreamReader {
 
         long result = 0;
         for (int i = 0; i < byteCount; i++) {
-            result |= (long)(input.readRawChar() & 0xFF) << (i * 8);
+            result |= (long)(input.readBits(8) & 0xFF) << (i * 8);
         }
         return result;
     }
@@ -152,13 +162,14 @@ public class BitStreamReader {
 
     /**
      * §2.7: Modular Short (MS) 읽기
+     * 비트 레벨 읽기: byte alignment 강제 안 함 (readRawShort() 대신 readBits(16) 사용)
      */
     public int readModularShort() {
         int result = 0;
         int shift = 0;
         int w;
         do {
-            w = input.readRawShort() & 0xFFFF;
+            w = input.readBits(16) & 0xFFFF;  // Bit-level: no forced alignment
             result |= (w & 0x7FFF) << (shift * 15);
             shift++;
         } while ((w & 0x8000) != 0);
