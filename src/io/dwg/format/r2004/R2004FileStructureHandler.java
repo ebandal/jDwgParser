@@ -337,8 +337,9 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
 
         // Temp fix: Map likely section numbers based on what we see
         // If we don't have explicit names from system pages, use heuristics
+        // NOTE: Section 13 appears to contain Objects data (based on header analysis)
         if (!sectionNames.containsKey(8)) {
-            sectionNames.put(8, "AcDb:Objects");  // Section 8 seems to be Objects (192 bytes properly decompressed)
+            sectionNames.put(8, "AcDb:AppInfo");  // Section 8 is mostly zeros (not Objects)
         }
         if (!sectionNames.containsKey(10)) {
             sectionNames.put(10, "AcDb:SummaryInfo");
@@ -347,7 +348,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
             sectionNames.put(11, "AcDb:VBAProject");
         }
         if (!sectionNames.containsKey(13)) {
-            sectionNames.put(13, "AcDb:AppInfo");
+            sectionNames.put(13, "AcDb:Objects");  // Section 13 has section map data - likely Objects section
         }
 
         // SECOND PASS: Process each data section (decompress all pages and combine)
@@ -388,6 +389,19 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
             byte[] sectionData = decompressed.toByteArray();
             System.out.printf("[DEBUG] R2004: Section %d '%s' final size: %d bytes from %d pages\n",
                 sectionNum, sectionName, sectionData.length, info.pages.size());
+
+            // Debug: Show Objects section content
+            if ("AcDb:Objects".equals(sectionName) && sectionData.length > 0) {
+                System.out.printf("[DEBUG] R2004: Objects section data (first %d bytes):\n",
+                    Math.min(192, sectionData.length));
+                for (int i = 0; i < Math.min(192, sectionData.length); i += 16) {
+                    System.out.printf("  0x%03X: ", i);
+                    for (int j = 0; j < 16 && i + j < sectionData.length; j++) {
+                        System.out.printf("%02X ", sectionData[i + j] & 0xFF);
+                    }
+                    System.out.println();
+                }
+            }
 
             sections.put(sectionName, new SectionInputStream(sectionData, sectionName));
         }
