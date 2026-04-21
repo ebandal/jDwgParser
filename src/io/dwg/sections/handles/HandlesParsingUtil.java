@@ -98,6 +98,7 @@ public class HandlesParsingUtil {
 
         while (!reader.isEof()) {
             // Page size 읽기 (big-endian)
+            long posBeforePageSize = reader.position();
             int pageSize = reader.readBigEndianShort();
 
             if (pageSize <= 2) {
@@ -106,7 +107,8 @@ public class HandlesParsingUtil {
             }
 
             if (pageSize < 2 || pageSize > 2040) {
-                System.out.printf("[DEBUG] HandlesParsingUtil: Invalid page size %d, stopping\n", pageSize);
+                System.out.printf("[DEBUG] HandlesParsingUtil: Invalid page size %d at bit pos %d (bytes: %d.%d), stopping\n",
+                    pageSize, posBeforePageSize, posBeforePageSize / 8, posBeforePageSize % 8);
                 break;
             }
 

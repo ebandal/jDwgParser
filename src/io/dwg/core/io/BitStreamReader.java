@@ -96,40 +96,57 @@ public class BitStreamReader {
 
     /**
      * §2.6: Modular Char (MC) 읽기 - Signed
-     * High bit=계속 플래그, 0x40=음수 플래그
-     * handle_delta는 UMC (부호 없음)를 사용하므로 이것을 쓰지 말 것.
+     * libredwg 호환 구현: high bit=계속 플래그, bit 6=부호 플래그 (최종 바이트만)
+     * 비트 레벨 읽기: 바이트 정렬을 강제하지 않음
      */
     public int readModularChar() {
         int result = 0;
         int shift = 0;
         int b;
-        do {
-            b = input.readRawChar() & 0xFF;
-            result |= (b & 0x7F) << (shift * 7);
-            shift++;
-        } while ((b & 0x80) != 0);
+        boolean negative = false;
 
-        // 음수 플래그 처리 (0x40)
-        if ((b & 0x40) != 0) {
-            result = -result;
-        }
-        return result;
+        do {
+            b = input.readBits(8) & 0xFF;
+
+            if ((b & 0x80) == 0) {
+                // 최종 바이트 (high bit = 0)
+                if ((b & 0x40) != 0) {
+                    // Bit 6이 부호 플래그
+                    negative = true;
+                    b &= 0xBF;  // 비트 6 제거
+                }
+                // 최종 바이트는 6비트 데이터만 포함
+                result |= (b & 0x3F) << (shift * 7);
+                break;
+            } else {
+                // 계속되는 바이트 (high bit = 1): 7비트 데이터
+                result |= (b & 0x7F) << (shift * 7);
+                shift++;
+            }
+        } while (true);
+
+        return negative ? -result : result;
     }
 
     /**
      * UMC (Unsigned Modular Char) 읽기
      * MC 인코딩이지만 부호는 없음 (항상 양수)
-     * Handles 섹션의 handle_delta용
+     * 비트 레벨 읽기: 바이트 정렬을 강제하지 않음 (libredwg 호환)
      */
     public int readUnsignedModularChar() {
         int result = 0;
         int shift = 0;
         int b;
+        boolean debug = false;  // Toggle for debugging
+        if (debug) System.out.printf("[DEBUG UMC] Start reading at pos %d\n", input.position());
         do {
-            b = input.readRawChar() & 0xFF;
+            b = input.readBits(8) & 0xFF;  // 비트 레벨: 정렬 강제 없음
+            if (debug) System.out.printf("[DEBUG UMC]   byte[%d] = 0x%02X (high=%d, value=0x%02X)\n",
+                shift, b, (b & 0x80) >> 7, b & 0x7F);
             result |= (b & 0x7F) << (shift * 7);
             shift++;
         } while ((b & 0x80) != 0);
+        if (debug) System.out.printf("[DEBUG UMC] Result = 0x%X (%d)\n", result, result);
         return result;
     }
 
