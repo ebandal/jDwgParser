@@ -90,9 +90,12 @@ public class DwgReader {
         SectionInputStream handlesStream = sections.get("AcDb:Handles");
         if (handlesStream != null) {
             try {
+                System.out.printf("[DEBUG] Parsing Handles section: %d bytes\n", handlesStream.rawBytes().length);
                 handleRegistry = new HandlesSectionParser().parse(handlesStream, version);
+                System.out.printf("[DEBUG] Handles parsed: %d entries\n", handleRegistry.allHandles().size());
             } catch (Exception e) {
                 System.out.printf("[WARN] Failed to parse Handles section: %s\n", e.getMessage());
+                e.printStackTrace();
             }
         }
         doc.setHandleRegistry(handleRegistry);

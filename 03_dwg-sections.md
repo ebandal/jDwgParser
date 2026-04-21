@@ -472,6 +472,174 @@ XData 항목 하나. 그룹코드와 값의 쌍.
 
 ---
 
+## 🔷 버전별 섹션 구조 (R13~R2018)
+
+이 섹션은 모든 DWG 버전에서 Handles/Objects 섹션이 어떻게 다르게 처리되는지를 보여준다.
+
+### 버전 그룹분류
+
+| 그룹 | 버전 | 압축 | 암호화 | 섹션레이아웃 | 문자열 |
+|-----|------|------|-------|----------|-------|
+| **A** | R13, R13c3, R14, R2000, R2000i, R2002 | ❌ | ❌ | 고정(헤더지정) | TV (ANSI) |
+| **B** | R2004, R2004a~c | ✅ LZ77 | ❌ | 동적(섹션정보표) | TV (ANSI) |
+| **C** | R2007~R2009 | ✅ LZ77 | ✅ 페이지헤더 | 동적(확장) | TU (Unicode) |
+| **D** | R2010, R2010b, R2012 | ✅ LZ77 | ✅ 페이지헤더 | 동적(Class확장) | TU (Unicode) |
+| **E** | R2013~R2017 | ✅ LZ77 | ✅ 페이지헤더 | 동적(추가확장) | TU (Unicode) |
+| **F** | R2018+ | ✅ LZ77 | ✅ 페이지헤더 | 동적(헤더확장) | TU (Unicode) |
+
+### 그룹 A (R13~R2002) - 고정 레이아웃, 압축 없음
+
+**Handles Section (§23) 구조:**
+
+```
+여러 페이지로 구성:
+
+[RS_BE]            page_size         (2 bytes, big-endian, 보통 2032~2040)
+[page_size - 4 bytes]                handle-offset 쌍들의 델타 인코딩 데이터
+[RS_BE]            crc               (2 bytes, big-endian, seed=0xC0C1)
+
+마지막 페이지: page_size == 2 (데이터 없음, 종료 신호)
+```
+
+**Objects Section (§20) 구조:**
+
+```
+Offset 0부터 시작 (헤더 없음):
+  [MS] objectSize
+  [BS] typeCode
+  [Handle] objectHandle
+  [BS] xDataSize
+  [XData or empty] xData
+  ... 공통 헤더 ...
+  ... 타입별 데이터 ...
+  
+다음 객체는 이전 객체 끝에서 계속됨
+Handles section의 offset은 Objects 내 절대 바이트 위치
+```
+
+**⚠️ 중요 세부사항:**
+- `page_size`는 **RS_BE (big-endian)**로 읽음 (가장 중요한 바이트가 먼저)
+- `handle_delta` = UMC (unsigned, 항상 양수)
+- `offset_delta` = MC (signed, 음수 가능 - 누적됨)
+- Objects 섹션은 offset 0부터 시작 (240바이트 헤더 없음)
+
+### 그룹 B (R2004) - LZ77 압축, 동적 섹션배치
+
+**파일 구조:**
+
+```
+[Header Section]  ← 암호화 안 됨
+├── Header Variables
+└── Section Info Table (동적 섹션 매핑)
+
+[Compressed Section Pages]
+├── Page N (압축됨)
+├── Page N+1 (압축됨)
+└── System Section Page (섹션 맵, 압축 가능)
+```
+
+**Handles Section (R2004):**
+
+```
+1. 섹션 정보표에서 HANDLES section 위치 → 페이지 목록 읽기
+2. 각 페이지 (32바이트 헤더 + 압축데이터) → LZ77 해제
+3. 결과 바이트스트림에서 Handles 파싱:
+
+   [RS_BE]          page_size
+   [1-3 bytes]      handle_delta (UMC)
+   [1-3 bytes]      offset_delta (MC, signed)
+   ... 반복 ...
+   [RS_BE]          crc
+```
+
+**Objects Section (R2004):**
+
+```
+1. 섹션 정보표에서 OBJECTS section 위치 → 페이지 목록 읽기
+2. 각 페이지 → LZ77 해제
+3. 결과 바이트스트림에서 Objects 파싱:
+   - Offset 0부터 시작 (헤더 없음)
+   - Handles의 offset으로 객체 위치 결정
+```
+
+**페이지 헤더 (32 bytes, 암호화 안 됨):**
+
+```
+[u32] page_type               (0x4163043b expected)
+[u32] section_type            (0 = OBJECTS, other values for other sections)
+[u32] data_size_compressed    
+[u32] page_size
+[u32] start_offset
+[u32] unknown
+[u32] page_header_crc
+[u32] data_crc
+```
+
+**LZ77 opcode 구조:**
+
+```
+While reading:
+  [B] opcode
+  
+  If opcode < 0x10:                    // Literal (1-16 bytes)
+    copy_count = opcode + 1
+    copy literal_bytes to output
+  
+  Else if opcode < 0x20:               // Medium match
+    offset_bytes = 2 bytes
+    length_bits = opcode - 0x10
+    offset = offset_bytes | ((length_bits >> 2) << 8)
+    length = (length_bits & 0x03) + 4
+    copy (output_pos - offset) to output, length bytes
+  
+  Else if opcode < 0x100:              // Long match
+    offset_bytes = 2 bytes
+    length_byte = 1 byte
+    offset = offset_bytes | ((opcode >> 2) << 8)
+    length = length_byte + (((opcode & 0x03) << 8) + 0x100)
+    copy (output_pos - offset) to output, length bytes
+  
+  If opcode == 0x11:
+    break  // Decompression complete
+```
+
+### 그룹 C (R2007~R2009) - 페이지헤더 암호화, 문자열 Unicode
+
+**주요 변경사항:**
+
+1. **Page Header Encryption (32 bytes):**
+   ```
+   secMask = 0x4164536b ^ (page_address & 0xFFFFFFFF)
+   
+   For each 4-byte word in header:
+     word ^= (secMask >> ((offset_in_page % 4) * 8)) & 0xFF
+   ```
+
+2. **String Encoding 변경:**
+   - R2004까지: TV (ANSI code page based)
+   - R2007부터: TU (UTF-16LE, Unicode)
+
+3. **Section Info Table 확장:**
+   - 추가 필드들 (bitsize, compression flags 등)
+   - Section 매핑 더 복잡함
+
+4. **Handles/Objects 섹션 포맷:**
+   - LZ77 압축 (R2004와 동일)
+   - 페이지 헤더만 암호화됨
+   - 데이터 자체는 암호화 안 됨
+
+### 그룹 D-F (R2010+) - 점진적 확장
+
+| 버전 | 추가사항 |
+|-----|---------|
+| R2010+ | Class definition에 hsize 필드 추가 |
+| R2013+ | 추가 metadata 통합 |
+| R2018+ | Header 자체 hsize 필드 추가 |
+
+**⚠️ 핵심:** Handles/Objects 섹션 포맷은 R2004~R2018 동안 변경 없음. 변경은 주로 Header 스키마에만 영향.
+
+---
+
 ## 섹션 공통 Sentinel 패턴
 
 R13/R14의 섹션(Header, Classes, Object Map)은 모두 동일한 구조를 따른다:
@@ -575,28 +743,38 @@ Sentinel End (16 bytes)
 
 ## Handles Section 파싱 상세 (§23)
 
-### Object Map 인코딩 구조
+⚠️ **중요:** libredwg 검증 결과, 모든 DWG 버전(R13~R2018)에서 동일한 구조 사용
 
-Object Map은 여러 블록으로 구성. 각 블록:
+### Object Map 인코딩 구조 (모든 버전)
+
+Object Map은 여러 페이지로 구성. 각 페이지:
 
 ```
-[2 bytes RS]  block_size   (이 블록의 바이트 크기, CRC 포함)
-[ block_size - 2 bytes ]   handle-offset 쌍들의 MC 인코딩 데이터
-[2 bytes RS]  CRC-16       (seed=0xC0C1, block_size 포함 전체)
+[2 bytes RS_BE]  page_size         (이 페이지의 바이트 크기, CRC 포함. BIG-ENDIAN!)
+[ page_size - 4 bytes ]            handle-offset 쌍들의 델타 인코딩 데이터
+[2 bytes RS_BE]  CRC-16            (seed=0xC0C1, BIG-ENDIAN!)
 ```
 
-마지막 블록: `block_size == 2` (데이터 없이 CRC만 있음 → 종료 신호)
+**주요 수정사항:**
+- `RS` → `RS_BE` (BIG-ENDIAN, 가장 중요한 바이트 먼저)
+- 페이지 크기는 보통 2032~2040 바이트
+- 마지막 페이지: `page_size == 2` (데이터 없음 → 종료 신호)
 
-### Delta 인코딩 알고리즘
+### Delta 인코딩 알고리즘 (모든 버전 동일)
 
 ```
 last_handle = 0
 last_offset = 0
 
-while hasMoreBlocks:
-    while blockHasMoreEntries:
-        handle_delta = readModularChar()  // MC
-        offset_delta = readModularChar()  // MC
+while hasMorePages:
+    page_size = readBigEndianShort()  // RS_BE - 매우 중요!
+    if page_size <= 2:
+        break  // 종료 신호
+    
+    page_start = current_position
+    while (current_position - page_start) < (page_size - 4):
+        handle_delta = readUnsignedModularChar()  // UMC - 항상 양수
+        offset_delta = readSignedModularChar()    // MC - 음수 가능! (오프셋이 역방향일 수 있음)
 
         current_handle = last_handle + handle_delta
         current_offset = last_offset + offset_delta
@@ -605,7 +783,16 @@ while hasMoreBlocks:
 
         last_handle = current_handle
         last_offset = current_offset
+    
+    crc = readBigEndianShort()  // RS_BE
+    validateCRC(crc, page_start, page_size)
 ```
+
+**R13/R14와의 차이점:**
+- RS_BE 사용 (R13/R14는 RS 사용)
+- handle_delta는 UMC (unsigned - 항상 양수)
+- offset_delta는 MC (signed - 음수 가능)
+- 각 페이지는 독립적인 CRC 검증
 
 ### HandlesSectionWriter Delta 인코딩
 
@@ -641,6 +828,10 @@ for entry in entries:
 
 ## Objects Section 파싱 파이프라인 (§20)
 
+⚠️ **중요:** 모든 DWG 버전(R13~R2018)에서 Objects section은 **헤더 없이** 바이트 오프셋 0부터 객체 데이터가 시작됨 (libredwg 검증)
+- R13~R2002: 직접 Objects 데이터 (비트스트림)
+- R2004~R2018: LZ77 해제 후 동일한 구조 사용
+
 ### 전체 파이프라인
 
 ```
@@ -648,10 +839,31 @@ ObjectsSectionParser.parse(stream, version, handles, classes):
 
 1. SectionInputStream → BitStreamReader 생성
 2. HandleRegistry의 모든 handle 순회:
-   a. offsetFor(handle) → fileOffset
-   b. BitStreamReader.seek(fileOffset * 8)  // 비트 오프셋 변환
+   a. offsetFor(handle) → byteOffset (누적 오프셋)
+   b. BitStreamReader.seek(byteOffset * 8)  // 바이트 오프셋 → 비트 오프셋 변환
    c. parseOneObject(reader, version, classes) 호출
 3. 결과: Map<Long handle, DwgObject> 반환
+
+주의: Objects section은 offset 0부터 시작. "240바이트 헤더"는 존재하지 않음.
+      Handles 섹션의 offset은 Objects 섹션 내 절대 바이트 위치.
+```
+
+### Offset의 누적 계산 (모든 버전)
+
+```
+// Handles section에서 읽은 deltas는 누적됨
+cumulative_offset = 0
+last_handle = 0
+last_offset = 0
+
+for each (handle_delta, offset_delta) in handles:
+    cumulative_offset += offset_delta  // offset_delta는 signed (음수 가능)
+    
+    byte_position = cumulative_offset  // Objects section 내 절대 위치
+    
+    // Objects section의 byte_position에서 객체 파싱
+    DwgObject obj = parseObjectAt(objects_data, byte_position)
+    registry.put(last_handle + handle_delta, obj)
 ```
 
 ### 단일 객체 파싱 순서
@@ -693,10 +905,12 @@ else:
 
 ### CommonEntityData 파싱 순서 (§20 공통 엔티티 헤더)
 
+**R13/R14 vs R2000+의 차이점을 명시적으로 처리할 것:**
+
 ```
 entityMode    = reader.readBits(2)    // BB
 numReactors   = reader.readBitLong()  // BL
-noLinks       = reader.readBit()      // B (R2000+)
+noLinks       = reader.readBit()      // B (R2000+만 읽음, R13/R14는 없음)
 
 if version < R2004:
     colorIndex = reader.readBitShort()  // BS

@@ -41,30 +41,59 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
     public Map<Long, DwgObject> parse(SectionInputStream stream, DwgVersion version) throws Exception {
         Map<Long, DwgObject> result = new HashMap<>();
 
-        // If we have handle registry (R13/R14), use offset-based parsing
+        System.out.printf("[DEBUG] Objects: version=%s, handles=%d\n",
+            version, handles != null ? handles.allHandles().size() : 0);
+
+        // All DWG versions (R13~R2018) use offset-based parsing when handle registry is available
+        // Objects section starts at offset 0 with no header
         if (handles != null && !handles.allHandles().isEmpty()) {
             byte[] raw = stream.rawBytes();
+            System.out.printf("[DEBUG] Objects: Offset-based parsing, %d handles, section size=%d bytes\n",
+                handles.allHandles().size(), raw.length);
+
+            int successCount = 0;
+            int failureCount = 0;
+
+            // Parse objects using handle offsets (all offsets are absolute byte positions in Objects section)
             for (Map.Entry<Long, Long> entry : sortedHandleOffsets()) {
                 long handle = entry.getKey();
                 long offset = entry.getValue();
 
-                if (offset >= raw.length) continue;
+                if (offset < 0 || offset >= raw.length) {
+                    System.out.printf("[DEBUG]   Handle 0x%X: offset %d out of range [0, %d)\n",
+                        handle, offset, raw.length);
+                    failureCount++;
+                    continue;
+                }
 
                 try {
                     DwgObject obj = parseObjectAt(raw, (int) offset, version, handle);
                     if (obj != null) {
                         result.put(handle, obj);
+                        successCount++;
+                        if (successCount <= 5 || successCount % 100 == 0) {
+                            System.out.printf("[DEBUG]   Handle 0x%X at offset 0x%X: SUCCESS\n",
+                                handle, offset);
+                        }
+                    } else {
+                        failureCount++;
                     }
                 } catch (Exception e) {
-                    // 파싱 실패 시 해당 객체 건너뜀
+                    System.out.printf("[DEBUG]   Handle 0x%X at offset 0x%X: Exception %s\n",
+                        handle, offset, e.getMessage());
+                    failureCount++;
                 }
             }
+
+            System.out.printf("[DEBUG] Objects: Offset-based parse complete: %d/%d success, %d failed\n",
+                successCount, handles.allHandles().size(), failureCount);
         } else {
-            // R2000+에는 Handles 섹션이 없으므로 streaming parse 사용
-            System.out.printf("[DEBUG] ObjectsSectionParser: No HandleRegistry, using streaming parse for %s\n", version);
+            // No handle registry: use streaming parse (R2000+ without working Handles)
+            System.out.printf("[DEBUG] Objects: No handle registry, using streaming parse for %s\n", version);
             result = parseStreaming(stream, version);
         }
 
+        System.out.printf("[DEBUG] Objects: Total objects parsed=%d\n", result.size());
         return result;
     }
 
@@ -72,50 +101,45 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         Map<Long, DwgObject> result = new HashMap<>();
         byte[] raw = stream.rawBytes();
         long nextHandle = 1;
-        int offset = 0;
+        int offset = 0;  // Objects section starts at offset 0 (no header)
         int parsedCount = 0;
         int attemptCount = 0;
 
-        System.out.printf("[DEBUG] Streaming parse: stream size %d bytes\n", raw.length);
-        System.out.printf("[DEBUG] First 16 bytes: ");
-        for (int i = 0; i < Math.min(16, raw.length); i++) {
+        System.out.printf("[DEBUG] Streaming parse: section size=%d bytes, starting at offset 0\n", raw.length);
+        System.out.printf("[DEBUG] First 16 bytes from offset 0x%X: ", offset);
+        for (int i = offset; i < Math.min(offset + 16, raw.length); i++) {
             System.out.printf("%02X ", raw[i] & 0xFF);
         }
         System.out.println();
 
-        while (offset < raw.length - 4 && attemptCount < 100) {
+        while (offset < raw.length - 6 && attemptCount < 50) {
             attemptCount++;
             try {
-                // Create reader for current offset
-                ByteBufferBitInput buf = new ByteBufferBitInput(
+                // Create reader at current offset (start at byte boundary)
+                ByteBufferBitInput bbuf = new ByteBufferBitInput(
                     java.nio.ByteBuffer.wrap(raw, offset, raw.length - offset));
-                BitStreamReader r = new BitStreamReader(buf, version);
+                BitStreamReader r = new BitStreamReader(bbuf, version);
 
-                // Debug: Show bytes at this offset
-                if (attemptCount <= 5) {
-                    System.out.printf("[DEBUG] Attempt %d at offset 0x%X: bytes=%02X %02X\n",
-                        attemptCount, offset, raw[offset] & 0xFF, raw[offset+1] & 0xFF);
-                }
-
-                // Read object size
                 int objSize = r.readModularShort();
+                int unknownField = r.getInput().readRawShort() & 0xFFFF;
 
                 if (attemptCount <= 5) {
-                    System.out.printf("[DEBUG]   -> objSize=%d (0x%04X)\n", objSize, objSize & 0xFFFF);
+                    System.out.printf("[DEBUG] Offset 0x%X: size=%d unknown=0x%04X\n",
+                        offset, objSize, unknownField);
                 }
 
                 // Sanity check
-                if (objSize <= 0 || objSize > 0x10000) {
+                if (objSize <= 0 || objSize > 0x100000) {
                     offset += 2;
                     continue;
                 }
 
-                // Read type code
+                // Read type code (after skipping unknown field)
                 int typeCode = r.readBitShort();
 
-                // Sanity check
-                if (typeCode < 0 || typeCode > 1000) {
-                    offset += 2;
+                // Sanity check - relax bounds to find valid objects
+                if (typeCode < 0 || typeCode > 5000) {
+                    offset += 1;
                     continue;
                 }
 

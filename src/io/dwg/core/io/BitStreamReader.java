@@ -95,8 +95,9 @@ public class BitStreamReader {
     }
 
     /**
-     * §2.6: Modular Char (MC) 읽기
+     * §2.6: Modular Char (MC) 읽기 - Signed
      * High bit=계속 플래그, 0x40=음수 플래그
+     * handle_delta는 UMC (부호 없음)를 사용하므로 이것을 쓰지 말 것.
      */
     public int readModularChar() {
         int result = 0;
@@ -112,6 +113,23 @@ public class BitStreamReader {
         if ((b & 0x40) != 0) {
             result = -result;
         }
+        return result;
+    }
+
+    /**
+     * UMC (Unsigned Modular Char) 읽기
+     * MC 인코딩이지만 부호는 없음 (항상 양수)
+     * Handles 섹션의 handle_delta용
+     */
+    public int readUnsignedModularChar() {
+        int result = 0;
+        int shift = 0;
+        int b;
+        do {
+            b = input.readRawChar() & 0xFF;
+            result |= (b & 0x7F) << (shift * 7);
+            shift++;
+        } while ((b & 0x80) != 0);
         return result;
     }
 
@@ -133,6 +151,17 @@ public class BitStreamReader {
             result = -result;
         }
         return result;
+    }
+
+    /**
+     * RS_BE (Big-Endian) 읽기 - Handles 섹션용
+     * Handles 섹션의 block_size와 CRC는 big-endian (RS_BE)로 저장됨.
+     * 모든 DWG 버전(R13~R2018)에서 동일.
+     */
+    public int readBigEndianShort() {
+        int byte1 = input.readRawChar() & 0xFF;
+        int byte2 = input.readRawChar() & 0xFF;
+        return (byte1 << 8) | byte2;  // MSB first (big-endian)
     }
 
     /**
