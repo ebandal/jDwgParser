@@ -8,9 +8,10 @@ import io.dwg.core.util.CrcLookupTables;
 import io.dwg.core.version.DwgVersion;
 import io.dwg.format.common.AbstractFileStructureHandler;
 import io.dwg.format.common.FileHeaderFields;
-import io.dwg.format.common.SectionDescriptor;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -19,23 +20,6 @@ import java.util.Map;
  * 스펙 §4 (R2004 DWG FILE FORMAT ORGANIZATION) 구현
  */
 public class R2004FileStructureHandler extends AbstractFileStructureHandler {
-
-    // Helper class to track section boundaries
-    private static class SectionBounds {
-        int sectionId;
-        long startOffset;
-        long endOffset;
-        long fileOffset;  // Actual file offset for page header decryption
-        SectionBounds(int id, long start) {
-            this.sectionId = id;
-            this.startOffset = start;
-            this.endOffset = start;
-            this.fileOffset = start;
-        }
-        long getSize() {
-            return endOffset - startOffset;
-        }
-    }
 
     // readHeader → readSections 로 전달되는 section map 오프셋
     private long sectionMapOffset;
@@ -238,7 +222,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
     }
 
     // -------------------------------------------------------------------------
-    // readSections
+    // readSections - Simplified using DecoderR2004 logic
     // -------------------------------------------------------------------------
     @Override
     public Map<String, SectionInputStream> readSections(BitInput input, FileHeaderFields header)
@@ -247,18 +231,10 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
 
         if (sectionMapOffset == 0) return sections;
 
-        // Read R2004 Section Map
-        R2004SectionMap sectionMap = R2004SectionMap.read(input, sectionMapOffset);
-        System.out.printf("[DEBUG] R2004: Section map loaded with %d sections\n", sectionMap.descriptors().size());
-
-        // For now, process first section (Header) which always starts at 0x100
-        // This is a simplified approach - full multi-section support requires tracking
-        // section boundaries from page headers
         long sectionDataStart = 0x100;
         input.seek(sectionDataStart * 8);
 
-        // Read data for the first section (Header)
-        // Try reading a reasonable amount (e.g., up to 1MB to capture all pages)
+        // Read all data from 0x100 onwards (up to 1MB)
         long maxSectionSize = 1000000;
         ByteArrayOutputStream sectionDataStream = new ByteArrayOutputStream();
         try {
@@ -267,7 +243,6 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
                     int b = input.readRawChar() & 0xFF;
                     sectionDataStream.write(b);
                 } catch (Exception e) {
-                    // End of file
                     break;
                 }
             }
@@ -275,230 +250,138 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
             // Reading error
         }
         byte[] allData = sectionDataStream.toByteArray();
-        System.out.printf("[DEBUG] R2004: Read %d bytes of section data starting at 0x100\n", allData.length);
+        System.out.printf("[DEBUG] R2004: Read %d bytes from 0x100\n", allData.length);
 
-        // FIRST PASS: Scan all pages to detect section boundaries
-        Map<Integer, SectionBounds> sectionBoundsMap = new HashMap<>();
+        // Debug: Show first 32 bytes (encrypted)
+        System.out.printf("[DEBUG] R2004: First 32 bytes of allData (encrypted):\n");
+        for (int i = 0; i < Math.min(32, allData.length); i += 16) {
+            System.out.printf("  0x%02X: ", i);
+            for (int j = 0; j < 16 && i + j < allData.length; j++) {
+                System.out.printf("%02X ", allData[i + j] & 0xFF);
+            }
+            System.out.println();
+        }
+
+        // FIRST PASS: Scan all pages and identify section ranges by sectionNum
+        // Each page starts with 32-byte encrypted header containing sectionNum at offset 4
+        Map<Integer, SectionInfo> dataPages = new HashMap<>();
         int scanOffset = 0;
-        int scanPageCount = 0;
         while (scanOffset + 32 <= allData.length) {
-            scanPageCount++;
+            // Decrypt page header using correct file offset (DecoderR2004 method)
             long actualFileOffset = sectionDataStart + scanOffset;
-            long secMask = 0x4164536bL ^ (actualFileOffset & 0xFFFFFFFFL);
-
-            // Decrypt page header
+            int secMask = (int)(0x4164536bL ^ (actualFileOffset & 0xFFFFFFFFL));
             byte[] pageHeader = new byte[32];
-            if (scanOffset + 32 > allData.length) break; // Safety check
-            for (int i = 0; i < 32; i++) {
-                pageHeader[i] = (byte)(allData[scanOffset + i] ^ ((secMask >> ((i & 3) * 8)) & 0xFF));
+            for (int i = 0; i < 8; i++) {
+                int hdr = ByteBuffer.wrap(allData, scanOffset + i*4, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+                hdr ^= secMask;
+                // Note: allocate().putInt() uses BIG_ENDIAN by default, which is correct for the format
+                byte[] decrypted = ByteBuffer.allocate(4).putInt(hdr).array();
+                System.arraycopy(decrypted, 0, pageHeader, i*4, 4);
             }
 
-            int pageType = (int)(ByteUtils.readLE32(pageHeader, 0) & 0xFFFFFFFFL);
-            int pageSecId = (int)(ByteUtils.readLE32(pageHeader, 4) & 0xFFFFFFFFL);
-            int compSize = (int)(ByteUtils.readLE32(pageHeader, 8) & 0xFFFFFFFFL);
+            // Data section page headers use BIG_ENDIAN format (per spec §4.3)
+            int pageType = ByteBuffer.wrap(pageHeader, 0, 4).order(ByteOrder.BIG_ENDIAN).getInt();
+            int sectionNum = ByteBuffer.wrap(pageHeader, 4, 4).order(ByteOrder.BIG_ENDIAN).getInt();
+            int compSize = ByteBuffer.wrap(pageHeader, 8, 4).order(ByteOrder.BIG_ENDIAN).getInt();
+            int decompSize = ByteBuffer.wrap(pageHeader, 12, 4).order(ByteOrder.BIG_ENDIAN).getInt();
 
-            // Validate compSize
-            if (compSize < 0 || compSize > 100000) {
-                System.out.printf("[WARN] R2004: Invalid compSize %d at scanOffset %d, stopping scan\n", compSize, scanOffset);
+            // Validate
+            if (compSize < 0 || compSize > 100000 || sectionNum > 28) {
+                System.out.printf("[WARN] R2004: Invalid page at offset 0x%X (sectionNum=%d, compSize=%d)\n",
+                    scanOffset, sectionNum, compSize);
                 break;
             }
 
-            // Track section boundaries for ALL valid section IDs (not just data pages)
-            // Valid section IDs are 0-28; ignore pages with invalid IDs
-            if (pageSecId >= 0 && pageSecId <= 28) {
-                if (!sectionBoundsMap.containsKey(pageSecId)) {
-                    sectionBoundsMap.put(pageSecId, new SectionBounds(pageSecId, scanOffset));
-                    System.out.printf("[DEBUG] R2004: Section %d started at scanOffset=0x%X, pageType=0x%X\n",
-                        pageSecId, scanOffset, pageType);
+            // Skip system pages (types 0x41630e3b, 0x4163003b) - only process data pages (0x4163043b)
+            if (pageType == 0x4163043b) {
+                // Track this data page by sectionNum
+                if (!dataPages.containsKey(sectionNum)) {
+                    dataPages.put(sectionNum, new SectionInfo());
                 }
-                SectionBounds bounds = sectionBoundsMap.get(pageSecId);
-                bounds.endOffset = scanOffset + 32 + compSize;
+                SectionInfo info = dataPages.get(sectionNum);
+                info.pages.add(new PageInfo(scanOffset + 32, compSize, decompSize));
+
+                System.out.printf("[DEBUG] R2004: Data page sectionNum=%d offset=0x%X compSize=%d decompSize=%d\n",
+                    sectionNum, scanOffset, compSize, decompSize);
+            } else if (pageType == 0x41630e3b || pageType == 0x4163003b) {
+                System.out.printf("[DEBUG] R2004: System page at offset 0x%X (type=0x%X), skipping for now\n",
+                    scanOffset, pageType);
+            } else {
+                System.out.printf("[WARN] R2004: Unknown page type 0x%X at offset 0x%X\n", pageType, scanOffset);
             }
 
             scanOffset += 32 + compSize;
-            if (scanOffset >= allData.length) break; // Prevent buffer overrun
+            if (scanOffset >= allData.length) break;
         }
-        System.out.printf("[DEBUG] R2004: Detected %d sections from %d pages\n", sectionBoundsMap.size(), scanPageCount);
 
-        // Map section IDs to names for lookup
-        Map<Integer, String> sectionIdNames = new HashMap<>();
-        sectionIdNames.put(1, "AcDb:Header");
-        sectionIdNames.put(2, "AcDb:AuxHeader");
-        sectionIdNames.put(3, "AcDb:Classes");
-        sectionIdNames.put(5, "AcDb:Template");
-        sectionIdNames.put(7, "(Gap)");
-        sectionIdNames.put(10, "AcDb:SummaryInfo");
-        sectionIdNames.put(11, "AcDb:VBAProject");
-        sectionIdNames.put(13, "AcDb:Objects");
-        sectionIdNames.put(14, "AcDb:SecdInfo");
+        // Map section numbers to names
+        Map<Integer, String> sectionNames = new HashMap<>();
+        sectionNames.put(1, "AcDb:Header");
+        sectionNames.put(2, "AcDb:AuxHeader");
+        sectionNames.put(3, "AcDb:Classes");
+        sectionNames.put(4, "AcDb:Handles");
+        sectionNames.put(5, "AcDb:Template");
+        sectionNames.put(7, "AcDb:Objects");
+        sectionNames.put(10, "AcDb:SummaryInfo");
+        sectionNames.put(11, "AcDb:VBAProject");
+        sectionNames.put(13, "AcDb:AppInfo");
+        sectionNames.put(14, "AcDb:SecurityInfo");
 
-        // SECOND PASS: Process each section
-        for (Integer sectionId : sectionBoundsMap.keySet()) {
-            SectionBounds bounds = sectionBoundsMap.get(sectionId);
-            String sectionName = sectionIdNames.getOrDefault(sectionId, "Unknown(" + sectionId + ")");
-            System.out.printf("[DEBUG] R2004: Section %d '%s': offset=0x%X, size=%d\n",
-                sectionId, sectionName, bounds.startOffset, bounds.getSize());
+        // SECOND PASS: Process each data section (decompress all pages and combine)
+        for (Integer sectionNum : dataPages.keySet()) {
+            SectionInfo info = dataPages.get(sectionNum);
+            String sectionName = sectionNames.getOrDefault(sectionNum, "Unknown(" + sectionNum + ")");
 
-            // Extract data for this section
-            byte[] sectionData = new byte[(int)bounds.getSize()];
-            System.arraycopy(allData, (int)bounds.startOffset, sectionData, 0, (int)bounds.getSize());
+            System.out.printf("[DEBUG] R2004: Processing section %d '%s' with %d pages\n",
+                sectionNum, sectionName, info.pages.size());
 
-            // Find or create section descriptor
-            SectionDescriptor desc = null;
-            for (SectionDescriptor d : sectionMap.descriptors()) {
-                if (d.name().equals(sectionName)) {
-                    desc = d;
-                    break;
-                }
-            }
-            if (desc == null) {
-                desc = new SectionDescriptor(sectionName);
-            }
+            ByteArrayOutputStream decompressed = new ByteArrayOutputStream();
+            for (PageInfo page : info.pages) {
+                // Extract compressed data
+                byte[] compressedData = new byte[page.compSize];
+                int availableBytes = Math.min(page.compSize, allData.length - page.headerEnd);
+                System.arraycopy(allData, page.headerEnd, compressedData, 0, availableBytes);
 
-            try {
-                // Skip empty/gap sections for now
-                if (desc.name().contains("(") && !desc.name().equals("(Gap)")) continue;
-
-                System.out.printf("[DEBUG] R2004: Processing section %d: '%s'\n", sectionId, sectionName);
-
-                byte[] data = sectionData;
-
-                System.out.printf("[DEBUG] R2004: Section '%s' - processing %d bytes starting at 0x100\n",
-                    desc.name(), data.length);
-
-                // R2004 sections are stored with 32-byte encrypted page headers
-                // Format: [32-byte encrypted header] [compressed/uncompressed data] [repeat for multiple pages]
-
-                // Check if this section spans multiple pages
-                System.out.printf("[DEBUG] R2004: Processing section '%s' (%d bytes total)\n", desc.name(), data.length);
-
-                ByteArrayOutputStream combinedDecompressed = new ByteArrayOutputStream();
-                int pageOffset = 0;
-                int pageCount = 0;
-
-                while (pageOffset < data.length && pageOffset + 32 <= data.length) {
-                    pageCount++;
-                    System.out.printf("[DEBUG] R2004: Reading page %d at offset %d\n", pageCount, pageOffset);
-                    // Decrypt page header - secMask based on ACTUAL file offset
-                    // Section starts at bounds.fileOffset, so actual offset = section file offset + page offset within section
-                    long actualFileOffset = sectionDataStart + bounds.fileOffset + pageOffset;
-                    long secMask = 0x4164536bL ^ (actualFileOffset & 0xFFFFFFFFL);
-                    System.out.printf("[DEBUG] R2004: File offset=0x%X, secMask=0x%X\n", actualFileOffset, secMask);
-                    byte[] pageHeader = new byte[32];
-                    for (int i = 0; i < 32; i++) {
-                        pageHeader[i] = (byte)(data[pageOffset + i] ^ ((secMask >> ((i & 3) * 8)) & 0xFF));
+                if (page.compSize < page.decompSize) {
+                    // Need to decompress
+                    try {
+                        io.dwg.core.util.R2004Lz77Decompressor decompressor =
+                            new io.dwg.core.util.R2004Lz77Decompressor();
+                        byte[] pageDecomp = decompressor.decompress(compressedData, page.decompSize);
+                        decompressed.write(pageDecomp);
+                        System.out.printf("[DEBUG] R2004: Section %d page decompressed %d -> %d bytes\n",
+                            sectionNum, page.compSize, pageDecomp.length);
+                    } catch (Exception e) {
+                        System.out.printf("[WARN] R2004: Decompression failed for section %d: %s\n",
+                            sectionNum, e.getMessage());
+                        decompressed.write(compressedData, 0, availableBytes);
                     }
-
-                    // Parse page header
-                    int pageType = (int)(ByteUtils.readLE32(pageHeader, 0) & 0xFFFFFFFFL);
-                    int sectionNum = (int)(ByteUtils.readLE32(pageHeader, 4) & 0xFFFFFFFFL);
-                    int compSize = (int)(ByteUtils.readLE32(pageHeader, 8) & 0xFFFFFFFFL);
-                    int decompSize = (int)(ByteUtils.readLE32(pageHeader, 12) & 0xFFFFFFFFL);
-                    int startOffset = (int)(ByteUtils.readLE32(pageHeader, 16) & 0xFFFFFFFFL);
-
-                    // Debug: Show decrypted page header bytes for Header
-                    if ("AcDb:Header".equals(desc.name())) {
-                        System.out.printf("[DEBUG] R2004: Header decrypted page header bytes:\n");
-                        for (int i = 0; i < 32; i += 8) {
-                            System.out.printf("  0x%02X: ", i);
-                            for (int j = 0; j < 8; j++) {
-                                System.out.printf("%02X ", pageHeader[i + j] & 0xFF);
-                            }
-                            System.out.println();
-                        }
-                    }
-
-                    System.out.printf("[DEBUG] R2004: '%s' page header - type=0x%X comp=%d decomp=%d\n",
-                        desc.name(), pageType, compSize, decompSize);
-
-                    if (pageType == 0x4163043B) { // Data section page
-                        // Extract compressed data (skip 32-byte header)
-                        byte[] compressedData = new byte[compSize];
-                        int availableBytes = Math.min(compSize, data.length - pageOffset - 32);
-                        System.arraycopy(data, pageOffset + 32, compressedData, 0, availableBytes);
-
-                        // Debug first bytes of compressed data for AuxHeader
-                        if ("AcDb:AuxHeader".equals(desc.name()) && availableBytes > 0) {
-                            System.out.printf("[DEBUG] R2004: AuxHeader compressed data first 64 bytes (hex):\n");
-                            for (int i = 0; i < Math.min(64, availableBytes); i += 16) {
-                                System.out.printf("  0x%02X: ", i);
-                                for (int j = 0; j < 16 && i + j < availableBytes; j++) {
-                                    System.out.printf("%02X ", compressedData[i + j] & 0xFF);
-                                }
-                                System.out.println();
-                            }
-                        }
-
-                        // Try to decompress if needed
-                        if (compSize < decompSize) {
-                            try {
-                                System.out.printf("[DEBUG] R2004: '%s' page at offset %d: decompressing %d->%d bytes\n",
-                                    desc.name(), pageOffset, compSize, decompSize);
-                                io.dwg.core.util.R2004Lz77Decompressor decompressor = new io.dwg.core.util.R2004Lz77Decompressor();
-                                byte[] pageDecompressed = decompressor.decompress(compressedData, decompSize);
-                                combinedDecompressed.write(pageDecompressed);
-                                System.out.printf("[DEBUG] R2004: Page decompressed to %d bytes\n", pageDecompressed.length);
-                            } catch (Exception e) {
-                                System.out.printf("[WARN] R2004: Failed to decompress page: %s\n", e.toString());
-                                combinedDecompressed.write(compressedData, 0, availableBytes);
-                            }
-                        } else {
-                            combinedDecompressed.write(compressedData, 0, availableBytes);
-                        }
-                    } else {
-                        // Not a standard page, skip it
-                        System.out.printf("[DEBUG] R2004: Non-data page type 0x%X, skipping\n", pageType);
-                    }
-
-                    // Move to next page (32-byte header + compSize bytes of data)
-                    pageOffset += 32 + compSize;
-                }
-
-                // Use combined decompressed data from all pages
-                if (combinedDecompressed.size() > 0) {
-                    sectionData = combinedDecompressed.toByteArray();
-                    System.out.printf("[DEBUG] R2004: Section '%s' total decompressed: %d bytes from %d input bytes\n",
-                        desc.name(), sectionData.length, data.length);
                 } else {
-                    sectionData = data;  // Fallback to raw data if no pages decompressed
+                    // No decompression needed
+                    decompressed.write(compressedData, 0, availableBytes);
                 }
-
-                // Debug output for Classes section
-                if ("AcDb:Classes".equals(desc.name()) && sectionData.length > 0) {
-                    System.out.printf("[DEBUG] R2004: Classes section processed size: %d bytes\n", sectionData.length);
-                    System.out.printf("[DEBUG] R2004: Classes section first 64 bytes (processed):\n");
-                    for (int i = 0; i < Math.min(64, sectionData.length); i += 16) {
-                        System.out.printf("  0x%02X: ", i);
-                        for (int j = 0; j < 16 && i + j < sectionData.length; j++) {
-                            System.out.printf("%02X ", sectionData[i + j] & 0xFF);
-                        }
-                        System.out.println();
-                    }
-                    // Check for sentinel
-                    if (sectionData.length >= 16) {
-                        byte[] sentinel = {(byte)0x8D, (byte)0xA1, (byte)0xC4, (byte)0xB8, (byte)0xC4, (byte)0xA9, (byte)0xF8, (byte)0xC5,
-                                         (byte)0xC0, (byte)0xDC, (byte)0xF4, (byte)0x5F, (byte)0xE7, (byte)0xCF, (byte)0xB6, (byte)0x8A};
-                        boolean found = true;
-                        for (int i = 0; i < 16; i++) {
-                            if (sectionData[i] != sentinel[i]) {
-                                found = false;
-                                break;
-                            }
-                        }
-                        System.out.printf("[DEBUG] R2004: Classes sentinel found at offset 0: %b\n", found);
-                    }
-                }
-
-                sections.put(desc.name(), new SectionInputStream(sectionData, desc.name()));
-
-            } catch (Exception e) {
-                System.out.printf("[WARN] R2004FileStructureHandler: Failed to read section '%s': %s\n",
-                    desc.name(), e.getMessage());
-                e.printStackTrace();
             }
+
+            byte[] sectionData = decompressed.toByteArray();
+            System.out.printf("[DEBUG] R2004: Section %d '%s' final size: %d bytes from %d pages\n",
+                sectionNum, sectionName, sectionData.length, info.pages.size());
+
+            sections.put(sectionName, new SectionInputStream(sectionData, sectionName));
         }
 
         return sections;
+    }
+
+    // Helper classes for section tracking
+    private static class SectionInfo {
+        java.util.List<PageInfo> pages = new java.util.ArrayList<>();
+    }
+
+    private static class PageInfo {
+        int headerEnd, compSize, decompSize;
+        PageInfo(int hEnd, int comp, int decomp) {
+            headerEnd = hEnd; compSize = comp; decompSize = decomp;
+        }
     }
 
     // -------------------------------------------------------------------------
