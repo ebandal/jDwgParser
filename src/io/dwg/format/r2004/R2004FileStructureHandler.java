@@ -13,6 +13,8 @@ import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+
+import decode.util.R2004Lz77;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -366,12 +368,23 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
                 int availableBytes = Math.min(page.compSize, allData.length - page.headerEnd);
                 System.arraycopy(allData, page.headerEnd, compressedData, 0, availableBytes);
 
+                // Debug: Show Objects compressed data
+                if ("AcDb:Objects".equals(sectionName) && page.compSize <= 160) {
+                    System.out.printf("[DEBUG] R2004: Objects section compressed data (first %d bytes):\n",
+                        Math.min(page.compSize, 128));
+                    for (int i = 0; i < Math.min(page.compSize, 128); i += 16) {
+                        System.out.printf("  0x%03X: ", i);
+                        for (int j = 0; j < 16 && i + j < page.compSize; j++) {
+                            System.out.printf("%02X ", compressedData[i + j] & 0xFF);
+                        }
+                        System.out.println();
+                    }
+                }
+
                 if (page.compSize < page.decompSize) {
-                    // Need to decompress
+                    // Need to decompress using verified R2004Lz77
                     try {
-                        io.dwg.core.util.R2004Lz77Decompressor decompressor =
-                            new io.dwg.core.util.R2004Lz77Decompressor();
-                        byte[] pageDecomp = decompressor.decompress(compressedData, page.decompSize);
+                        byte[] pageDecomp = R2004Lz77.decompress(compressedData, page.decompSize);
                         decompressed.write(pageDecomp);
                         System.out.printf("[DEBUG] R2004: Section %d page decompressed %d -> %d bytes\n",
                             sectionNum, page.compSize, pageDecomp.length);
