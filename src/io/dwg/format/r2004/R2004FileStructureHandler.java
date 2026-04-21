@@ -262,50 +262,68 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
             System.out.println();
         }
 
-        // FIRST PASS: Scan all pages and identify section ranges by sectionNum
-        // Each page starts with 32-byte encrypted header containing sectionNum at offset 4
+        // FIRST PASS: Scan all pages and identify system pages and data page ranges
         Map<Integer, SectionInfo> dataPages = new HashMap<>();
+        java.util.List<SystemPageInfo> systemPages = new java.util.ArrayList<>();
         int scanOffset = 0;
-        while (scanOffset + 32 <= allData.length) {
-            // Decrypt page header using correct file offset (DecoderR2004 method)
-            long actualFileOffset = sectionDataStart + scanOffset;
-            int secMask = (int)(0x4164536bL ^ (actualFileOffset & 0xFFFFFFFFL));
-            byte[] pageHeader = new byte[32];
-            for (int i = 0; i < 8; i++) {
-                int hdr = ByteBuffer.wrap(allData, scanOffset + i*4, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
-                hdr ^= secMask;
-                // Note: allocate().putInt() uses BIG_ENDIAN by default, which is correct for the format
-                byte[] decrypted = ByteBuffer.allocate(4).putInt(hdr).array();
-                System.arraycopy(decrypted, 0, pageHeader, i*4, 4);
-            }
 
-            // Data section page headers use BIG_ENDIAN format (per spec §4.3)
-            int pageType = ByteBuffer.wrap(pageHeader, 0, 4).order(ByteOrder.BIG_ENDIAN).getInt();
-            int sectionNum = ByteBuffer.wrap(pageHeader, 4, 4).order(ByteOrder.BIG_ENDIAN).getInt();
+        while (scanOffset + 4 <= allData.length) {
+            // Read first 4 bytes to determine page type (unencrypted for system pages)
+            int rawPageType = ByteBuffer.wrap(allData, scanOffset, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+            byte[] pageHeader;
+            int pageType;
+
+            if (rawPageType == 0x41630e3b || rawPageType == 0x4163003b) {
+                // System page - unencrypted, read 32-byte header directly
+                if (scanOffset + 32 > allData.length) break;
+                pageHeader = new byte[32];
+                System.arraycopy(allData, scanOffset, pageHeader, 0, 32);
+                pageType = rawPageType;
+                System.out.printf("[DEBUG] R2004: Found system page at offset 0x%X (type=0x%X)\n",
+                    scanOffset, pageType);
+            } else {
+                // Data page - encrypted, need to decrypt full 32-byte header
+                if (scanOffset + 32 > allData.length) break;
+                long actualFileOffset = sectionDataStart + scanOffset;
+                int secMask = (int)(0x4164536bL ^ (actualFileOffset & 0xFFFFFFFFL));
+                pageHeader = new byte[32];
+                for (int i = 0; i < 8; i++) {
+                    int hdr = ByteBuffer.wrap(allData, scanOffset + i*4, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+                    hdr ^= secMask;
+                    byte[] decrypted = ByteBuffer.allocate(4).putInt(hdr).array();
+                    System.arraycopy(decrypted, 0, pageHeader, i*4, 4);
+                }
+                pageType = ByteBuffer.wrap(pageHeader, 0, 4).order(ByteOrder.BIG_ENDIAN).getInt();
+            }
             int compSize = ByteBuffer.wrap(pageHeader, 8, 4).order(ByteOrder.BIG_ENDIAN).getInt();
-            int decompSize = ByteBuffer.wrap(pageHeader, 12, 4).order(ByteOrder.BIG_ENDIAN).getInt();
 
             // Validate
-            if (compSize < 0 || compSize > 100000 || sectionNum > 28) {
-                System.out.printf("[WARN] R2004: Invalid page at offset 0x%X (sectionNum=%d, compSize=%d)\n",
-                    scanOffset, sectionNum, compSize);
+            if (compSize < 0 || compSize > 100000) {
+                System.out.printf("[WARN] R2004: Invalid page at offset 0x%X (compSize=%d)\n",
+                    scanOffset, compSize);
                 break;
             }
 
-            // Skip system pages (types 0x41630e3b, 0x4163003b) - only process data pages (0x4163043b)
             if (pageType == 0x4163043b) {
-                // Track this data page by sectionNum
-                if (!dataPages.containsKey(sectionNum)) {
-                    dataPages.put(sectionNum, new SectionInfo());
-                }
-                SectionInfo info = dataPages.get(sectionNum);
-                info.pages.add(new PageInfo(scanOffset + 32, compSize, decompSize));
+                // Data section page
+                int sectionNum = ByteBuffer.wrap(pageHeader, 4, 4).order(ByteOrder.BIG_ENDIAN).getInt();
+                int decompSize = ByteBuffer.wrap(pageHeader, 12, 4).order(ByteOrder.BIG_ENDIAN).getInt();
 
-                System.out.printf("[DEBUG] R2004: Data page sectionNum=%d offset=0x%X compSize=%d decompSize=%d\n",
-                    sectionNum, scanOffset, compSize, decompSize);
+                if (sectionNum <= 28) {
+                    if (!dataPages.containsKey(sectionNum)) {
+                        dataPages.put(sectionNum, new SectionInfo());
+                    }
+                    dataPages.get(sectionNum).pages.add(new PageInfo(scanOffset + 32, compSize, decompSize));
+                    System.out.printf("[DEBUG] R2004: Data page sectionNum=%d offset=0x%X compSize=%d decompSize=%d\n",
+                        sectionNum, scanOffset, compSize, decompSize);
+                }
             } else if (pageType == 0x41630e3b || pageType == 0x4163003b) {
-                System.out.printf("[DEBUG] R2004: System page at offset 0x%X (type=0x%X), skipping for now\n",
-                    scanOffset, pageType);
+                // System page
+                int decompSize = ByteBuffer.wrap(pageHeader, 12, 4).order(ByteOrder.BIG_ENDIAN).getInt();
+                int compressionType = ByteBuffer.wrap(pageHeader, 16, 4).order(ByteOrder.BIG_ENDIAN).getInt();
+                systemPages.add(new SystemPageInfo(scanOffset, scanOffset + 32, compSize, decompSize, compressionType, pageType));
+                System.out.printf("[DEBUG] R2004: System page at offset 0x%X (type=0x%X) compSize=%d\n",
+                    scanOffset, pageType, compSize);
             } else {
                 System.out.printf("[WARN] R2004: Unknown page type 0x%X at offset 0x%X\n", pageType, scanOffset);
             }
@@ -314,18 +332,23 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
             if (scanOffset >= allData.length) break;
         }
 
-        // Map section numbers to names
-        Map<Integer, String> sectionNames = new HashMap<>();
-        sectionNames.put(1, "AcDb:Header");
-        sectionNames.put(2, "AcDb:AuxHeader");
-        sectionNames.put(3, "AcDb:Classes");
-        sectionNames.put(4, "AcDb:Handles");
-        sectionNames.put(5, "AcDb:Template");
-        sectionNames.put(7, "AcDb:Objects");
-        sectionNames.put(10, "AcDb:SummaryInfo");
-        sectionNames.put(11, "AcDb:VBAProject");
-        sectionNames.put(13, "AcDb:AppInfo");
-        sectionNames.put(14, "AcDb:SecurityInfo");
+        // Process system pages to build section name mapping
+        Map<Integer, String> sectionNames = buildSectionNameMapping(allData, systemPages, sectionDataStart);
+
+        // Temp fix: Map likely section numbers based on what we see
+        // If we don't have explicit names from system pages, use heuristics
+        if (!sectionNames.containsKey(8)) {
+            sectionNames.put(8, "AcDb:Objects");  // Section 8 seems to be Objects (192 bytes properly decompressed)
+        }
+        if (!sectionNames.containsKey(10)) {
+            sectionNames.put(10, "AcDb:SummaryInfo");
+        }
+        if (!sectionNames.containsKey(11)) {
+            sectionNames.put(11, "AcDb:VBAProject");
+        }
+        if (!sectionNames.containsKey(13)) {
+            sectionNames.put(13, "AcDb:AppInfo");
+        }
 
         // SECOND PASS: Process each data section (decompress all pages and combine)
         for (Integer sectionNum : dataPages.keySet()) {
@@ -372,6 +395,86 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         return sections;
     }
 
+    // Build section name mapping from system pages
+    private Map<Integer, String> buildSectionNameMapping(byte[] allData,
+            java.util.List<SystemPageInfo> systemPages, long sectionDataStart) {
+        Map<Integer, String> mapping = new HashMap<>();
+
+        // Default mappings (will be overridden by section map if found)
+        mapping.put(1, "AcDb:Header");
+        mapping.put(2, "AcDb:AuxHeader");
+        mapping.put(3, "AcDb:Classes");
+        mapping.put(4, "AcDb:Handles");
+        mapping.put(5, "AcDb:Template");
+        mapping.put(7, "AcDb:Objects");
+
+        // Try to parse section map from system pages
+        for (SystemPageInfo sysPage : systemPages) {
+            try {
+                byte[] pageData = new byte[sysPage.compSize];
+                int avail = Math.min(sysPage.compSize, allData.length - sysPage.headerEnd);
+                System.arraycopy(allData, sysPage.headerEnd, pageData, 0, avail);
+
+                // Decompress if needed
+                byte[] decompressed = pageData;
+                if (sysPage.compressionType == 2 && sysPage.compSize < sysPage.decompSize) {
+                    try {
+                        io.dwg.core.util.R2004Lz77Decompressor decompressor =
+                            new io.dwg.core.util.R2004Lz77Decompressor();
+                        decompressed = decompressor.decompress(pageData, sysPage.decompSize);
+                    } catch (Exception e) {
+                        System.out.printf("[WARN] R2004: Failed to decompress system page: %s\n", e.getMessage());
+                        continue;
+                    }
+                }
+
+                // Try to parse section map from decompressed data
+                // Section map typically starts at offset 0 and contains section entries
+                if (decompressed.length > 20) {
+                    // Parse section entries (each entry is typically 32+ bytes)
+                    // Section entry format: sectionNumber (4), sectionName (variable), etc.
+                    int offset = 0;
+                    while (offset + 4 <= decompressed.length && offset < 500) {
+                        try {
+                            int sectionNum = ByteBuffer.wrap(decompressed, offset, 4)
+                                .order(ByteOrder.LITTLE_ENDIAN).getInt();
+
+                            // Read section name (null-terminated string)
+                            if (offset + 8 <= decompressed.length) {
+                                StringBuilder name = new StringBuilder();
+                                for (int i = offset + 4; i < Math.min(offset + 100, decompressed.length); i++) {
+                                    byte b = decompressed[i];
+                                    if (b == 0) {
+                                        if (name.length() > 0 && name.charAt(0) >= 32) {
+                                            // Valid section name found
+                                            mapping.put(sectionNum, name.toString());
+                                            System.out.printf("[DEBUG] R2004: Section map entry: %d -> '%s'\n",
+                                                sectionNum, name.toString());
+                                        }
+                                        break;
+                                    } else if (b >= 32 && b < 127) {
+                                        name.append((char)b);
+                                    } else if (name.length() > 0) {
+                                        break;  // Non-ASCII found in middle, stop parsing
+                                    }
+                                }
+                                offset += 32;
+                            } else {
+                                break;
+                            }
+                        } catch (Exception e) {
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                System.out.printf("[WARN] R2004: Error processing system page: %s\n", e.getMessage());
+            }
+        }
+
+        return mapping;
+    }
+
     // Helper classes for section tracking
     private static class SectionInfo {
         java.util.List<PageInfo> pages = new java.util.ArrayList<>();
@@ -381,6 +484,14 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         int headerEnd, compSize, decompSize;
         PageInfo(int hEnd, int comp, int decomp) {
             headerEnd = hEnd; compSize = comp; decompSize = decomp;
+        }
+    }
+
+    private static class SystemPageInfo {
+        int headerStart, headerEnd, compSize, decompSize, compressionType, pageType;
+        SystemPageInfo(int hStart, int hEnd, int comp, int decomp, int comprType, int pType) {
+            headerStart = hStart; headerEnd = hEnd; compSize = comp;
+            decompSize = decomp; compressionType = comprType; pageType = pType;
         }
     }
 
