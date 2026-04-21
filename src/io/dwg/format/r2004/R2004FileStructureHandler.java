@@ -23,8 +23,9 @@ import java.util.Map;
  */
 public class R2004FileStructureHandler extends AbstractFileStructureHandler {
 
-    // readHeader → readSections 로 전달되는 section map 오프셋
+    // readHeader → readSections 로 전달되는 값들
     private long sectionMapOffset;
+    private int sectionPageAmount;
 
     @Override
     public DwgVersion version() {
@@ -143,6 +144,52 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         String fileId = new String(decryptedHeader, 0, 12, StandardCharsets.US_ASCII);
         System.out.printf("[DEBUG] file_ID_string: \"%s\" (should be \"AcFssFcAJMB\")\n", fileId);
 
+        // Parse encrypted header fields (based on DecoderR2004.readFileHeader)
+        // Follow the exact sequence from DecoderR2004
+        int decOffset = 0;
+
+        // 0x00-0x0B: file ID string
+        decOffset = 12;
+
+        // 0x0C-0x0F, 0x10-0x13, 0x14-0x17: unknown (3 * 4 bytes)
+        decOffset += 12;
+
+        // 0x18-0x1B: rootTreeNodeGap
+        decOffset += 4;
+
+        // 0x1C-0x1F: lowermostLeftTreeNodeGap
+        decOffset += 4;
+
+        // 0x20-0x23: lowermostRightTreeNodeGap
+        decOffset += 4;
+
+        // 0x24-0x27: unknown
+        decOffset += 4;
+
+        // 0x28-0x2B: lastSectionPageId
+        decOffset += 4;
+
+        // 0x2C-0x33: lastSectionPageEndAddress (8 bytes)
+        decOffset += 8;
+
+        // 0x34-0x3B: secondHeaderDataAddress (8 bytes)
+        decOffset += 8;
+
+        // 0x3C-0x3F: gapAmount
+        int gapAmount = (int) (ByteUtils.readLE32(decryptedHeader, decOffset) & 0xFFFFFFFF);
+        System.out.printf("[DEBUG] Gap amount: %d (at offset 0x%02X)\n", gapAmount, decOffset);
+        decOffset += 4;
+
+        // 0x40-0x43: Section page amount - THIS IS KEY!
+        this.sectionPageAmount = (int) (ByteUtils.readLE32(decryptedHeader, decOffset) & 0xFFFFFFFF);
+        System.out.printf("[DEBUG] Section page amount: %d (at offset 0x%02X)\n", this.sectionPageAmount, decOffset);
+        decOffset += 4;
+
+        // Skip some unknown offsets
+        decOffset += 4; // 0x20
+        decOffset += 4; // 0x24 (0x80)
+        decOffset += 4; // 0x28 (0x40)
+
         // DEBUG: 특정 오프셋의 값들 확인
         System.out.printf("[DEBUG] decryptedHeader[0x24] = 0x%08X\n", ByteUtils.readLE32(decryptedHeader, 0x24) & 0xFFFFFFFFL);
         System.out.printf("[DEBUG] decryptedHeader[0x28] = 0x%08X\n", ByteUtils.readLE32(decryptedHeader, 0x28) & 0xFFFFFFFFL);
@@ -153,7 +200,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         System.out.printf("[DEBUG] decryptedHeader[0x5C] = 0x%08X\n", ByteUtils.readLE32(decryptedHeader, 0x5C) & 0xFFFFFFFFL);
         System.out.printf("[DEBUG] decryptedHeader[0x60] = 0x%08X\n", ByteUtils.readLE32(decryptedHeader, 0x60) & 0xFFFFFFFFL);
 
-        // 5. 복호화된 헤더에서 섹션맵 오프셋 추출 (0x54-0x5B)
+        // 5. Extract section map offset from encrypted header (0x54-0x5B)
         sectionMapOffset = ByteUtils.readLE64(decryptedHeader, 0x54) & 0xFFFFFFFFFFFFFFFFL;
         System.out.printf("[DEBUG] Section map address at 0x54-0x5B: raw=0x%016X\n", sectionMapOffset);
 
@@ -233,14 +280,27 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
 
         if (sectionMapOffset == 0) return sections;
 
+        // STEP 1: Initialize default section names (will be overridden if system pages found)
+        Map<Integer, String> sectionNames = new HashMap<>();
+        sectionNames.put(1, "AcDb:Header");
+        sectionNames.put(2, "AcDb:AuxHeader");
+        sectionNames.put(3, "AcDb:Classes");
+        sectionNames.put(4, "AcDb:Handles");
+        sectionNames.put(5, "AcDb:Template");
+        sectionNames.put(6, "AcDb:AuxHeader2");
+        sectionNames.put(7, "AcDb:Objects");
+
+        // STEP 2: Read data pages from 0x100 onwards
         long sectionDataStart = 0x100;
         input.seek(sectionDataStart * 8);
 
-        // Read all data from 0x100 onwards (up to 1MB)
-        long maxSectionSize = 1000000;
+        // Read all data from 0x100 onwards (scan until we hit section map offset)
+        long maxRead = sectionMapOffset - sectionDataStart;
+        if (maxRead > 1000000) maxRead = 1000000;
+
         ByteArrayOutputStream sectionDataStream = new ByteArrayOutputStream();
         try {
-            for (long i = 0; i < maxSectionSize; i++) {
+            for (long i = 0; i < maxRead; i++) {
                 try {
                     int b = input.readRawChar() & 0xFF;
                     sectionDataStream.write(b);
@@ -264,12 +324,16 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
             System.out.println();
         }
 
-        // FIRST PASS: Scan all pages and identify system pages and data page ranges
+        // FIRST PASS: Read exactly sectionPageAmount pages from 0x100
+        // These pages are either system pages (section map) or data pages (Objects, Classes, etc)
         Map<Integer, SectionInfo> dataPages = new HashMap<>();
         java.util.List<SystemPageInfo> systemPages = new java.util.ArrayList<>();
         int scanOffset = 0;
+        int pagesRead = 0;
 
-        while (scanOffset + 4 <= allData.length) {
+        System.out.printf("[DEBUG] R2004: Reading %d section pages from 0x100\n", sectionPageAmount);
+
+        while (scanOffset + 4 <= allData.length && pagesRead < sectionPageAmount) {
             // Read first 4 bytes to determine page type (unencrypted for system pages)
             int rawPageType = ByteBuffer.wrap(allData, scanOffset, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
             byte[] pageHeader;
@@ -281,8 +345,8 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
                 pageHeader = new byte[32];
                 System.arraycopy(allData, scanOffset, pageHeader, 0, 32);
                 pageType = rawPageType;
-                System.out.printf("[DEBUG] R2004: Found system page at offset 0x%X (type=0x%X)\n",
-                    scanOffset, pageType);
+                System.out.printf("[DEBUG] R2004: Found system page %d at offset 0x%X (type=0x%X)\n",
+                    pagesRead, scanOffset, pageType);
             } else {
                 // Data page - encrypted, need to decrypt full 32-byte header
                 if (scanOffset + 32 > allData.length) break;
@@ -301,10 +365,12 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
 
             // Validate
             if (compSize < 0 || compSize > 100000) {
-                System.out.printf("[WARN] R2004: Invalid page at offset 0x%X (compSize=%d)\n",
-                    scanOffset, compSize);
+                System.out.printf("[WARN] R2004: Invalid page %d at offset 0x%X (compSize=%d), stopping scan\n",
+                    pagesRead, scanOffset, compSize);
                 break;
             }
+
+            pagesRead++;
 
             if (pageType == 0x4163043b) {
                 // Data section page
@@ -331,27 +397,19 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
             }
 
             scanOffset += 32 + compSize;
+
+            // Align to 32-byte boundary (0x20) like DecoderR2004 does
+            if (scanOffset % 0x20 != 0) {
+                int align = 0x20 - (scanOffset % 0x20);
+                System.out.printf("[DEBUG] R2004: Aligning page %d from 0x%X to 0x%X (+%d bytes)\n",
+                    pagesRead - 1, scanOffset - align + (32 + compSize), scanOffset + align, align);
+                scanOffset += align;
+            }
+
             if (scanOffset >= allData.length) break;
         }
 
-        // Process system pages to build section name mapping
-        Map<Integer, String> sectionNames = buildSectionNameMapping(allData, systemPages, sectionDataStart);
-
-        // Temp fix: Map likely section numbers based on what we see
-        // If we don't have explicit names from system pages, use heuristics
-        // NOTE: Section 13 appears to contain Objects data (based on header analysis)
-        if (!sectionNames.containsKey(8)) {
-            sectionNames.put(8, "AcDb:AppInfo");  // Section 8 is mostly zeros (not Objects)
-        }
-        if (!sectionNames.containsKey(10)) {
-            sectionNames.put(10, "AcDb:SummaryInfo");
-        }
-        if (!sectionNames.containsKey(11)) {
-            sectionNames.put(11, "AcDb:VBAProject");
-        }
-        if (!sectionNames.containsKey(13)) {
-            sectionNames.put(13, "AcDb:Objects");  // Section 13 has section map data - likely Objects section
-        }
+        // sectionNames was already populated from readSectionMapPages above
 
         // SECOND PASS: Process each data section (decompress all pages and combine)
         for (Integer sectionNum : dataPages.keySet()) {
@@ -420,6 +478,133 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         }
 
         return sections;
+    }
+
+    /**
+     * Read the section map from the location indicated in the file header.
+     * The section map contains system page(s) that define the section numbering.
+     */
+    private Map<Integer, String> readSectionMapPages(BitInput input, long sectionMapOffset) {
+        Map<Integer, String> mapping = new HashMap<>();
+
+        // Default standard section mappings (R2004)
+        mapping.put(1, "AcDb:Header");
+        mapping.put(2, "AcDb:AuxHeader");
+        mapping.put(3, "AcDb:Classes");
+        mapping.put(4, "AcDb:Handles");
+        mapping.put(5, "AcDb:Template");
+        mapping.put(6, "AcDb:AuxHeader2");
+        mapping.put(7, "AcDb:Objects");
+
+        try {
+            input.seek(sectionMapOffset * 8);
+
+            // Read system page header (similar to system pages in data section)
+            byte[] pageHeader = new byte[32];
+            for (int i = 0; i < 32; i++) {
+                pageHeader[i] = (byte) input.readRawChar();
+            }
+
+            // Read page type (first 4 bytes, LITTLE_ENDIAN, unencrypted for system pages)
+            int pageType = ByteBuffer.wrap(pageHeader, 0, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+            System.out.printf("[DEBUG] R2004: Section map page type: 0x%X\n", pageType);
+
+            if (pageType != 0x41630e3b && pageType != 0x4163003b) {
+                System.out.println("[WARN] R2004: Section map has unexpected page type, using defaults");
+                return mapping;
+            }
+
+            // System page header format (LITTLE_ENDIAN):
+            // 0x00-0x03: page type
+            // 0x04-0x07: decompressed size
+            // 0x08-0x0B: compressed size
+            // 0x0C-0x0F: compression type
+            int decompSize = ByteBuffer.wrap(pageHeader, 4, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+            int compSize = ByteBuffer.wrap(pageHeader, 8, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+            int compressionType = ByteBuffer.wrap(pageHeader, 12, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+
+            System.out.printf("[DEBUG] R2004: Section map - decompSize=%d compSize=%d type=%d\n",
+                decompSize, compSize, compressionType);
+
+            // Read compressed data
+            byte[] compressedData = new byte[compSize];
+            for (int i = 0; i < compSize; i++) {
+                compressedData[i] = (byte) input.readRawChar();
+            }
+
+            // Decompress if needed
+            byte[] mapData = compressedData;
+            if (compressionType == 2 && compSize < decompSize) {
+                mapData = R2004Lz77.decompress(compressedData, decompSize);
+                System.out.printf("[DEBUG] R2004: Section map decompressed %d -> %d bytes\n",
+                    compSize, mapData.length);
+            }
+
+            // Parse section map entries
+            // Each entry is: sectionNumber (int), sectionName (string), pageCount (int), etc.
+            parseSectionMapData(mapData, mapping);
+
+        } catch (Exception e) {
+            System.out.printf("[WARN] R2004: Failed to read section map: %s, using defaults\n", e.getMessage());
+        }
+
+        return mapping;
+    }
+
+    /**
+     * Parse the decompressed section map data to extract section numbers and names.
+     */
+    private void parseSectionMapData(byte[] mapData, Map<Integer, String> mapping) {
+        if (mapData.length < 10) {
+            System.out.println("[DEBUG] R2004: Section map data too small");
+            return;
+        }
+
+        // According to R2004 spec, section map contains:
+        // - Number of sections (int)
+        // - For each section: number (int), name (string), etc.
+
+        int sectionCount = ByteBuffer.wrap(mapData, 0, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+        System.out.printf("[DEBUG] R2004: Section map contains %d sections\n", sectionCount);
+
+        if (sectionCount < 1 || sectionCount > 100) {
+            System.out.println("[DEBUG] R2004: Invalid section count, using defaults");
+            return;
+        }
+
+        int offset = 4;
+        for (int i = 0; i < sectionCount && offset < mapData.length - 8; i++) {
+            try {
+                // Read section number (LE32)
+                int sectionNum = ByteBuffer.wrap(mapData, offset, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+                offset += 4;
+
+                // Read section name (null-terminated string)
+                StringBuilder name = new StringBuilder();
+                while (offset < mapData.length && mapData[offset] != 0) {
+                    char c = (char) (mapData[offset] & 0xFF);
+                    if (c >= 32 && c < 127) {
+                        name.append(c);
+                    }
+                    offset++;
+                }
+                offset++; // Skip null terminator
+
+                // Skip to next 4-byte boundary
+                while (offset % 4 != 0 && offset < mapData.length) {
+                    offset++;
+                }
+
+                if (name.length() > 0) {
+                    mapping.put(sectionNum, name.toString());
+                    System.out.printf("[DEBUG] R2004: Section map entry: %d -> '%s'\n",
+                        sectionNum, name.toString());
+                }
+            } catch (Exception e) {
+                System.out.printf("[WARN] R2004: Error parsing section map entry %d: %s\n", i, e.getMessage());
+                break;
+            }
+        }
     }
 
     // Build section name mapping from system pages
