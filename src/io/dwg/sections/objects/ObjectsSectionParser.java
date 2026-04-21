@@ -53,6 +53,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
             int successCount = 0;
             int failureCount = 0;
+            int outOfRangeCount = 0;
 
             // Parse objects using handle offsets (all offsets are absolute byte positions in Objects section)
             for (Map.Entry<Long, Long> entry : sortedHandleOffsets()) {
@@ -60,9 +61,11 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                 long offset = entry.getValue();
 
                 if (offset < 0 || offset >= raw.length) {
-                    System.out.printf("[DEBUG]   Handle 0x%X: offset %d out of range [0, %d)\n",
-                        handle, offset, raw.length);
-                    failureCount++;
+                    if (successCount == 0 || successCount % 50 == 0) {
+                        System.out.printf("[DEBUG]   Handle 0x%X: offset %d out of range [0, %d) - SKIPPED\n",
+                            handle, offset, raw.length);
+                    }
+                    outOfRangeCount++;
                     continue;
                 }
 
@@ -85,8 +88,8 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                 }
             }
 
-            System.out.printf("[DEBUG] Objects: Offset-based parse complete: %d/%d success, %d failed\n",
-                successCount, handles.allHandles().size(), failureCount);
+            System.out.printf("[DEBUG] Objects: Offset-based parse complete: %d/%d success, %d failed, %d skipped (out-of-range)\n",
+                successCount, handles.allHandles().size() - outOfRangeCount, failureCount, outOfRangeCount);
         } else {
             // No handle registry: use streaming parse (R2000+ without working Handles)
             System.out.printf("[DEBUG] Objects: No handle registry, using streaming parse for %s\n", version);
