@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **Java DWG parser library** specification project. It targets parsing/writing AutoCAD DWG files per the OpenDesign Specification v5.4.1 (see `doc/OpenDesign_Specification_for_.dwg_files.pdf`). All 223 planned classes are documented in spec files; no source code exists yet.
+This is a **Java DWG parser library** specification project. It targets parsing AutoCAD DWG files per the OpenDesign Specification v5.4.1 (see `doc/OpenDesign_Specification_for_.dwg_files.pdf`). All 223 planned classes are documented in spec files; no source code exists yet.
 
 ## Build & Test Commands
 
@@ -26,7 +26,7 @@ dwg-core → dwg-format → dwg-sections → dwg-entities → dwg-api
 |---|---|---|---|
 | `dwg-core` | `01_dwg-core.md` | 35 | Bit-level I/O, types, LZ77, CRC, exceptions |
 | `dwg-format` | `02_dwg-format.md` | 28 | Version-specific file structure handlers (R13–R2018) |
-| `dwg-sections` | `03_dwg-sections.md` | 38 | Section parsers/writers (§9–§28) |
+| `dwg-sections` | `03_dwg-sections.md` | 38 | Section parsers (§9–§28) |
 | `dwg-entities` | `04_dwg-entities.md` | 82 | Pure domain model (no parsing logic) |
 | `dwg-api` + `dwg-test` | `05_dwg-api-and-test.md` | 40 | Public API, query builder, test infra, JMH benchmarks |
 
@@ -36,7 +36,7 @@ dwg-core → dwg-format → dwg-sections → dwg-entities → dwg-api
 Phase 1  dwg-core — BitStream I/O, version detection, LZ77/CRC utilities
 Phase 2  dwg-format(R2004) + dwg-sections(Header/Classes/Handles/Objects)
          + dwg-entities(Line/Circle/Arc/Text/Insert/Layer) + dwg-api(Reader only)
-Phase 3  dwg-format(R2007/R2013) + dwg-api(Writer) + remaining entities
+Phase 3  dwg-format(R2007/R2013) + remaining entities
 Phase 4  dwg-format(R13/R14) + all auxiliary sections + full test suite
 ```
 
@@ -44,7 +44,7 @@ Phase 4  dwg-format(R13/R14) + all auxiliary sections + full test suite
 
 - **Strategy** — `DwgFileStructureHandler` selects parsing logic per DWG version
 - **Factory** — `DwgFileStructureHandlerFactory` and `ObjectTypeResolver` dispatch by version/type
-- **Builder** — `DwgReader`, `DwgWriter`, `DwgDocumentBuilder`, `DwgQueryBuilder` (fluent API)
+- **Builder** — `DwgReader`, `DwgDocumentBuilder`, `DwgQueryBuilder` (fluent API)
 - **Registry** — `SectionParserRegistry` dispatches section names to parser implementations
 - **Two-phase object resolution** — First build handle→offset map, then resolve object graph references
 
