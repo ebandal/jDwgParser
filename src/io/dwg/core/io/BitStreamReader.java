@@ -174,10 +174,11 @@ public class BitStreamReader {
      * RS_BE (Big-Endian) 읽기 - Handles 섹션용
      * Handles 섹션의 block_size와 CRC는 big-endian (RS_BE)로 저장됨.
      * 모든 DWG 버전(R13~R2018)에서 동일.
+     * 비트 레벨 읽기: MC 이후 bit 경계에서 읽을 수 있어야 함
      */
     public int readBigEndianShort() {
-        int byte1 = input.readRawChar() & 0xFF;
-        int byte2 = input.readRawChar() & 0xFF;
+        int byte1 = input.readBits(8) & 0xFF;
+        int byte2 = input.readBits(8) & 0xFF;
         return (byte1 << 8) | byte2;  // MSB first (big-endian)
     }
 

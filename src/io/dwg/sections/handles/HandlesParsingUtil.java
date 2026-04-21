@@ -126,7 +126,7 @@ public class HandlesParsingUtil {
                 int handleDelta = reader.readUnsignedModularChar();
                 if (handleDelta == 0) break;
 
-                // offset_delta: MC (signed) - can be negative!
+                // offset_delta: MC (signed)
                 int offsetDelta = reader.readModularChar();
 
                 long afterPos = reader.position();
@@ -136,9 +136,10 @@ public class HandlesParsingUtil {
                 lastHandle += handleDelta;
                 lastOffset += offsetDelta;
 
-                if (pairsRead < 3) {
-                    System.out.printf("[DEBUG] HandlesParsingUtil:   pair: handle=0x%X offset=0x%X (%d bytes)\n",
-                        lastHandle, lastOffset, bytesReadThisPair);
+                // Debug output for first 3 and specific problematic handles
+                if (pairsRead < 3 || pairsRead == 677) {
+                    System.out.printf("[DEBUG] HandlesParsingUtil:   pair[%d]: hDelta=0x%X(→0x%X) oDelta=%d(→%d) (%db)\n",
+                        pairsRead, handleDelta, lastHandle, offsetDelta, lastOffset, bytesReadThisPair);
                 }
 
                 registry.put(lastHandle, lastOffset);
