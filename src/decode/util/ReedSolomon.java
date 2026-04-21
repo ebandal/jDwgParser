@@ -111,13 +111,15 @@ public final class ReedSolomon {
         byte[] synbuf = new byte[16];
         boolean errflag = false;
 
+        // Syndrome: evaluate R(x) at roots α^1, α^2, ..., α^16
+        // Note: 255-byte block has indices 0-254, so degree is 254
         for (int j = 0; j < 16; j++) {
             synbuf[j] = (byte) evaluate(block, 254, F256_POWER[j + 1] & 0xFF);
             if (synbuf[j] != 0) errflag = true;
         }
 
-        if (!errflag) return 0;
-        if (!fix) return -1;
+        if (!errflag) return 0;  // No errors detected
+        if (!fix) return -1;      // Errors detected but not fixing
 
         byte[] sigma = new byte[POLY_LENGTH];
         byte[] omega = new byte[POLY_LENGTH];
@@ -169,8 +171,10 @@ public final class ReedSolomon {
     }
 
     private static int evaluate(byte[] poly, int deg, int x) {
+        // Horner's method: evaluate polynomial at point x
+        // For deg < array length, this correctly handles the coefficients
         int y = 0;
-        for (int i = deg; i >= 0; i--) {
+        for (int i = Math.min(deg, poly.length - 1); i >= 0; i--) {
             y = f256Multiply(x, y) ^ (poly[i] & 0xFF);
         }
         return y;
@@ -216,9 +220,11 @@ public final class ReedSolomon {
         coeff = f256Multiply(coeff, matrix[dst][2][dstd] & 0xFF);
 
         for (int j = 0; j < 3; j++) {
+            // MIN(17 - power, POLY_LENGTH) as in libredwg
             int limit = Math.min(17 - power, POLY_LENGTH);
             for (int i = 0; i < limit; i++) {
                 int idx = i + power;
+                // Safe boundary check: only operate within valid array range
                 if (idx >= 0 && idx < POLY_LENGTH) {
                     matrix[dst][j][idx] ^= (byte) f256Multiply(coeff, matrix[src][j][i] & 0xFF);
                 }
