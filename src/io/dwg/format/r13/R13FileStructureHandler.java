@@ -220,14 +220,16 @@ public class R13FileStructureHandler extends AbstractFileStructureHandler {
         output.writeRawShort((short) header.codePage());
 
         // 8. RC (1 byte): section count
-        java.util.List<R13SectionLocator> locators = header.sectionLocators();
+        var locators = header.sectionLocators();
         int sectionCount = locators != null ? locators.size() : 0;
         output.writeRawChar(sectionCount);
 
         // 9. Section locator array
         if (locators != null) {
-            for (R13SectionLocator loc : locators) {
-                loc.write(output);
+            for (Object locObj : locators) {
+                if (locObj instanceof R13SectionLocator loc) {
+                    loc.write(output);
+                }
             }
         }
 
