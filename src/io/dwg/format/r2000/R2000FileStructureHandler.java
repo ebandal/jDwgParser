@@ -29,7 +29,7 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
     public FileHeaderFields readHeader(BitInput input) throws Exception {
         FileHeaderFields fields = new FileHeaderFields(DwgVersion.R2000);
 
-        // R2000 헤더 구조 (libredwg 참고)
+        // R2000 헤더 구조 (libredwg decode.c 참고)
         // 0x00-0x05: Version string (6 바이트) = "AC1015"
         // 0x06-0x0B: Reserved (6 바이트)
         // 0x0C 이후: Header fields
@@ -71,10 +71,17 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
         int sectionCount = input.readRawChar();
 
         // 9. 섹션 Locator 배열 읽기
-        // R2000: 섹션이 정해진 순서로 나타남 (0=Header, 1=Classes, 2=Handles, 3=Objects)
-        // NOTE: R2000 has a different section locator format than R13/R14
+        // R2000 uses SAME format as R13: RL RL RL (12 bytes per locator)
+        // NOT RC RL RL (9 bytes) as initially thought
+        // Format:
+        // - record_number: RL (4 bytes)
+        // - seeker: RL (4 bytes) - byte offset in file
+        // - size: RL (4 bytes) - byte length
+
         Map<String, Long> offsets = new HashMap<>();
         Map<String, Long> sizes = new HashMap<>();
+
+        java.util.List<io.dwg.format.r13.R13SectionLocator> locators = new java.util.ArrayList<>();
 
         String[] sectionNames = {
             io.dwg.format.common.SectionType.HEADER.sectionName(),
@@ -83,33 +90,30 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
             io.dwg.format.common.SectionType.OBJECTS.sectionName()
         };
 
-        // R2000 section locator format:
-        // Only the HEADER section locator is properly stored in the header
-        // Format: 4 bytes unknown + 4 bytes seeker + 4 bytes size
-        // Other sections (Classes, Handles, Objects) locations appear to be
-        // stored elsewhere or use a different format
+        // Read all section locators (12 bytes each, same as R13)
+        // Note: Only the first 4 locators are guaranteed to be standard sections (0-3)
+        // Auxiliary sections (records 4+) may exist but we handle only the main 4 for now
+        for (int i = 0; i < sectionCount; i++) {
+            int number = input.readRawLong();
+            long address = input.readRawLong() & 0xFFFFFFFFL;
+            long size = input.readRawLong() & 0xFFFFFFFFL;
 
-        // Read HEADER section locator (always the first one)
-        input.readRawLong();  // Skip unknown field
-        long headerSeeker = input.readRawLong() & 0xFFFFFFFFL;
-        long headerSize = input.readRawLong() & 0xFFFFFFFFL;
+            io.dwg.format.r13.R13SectionLocator locator = new io.dwg.format.r13.R13SectionLocator(number, address, size);
+            locators.add(locator);
 
-        offsets.put(sectionNames[0], headerSeeker);  // HEADER
-        sizes.put(sectionNames[0], headerSize);
-
-        // For other sections, skip the malformed locators
-        // R2000 has 6 items in section_count but not all are standard sections
-        // Skip reading them to avoid parsing garbage
-        for (int i = 1; i < sectionCount; i++) {
-            input.readRawLong();  // Skip unknown fields
-            input.readRawLong();
-            input.readRawLong();
+            // Only map standard sections (0-3) to their names
+            // Skip auxiliary sections for now (records 4+)
+            if (number >= 0 && number < sectionNames.length) {
+                offsets.put(sectionNames[number], address);
+                sizes.put(sectionNames[number], size);
+            }
         }
 
         fields.setSectionOffsets(offsets);
         fields.setSectionSizes(sizes);
+        fields.setSectionLocators(locators);
 
-        // 10. RS (2 바이트): CRC - skip
+        // 10. RS (2 바이트): CRC (skip for now, not validated)
         input.readRawShort();
 
         return fields;
@@ -194,10 +198,12 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
         }
         output.writeRawChar(sectionCount);
 
-        // Write section locators
+        // Write section locators (use R13 format which is also valid for R2000)
         if (header.sectionLocators() != null) {
-            for (io.dwg.format.r13.R13SectionLocator loc : header.sectionLocators()) {
-                loc.write(output);
+            for (Object locObj : header.sectionLocators()) {
+                if (locObj instanceof io.dwg.format.r13.R13SectionLocator loc) {
+                    loc.write(output);
+                }
             }
         }
 

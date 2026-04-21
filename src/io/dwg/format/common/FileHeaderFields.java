@@ -1,7 +1,6 @@
 package io.dwg.format.common;
 
 import io.dwg.core.version.DwgVersion;
-import io.dwg.format.r13.R13SectionLocator;
 import java.util.List;
 import java.util.Map;
 
@@ -21,7 +20,7 @@ public class FileHeaderFields {
     private long sectionMapId;      // R2007+ only (page ID of section map)
     private Map<String, Long> sectionOffsets;
     private Map<String, Long> sectionSizes;
-    private List<R13SectionLocator> sectionLocators;  // R13/R14 only
+    private List<?> sectionLocators;  // R13/R14/R2000 (R13SectionLocator or R2000SectionLocator)
 
     public FileHeaderFields(DwgVersion version) {
         this.version = version;
@@ -129,11 +128,11 @@ public class FileHeaderFields {
         this.sectionSizes = sizes;
     }
 
-    public List<R13SectionLocator> sectionLocators() {
+    public List<?> sectionLocators() {
         return sectionLocators;
     }
 
-    public void setSectionLocators(List<R13SectionLocator> locators) {
+    public void setSectionLocators(List<?> locators) {
         this.sectionLocators = locators;
     }
 
