@@ -8,6 +8,9 @@ import io.dwg.sections.classes.ClassesSectionParser;
 import io.dwg.sections.handles.HandlesSectionParser;
 import io.dwg.sections.header.HeaderSectionParser;
 import io.dwg.sections.objects.ObjectsSectionParser;
+import io.dwg.sections.tables.LayerTableParser;
+import io.dwg.sections.tables.LinetypeTableParser;
+import io.dwg.sections.tables.StyleTableParser;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -44,6 +47,12 @@ public class SectionParserRegistry {
         reg.register(new SummaryInfoParser());
         reg.register(new PreviewSectionParser());
         reg.register(new AuxHeaderParser());
+
+        // Auxiliary table parsers (Phase 4)
+        reg.register(new LayerTableParser());
+        reg.register(new LinetypeTableParser());
+        reg.register(new StyleTableParser());
+
         return reg;
     }
 }
