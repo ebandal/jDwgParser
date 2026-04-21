@@ -95,6 +95,12 @@ public class HandlesParsingUtil {
         long lastHandle = 0;
         long lastOffset = 0;
         int pageNum = 0;
+        java.io.PrintWriter debugFile = null;
+        try {
+            debugFile = new java.io.PrintWriter(new java.io.FileWriter("handles_debug.txt"));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         while (!reader.isEof()) {
             // Page size 읽기 (big-endian)
@@ -136,8 +142,15 @@ public class HandlesParsingUtil {
                 lastHandle += handleDelta;
                 lastOffset += offsetDelta;
 
-                // Debug output for first 3 and specific problematic handles
-                if (pairsRead < 3 || pairsRead == 677) {
+                // Debug output to file for all pairs
+                if (debugFile != null) {
+                    debugFile.printf("pair[%d]: hDelta=0x%X cumH=0x%X oDelta=%d cumO=%d\n",
+                        pairsRead, handleDelta, lastHandle, offsetDelta, lastOffset);
+                    debugFile.flush();
+                }
+
+                // Debug output for first 20 pairs and every 50th pair
+                if (pairsRead < 20 || pairsRead % 50 == 0) {
                     System.out.printf("[DEBUG] HandlesParsingUtil:   pair[%d]: hDelta=0x%X(→0x%X) oDelta=%d(→%d) (%db)\n",
                         pairsRead, handleDelta, lastHandle, offsetDelta, lastOffset, bytesReadThisPair);
                 }
@@ -156,6 +169,10 @@ public class HandlesParsingUtil {
 
         System.out.printf("[DEBUG] HandlesParsingUtil: Parsed %d pages, total handles=%d\n",
             pageNum, registry.allHandles().size());
+
+        if (debugFile != null) {
+            debugFile.close();
+        }
     }
 
     /**

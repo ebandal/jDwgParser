@@ -1,4 +1,4 @@
-package io.dwg.format.r2000;
+package test.java.io.dwg.format.r2000;
 
 import io.dwg.api.DwgDocument;
 import io.dwg.api.DwgReader;

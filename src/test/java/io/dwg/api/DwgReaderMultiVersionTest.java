@@ -1,5 +1,7 @@
-package io.dwg.api;
+package test.java.io.dwg.api;
 
+import io.dwg.api.DwgDocument;
+import io.dwg.api.DwgReader;
 import io.dwg.core.version.DwgVersion;
 import java.nio.file.Paths;
 
