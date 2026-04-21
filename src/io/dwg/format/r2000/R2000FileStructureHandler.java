@@ -109,12 +109,27 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
             }
         }
 
+        // 10. RS (2 바이트): CRC (skip for now, not validated)
+        input.readRawShort();
+
+        // R2000 특수 처리: Objects/Classes/Handles를 하나로 합침
+        // R2000 파일 구조: [Header structure + Locators (~96 bytes)] [Objects section] [Header section data]
+        // Objects section = from position after locators to start of Header section
+        long objectsStartOffset = input.position() / 8;  // Convert bits to bytes
+
+        // Get Header section offset (locator number 0)
+        long headerOffset = offsets.getOrDefault(io.dwg.format.common.SectionType.HEADER.sectionName(), -1L);
+
+        // Objects section size = Header offset - Objects offset (if Header has valid locator)
+        if (headerOffset > 0 && headerOffset > objectsStartOffset) {
+            long objectsSize = headerOffset - objectsStartOffset;
+            offsets.put(io.dwg.format.common.SectionType.OBJECTS.sectionName(), objectsStartOffset);
+            sizes.put(io.dwg.format.common.SectionType.OBJECTS.sectionName(), objectsSize);
+        }
+
         fields.setSectionOffsets(offsets);
         fields.setSectionSizes(sizes);
         fields.setSectionLocators(locators);
-
-        // 10. RS (2 바이트): CRC (skip for now, not validated)
-        input.readRawShort();
 
         return fields;
     }
@@ -129,17 +144,20 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
             long offset = offsets.get(sectionName);
             long size = sizes.get(sectionName);
 
-            // Skip obviously invalid sections
-            if (size > 0xF0000000L) {
+            // Skip invalid sections
+            if (size <= 0 || offset < 0) {
                 continue;
             }
 
-            if (offset > 0 && size > 0) {
-                byte[] sectionData = new byte[(int) size];
+            if (offset >= 0 && size > 0) {
                 input.seek(offset * 8); // Convert byte offset to bit offset
+
+                // Read section data (fixed size)
+                byte[] sectionData = new byte[(int) size];
                 for (int i = 0; i < size; i++) {
                     sectionData[i] = (byte) input.readRawChar();
                 }
+
                 sections.put(sectionName, new SectionInputStream(sectionData, sectionName));
             }
         }
