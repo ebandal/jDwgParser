@@ -171,64 +171,37 @@ public class ReedSolomonDecoder {
      */
     public static byte[] decodeR2007Data(byte[] data) {
         // 0x3d8 = 984 bytes (3 * 255 + 219 = 984)
-        if (data == null || data.length < 765) {  // 최소 3 * 255 bytes
-            System.err.printf("[RS DEBUG] Invalid input: %s (length=%d, need >=765)\n",
-                data == null ? "null" : "ok", data == null ? 0 : data.length);
+        if (data == null || data.length < 765) {
             return null;
         }
 
         try {
-            // 3개의 255바이트 블록으로 분할
-            byte[] block1 = new byte[255];
-            byte[] block2 = new byte[255];
-            byte[] block3 = new byte[255];
+            final int BLOCK_COUNT = 3;
+            final int BLOCK_SIZE = 255;
+            final int DATA_SIZE = 239;
 
-            System.arraycopy(data, 0, block1, 0, 255);
-            System.arraycopy(data, 255, block2, 0, 255);
-            System.arraycopy(data, 510, block3, 0, 255);
-
-            // 각 블록 복호화 (최대 8바이트 에러 수정)
-            System.out.println("[RS DEBUG] Checking block 1 for errors (without fix)...");
-            int check1 = decodeBlock(block1, false);
-            System.out.printf("[RS DEBUG] Block 1 check: %d (0=no error, -1=has errors)\n", check1);
-
-            System.out.println("[RS DEBUG] Decoding block 1 (with fix)...");
-            int err1 = decodeBlock(block1, true);
-            System.out.printf("[RS DEBUG] Block 1 result: %d errors\n", err1);
-
-            System.out.println("[RS DEBUG] Checking block 2 for errors (without fix)...");
-            int check2 = decodeBlock(block2, false);
-            System.out.printf("[RS DEBUG] Block 2 check: %d (0=no error, -1=has errors)\n", check2);
-
-            System.out.println("[RS DEBUG] Decoding block 2 (with fix)...");
-            int err2 = decodeBlock(block2, true);
-            System.out.printf("[RS DEBUG] Block 2 result: %d errors\n", err2);
-
-            System.out.println("[RS DEBUG] Checking block 3 for errors (without fix)...");
-            int check3 = decodeBlock(block3, false);
-            System.out.printf("[RS DEBUG] Block 3 check: %d (0=no error, -1=has errors)\n", check3);
-
-            System.out.println("[RS DEBUG] Decoding block 3 (with fix)...");
-            int err3 = decodeBlock(block3, true);
-            System.out.printf("[RS DEBUG] Block 3 result: %d errors\n", err3);
-
-            // 복호화 결과 확인 (검산: 에러 있으면 로그만 출력하고 계속 진행)
-            System.err.printf("[RS DEBUG] Decoding results: err1=%d, err2=%d, err3=%d\n", err1, err2, err3);
-            if (err1 < 0 || err2 < 0 || err3 < 0) {
-                System.err.println("[RS DEBUG] Warning: Some blocks have unrecoverable errors, using raw data anyway");
+            // R2007 stores the 3 RS-encoded blocks INTERLEAVED byte-by-byte, not as
+            // consecutive 255-byte runs. Deinterleave first:
+            //   block[i][j] = data[i + j * BLOCK_COUNT]
+            // Without this, syndromes are computed on mixed data from all 3 blocks
+            // and BM/Chien produce garbage roots.
+            byte[][] blocks = new byte[BLOCK_COUNT][BLOCK_SIZE];
+            for (int i = 0; i < BLOCK_COUNT; i++) {
+                for (int j = 0; j < BLOCK_SIZE; j++) {
+                    blocks[i][j] = data[i + j * BLOCK_COUNT];
+                }
             }
 
-            // 복호화된 데이터 결합 (각 블록에서 처음 239바이트만 사용)
-            byte[] result = new byte[717];
-            System.arraycopy(block1, 0, result, 0, 239);
-            System.arraycopy(block2, 0, result, 239, 239);
-            System.arraycopy(block3, 0, result, 478, 239);
+            for (int i = 0; i < BLOCK_COUNT; i++) {
+                decodeBlock(blocks[i], true);
+            }
 
-            System.out.println("[RS DEBUG] Successfully decoded R2007 data");
+            byte[] result = new byte[BLOCK_COUNT * DATA_SIZE];
+            for (int i = 0; i < BLOCK_COUNT; i++) {
+                System.arraycopy(blocks[i], 0, result, i * DATA_SIZE, DATA_SIZE);
+            }
             return result;
         } catch (Exception e) {
-            System.err.printf("[RS DEBUG] Exception: %s\n", e.getMessage());
-            e.printStackTrace();
             return null;
         }
     }

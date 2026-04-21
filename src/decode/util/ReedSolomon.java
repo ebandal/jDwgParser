@@ -112,7 +112,6 @@ public final class ReedSolomon {
         boolean errflag = false;
 
         // Syndrome: evaluate R(x) at roots α^1, α^2, ..., α^16
-        // Note: 255-byte block has indices 0-254, so degree is 254
         for (int j = 0; j < 16; j++) {
             synbuf[j] = (byte) evaluate(block, 254, F256_POWER[j + 1] & 0xFF);
             if (synbuf[j] != 0) errflag = true;
@@ -129,28 +128,37 @@ public final class ReedSolomon {
 
     /**
      * Decode R2007 RS-encoded header data.
+     * The RS data is INTERLEAVED across 3 blocks: bytes are read at
+     * offsets i, i+3, i+6, ... for block i. After deinterleaving, each
+     * block is 255 bytes (239 data + 16 parity).
      *
-     * @param data 765+ bytes of RS-encoded data (3 × 255-byte blocks)
-     * @return 717 bytes of decoded data, or null on failure
+     * @param data 765+ bytes of interleaved RS-encoded data (3 × 255 bytes)
+     * @return 717 bytes of decoded data (3 × 239 bytes), or null on failure
      */
     public static byte[] decodeR2007Data(byte[] data) {
         if (data == null || data.length < 765) return null;
         try {
-            byte[] block1 = new byte[255];
-            byte[] block2 = new byte[255];
-            byte[] block3 = new byte[255];
-            System.arraycopy(data, 0, block1, 0, 255);
-            System.arraycopy(data, 255, block2, 0, 255);
-            System.arraycopy(data, 510, block3, 0, 255);
+            final int BLOCK_COUNT = 3;
+            final int BLOCK_SIZE = 255;
+            final int DATA_SIZE = 239;
 
-            decodeBlock(block1, true);
-            decodeBlock(block2, true);
-            decodeBlock(block3, true);
+            byte[][] blocks = new byte[BLOCK_COUNT][BLOCK_SIZE];
+            // Deinterleave: block[i][j] = data[i + j * BLOCK_COUNT]
+            for (int i = 0; i < BLOCK_COUNT; i++) {
+                for (int j = 0; j < BLOCK_SIZE; j++) {
+                    blocks[i][j] = data[i + j * BLOCK_COUNT];
+                }
+            }
 
-            byte[] result = new byte[717];
-            System.arraycopy(block1, 0, result, 0, 239);
-            System.arraycopy(block2, 0, result, 239, 239);
-            System.arraycopy(block3, 0, result, 478, 239);
+            // Apply RS error correction to each block (if needed)
+            for (int i = 0; i < BLOCK_COUNT; i++) {
+                decodeBlock(blocks[i], true);
+            }
+
+            byte[] result = new byte[BLOCK_COUNT * DATA_SIZE];
+            for (int i = 0; i < BLOCK_COUNT; i++) {
+                System.arraycopy(blocks[i], 0, result, i * DATA_SIZE, DATA_SIZE);
+            }
             return result;
         } catch (Exception e) {
             return null;
@@ -171,8 +179,7 @@ public final class ReedSolomon {
     }
 
     private static int evaluate(byte[] poly, int deg, int x) {
-        // Horner's method: evaluate polynomial at point x
-        // For deg < array length, this correctly handles the coefficients
+        // Evaluate polynomial at point x using Horner's method
         int y = 0;
         for (int i = Math.min(deg, poly.length - 1); i >= 0; i--) {
             y = f256Multiply(x, y) ^ (poly[i] & 0xFF);
