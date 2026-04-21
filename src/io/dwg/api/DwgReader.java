@@ -74,10 +74,14 @@ public class DwgReader {
         DwgClassRegistry classRegistry = new DwgClassRegistry();
         SectionInputStream classStream = sections.get("AcDb:Classes");
         if (classStream != null) {
-            List<DwgClassDefinition> classes =
-                new ClassesSectionParser().parse(classStream, version);
-            doc.setCustomClasses(classes);
-            classes.forEach(classRegistry::register);
+            try {
+                List<DwgClassDefinition> classes =
+                    new ClassesSectionParser().parse(classStream, version);
+                doc.setCustomClasses(classes);
+                classes.forEach(classRegistry::register);
+            } catch (Exception e) {
+                System.out.printf("[WARN] Failed to parse Classes section: %s\n", e.getMessage());
+            }
         }
         doc.setClassRegistry(classRegistry);
 
@@ -85,7 +89,11 @@ public class DwgReader {
         HandleRegistry handleRegistry = new HandleRegistry();
         SectionInputStream handlesStream = sections.get("AcDb:Handles");
         if (handlesStream != null) {
-            handleRegistry = new HandlesSectionParser().parse(handlesStream, version);
+            try {
+                handleRegistry = new HandlesSectionParser().parse(handlesStream, version);
+            } catch (Exception e) {
+                System.out.printf("[WARN] Failed to parse Handles section: %s\n", e.getMessage());
+            }
         }
         doc.setHandleRegistry(handleRegistry);
 

@@ -74,18 +74,35 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         long nextHandle = 1;
         int offset = 0;
         int parsedCount = 0;
+        int attemptCount = 0;
 
         System.out.printf("[DEBUG] Streaming parse: stream size %d bytes\n", raw.length);
+        System.out.printf("[DEBUG] First 16 bytes: ");
+        for (int i = 0; i < Math.min(16, raw.length); i++) {
+            System.out.printf("%02X ", raw[i] & 0xFF);
+        }
+        System.out.println();
 
-        while (offset < raw.length - 4) {
+        while (offset < raw.length - 4 && attemptCount < 100) {
+            attemptCount++;
             try {
                 // Create reader for current offset
                 ByteBufferBitInput buf = new ByteBufferBitInput(
                     java.nio.ByteBuffer.wrap(raw, offset, raw.length - offset));
                 BitStreamReader r = new BitStreamReader(buf, version);
 
+                // Debug: Show bytes at this offset
+                if (attemptCount <= 5) {
+                    System.out.printf("[DEBUG] Attempt %d at offset 0x%X: bytes=%02X %02X\n",
+                        attemptCount, offset, raw[offset] & 0xFF, raw[offset+1] & 0xFF);
+                }
+
                 // Read object size
                 int objSize = r.readModularShort();
+
+                if (attemptCount <= 5) {
+                    System.out.printf("[DEBUG]   -> objSize=%d (0x%04X)\n", objSize, objSize & 0xFFFF);
+                }
 
                 // Sanity check
                 if (objSize <= 0 || objSize > 0x10000) {
