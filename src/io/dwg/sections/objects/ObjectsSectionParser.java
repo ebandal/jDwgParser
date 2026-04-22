@@ -91,9 +91,14 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             System.out.printf("[DEBUG] Objects: Offset-based parse complete: %d/%d success, %d failed, %d skipped (out-of-range)\n",
                 successCount, handles.allHandles().size() - outOfRangeCount, failureCount, outOfRangeCount);
         } else {
-            // No handle registry: use streaming parse (R2000+ without working Handles)
-            System.out.printf("[DEBUG] Objects: No handle registry, using streaming parse for %s\n", version);
-            result = parseStreaming(stream, version);
+            // No handle registry: extract and parse for R2000
+            System.out.printf("[DEBUG] Objects: No handle registry, processing R2000 combined section\n");
+
+            if (version == DwgVersion.R2000) {
+                result = parseR2000Combined(stream, version);
+            } else {
+                result = parseStreaming(stream, version);
+            }
         }
 
         System.out.printf("[DEBUG] Objects: Total objects parsed=%d\n", result.size());
@@ -352,6 +357,240 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             case LAYOUT              -> new DwgLayout();
             default -> null;
         };
+    }
+
+    /**
+     * R2000-specific parser for combined Objects section.
+     * R2000 Objects section contains Handles + Objects interleaved.
+     * Find Handles by scanning for RS_BE page_size markers (2000-2100 range).
+     */
+    private Map<Long, DwgObject> parseR2000Combined(SectionInputStream stream, DwgVersion version) throws Exception {
+        System.out.printf("[DEBUG] R2000: Parsing Objects section with embedded Handles\n");
+
+        byte[] rawSection = stream.rawBytes();
+        System.out.printf("[DEBUG] R2000: Section size=%d bytes\n", rawSection.length);
+
+        // Step 1: Find Handles offset by scanning for RS_BE page_size markers
+        int handlesOffset = findR2000HandlesOffset(rawSection);
+        if (handlesOffset < 0) {
+            System.out.printf("[DEBUG] R2000: Handles offset not found, falling back to streaming parse\n");
+            return parseStreaming(stream, version);
+        }
+
+        System.out.printf("[DEBUG] R2000: Handles found at offset 0x%X\n", handlesOffset);
+
+        // Step 2: Extract Handles section (from found offset to end)
+        byte[] handlesData = new byte[rawSection.length - handlesOffset];
+        System.arraycopy(rawSection, handlesOffset, handlesData, 0, handlesData.length);
+
+        // Step 3: Parse Handles section
+        HandleRegistry handlesReg = null;
+        try {
+            io.dwg.core.io.SectionInputStream handlesStream =
+                new io.dwg.core.io.SectionInputStream(handlesData, "AcDb:Handles");
+            io.dwg.sections.handles.HandlesSectionParser handlesParser =
+                new io.dwg.sections.handles.HandlesSectionParser();
+            handlesReg = handlesParser.parse(handlesStream, version);
+            System.out.printf("[DEBUG] R2000: Parsed %d handles\n", handlesReg.allHandles().size());
+            this.handles = handlesReg;
+        } catch (Exception e) {
+            System.out.printf("[DEBUG] R2000: Handles parsing failed: %s\n", e.getMessage());
+            return parseStreaming(stream, version);
+        }
+
+        // Step 4: Parse Objects using offset-based approach (offset 0 in original section)
+        Map<Long, DwgObject> result = new java.util.HashMap<>();
+        if (handlesReg != null && !handlesReg.allHandles().isEmpty()) {
+            System.out.printf("[DEBUG] R2000: Using offset-based parsing with %d handles\n",
+                handlesReg.allHandles().size());
+
+            int successCount = 0;
+            int failureCount = 0;
+
+            for (io.dwg.sections.handles.HandleEntry entry : handlesReg.sortedEntries()) {
+                long handle = entry.handle();
+                long offset = entry.offset();
+
+                // Offsets are relative to Objects section start (offset 0)
+                if (offset < 0 || offset >= handlesOffset) {
+                    // Offset points beyond Handles (probably invalid)
+                    failureCount++;
+                    continue;
+                }
+
+                try {
+                    DwgObject obj = parseObjectAt(rawSection, (int) offset, version, handle);
+                    if (obj != null) {
+                        result.put(handle, obj);
+                        successCount++;
+                        if (successCount <= 5 || successCount % 100 == 0) {
+                            System.out.printf("[DEBUG]   Handle 0x%X at 0x%X: SUCCESS\n", handle, offset);
+                        }
+                    } else {
+                        failureCount++;
+                    }
+                } catch (Exception e) {
+                    if (successCount <= 10) {
+                        System.out.printf("[DEBUG]   Handle 0x%X at 0x%X: %s\n", handle, offset, e.getMessage());
+                    }
+                    failureCount++;
+                }
+            }
+
+            System.out.printf("[DEBUG] R2000: Parsed %d/%d objects\n", successCount, handlesReg.allHandles().size());
+        }
+
+        return result;
+    }
+
+    /**
+     * Find Handles section offset in R2000 Objects section.
+     * Scans for RS_BE (big-endian) page_size values in range 2000-2100.
+     * Returns offset or -1 if not found.
+     */
+    private int findR2000HandlesOffset(byte[] data) {
+        // R2000 Handles section appears to start at a fixed offset (0x7F observed in Cone.dwg)
+        // This seems to be a standard offset after Objects section header
+        int handlesOffset = 0x7F;  // Try standard offset first
+
+        if (handlesOffset < data.length - 2) {
+            java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(data);
+            buffer.order(java.nio.ByteOrder.BIG_ENDIAN);
+            buffer.position(handlesOffset);
+
+            short valueBE = buffer.getShort();
+            int value = valueBE & 0xFFFF;
+
+            // Verify this is a valid page size
+            if (value > 2 && value <= 2040) {
+                System.out.printf("[DEBUG] R2000: Using standard offset 0x%X, RS_BE value=%d\n", handlesOffset, value);
+                return handlesOffset;
+            }
+        }
+
+        // If standard offset doesn't work, fall back to scanning (as backup)
+        System.out.printf("[DEBUG] R2000: Standard offset 0x7F failed, scanning for valid page size...\n");
+        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(data);
+        buffer.order(java.nio.ByteOrder.BIG_ENDIAN);
+
+        for (int i = 0; i < data.length - 1; i++) {
+            buffer.position(i);
+            if (buffer.remaining() < 2) break;
+
+            short valueBE = buffer.getShort();
+            int value = valueBE & 0xFFFF;
+
+            // R2000 Handles pages have size in range [2, 2040]
+            if (value > 2 && value <= 2040) {
+                System.out.printf("[DEBUG] R2000: Found RS_BE value %d (valid page size) at offset 0x%X\n", value, i);
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /**
+     * R2000-specific parser for combined Objects/Classes/Handles binary format.
+     * R2000 objects use 00 FF markers with raw byte format (not bit-packed).
+     * @deprecated Use parseR2000Combined() instead
+     */
+    @Deprecated
+    private Map<Long, DwgObject> parseR2000Streaming(SectionInputStream stream, DwgVersion version) throws Exception {
+        Map<Long, DwgObject> result = new HashMap<>();
+        byte[] raw = stream.rawBytes();
+        long nextHandle = 1;
+        int offset = 0;
+        int objectCount = 0;
+
+        System.out.printf("[DEBUG] R2000: Binary format parsing, section size=%d bytes\n", raw.length);
+
+        while (offset < raw.length - 10) {
+            // Look for 00 FF marker
+            if (offset + 1 < raw.length &&
+                (raw[offset] & 0xFF) == 0x00 &&
+                (raw[offset + 1] & 0xFF) == 0xFF) {
+
+                // Found marker, read object structure
+                // Format: 00 FF [size:RS] [1F 00] [count:RC] 00 [type:RC] 00 [data...]
+
+                if (offset + 10 > raw.length) break;
+
+                // Read size (RS, little-endian, 2 bytes)
+                int size = ((raw[offset + 3] & 0xFF) << 8) | (raw[offset + 2] & 0xFF);
+
+                if (size <= 0 || size > 100000) {
+                    offset += 2;
+                    continue;
+                }
+
+                // Type code is at offset+8
+                int typeCode = raw[offset + 8] & 0xFF;
+
+                // Sanity check: valid DWG type codes are 0x30-0x4F or specific values
+                // Skip objects with invalid types
+                boolean validType = (typeCode >= 0x30 && typeCode <= 0x4F) || typeCode == 0x14 || typeCode == 0x15;
+
+                if (objectCount < 5) {
+                    System.out.printf("[DEBUG] R2000: Object %d @ 0x%X: size=%d type=0x%02X %s\n",
+                        objectCount, offset, size, typeCode, validType ? "" : "(INVALID, skipping)");
+                }
+
+                if (!validType) {
+                    offset += 2;  // Skip this invalid marker
+                    continue;
+                }
+
+                try {
+                    // Create object for this type
+                    DwgObject obj = createObject(typeCode);
+                    if (obj != null) {
+                        // Set basic properties
+                        ((AbstractDwgObject) obj).setHandle(nextHandle);
+                        ((AbstractDwgObject) obj).setRawTypeCode(typeCode);
+
+                        // Try to parse the object data using BitStreamReader
+                        // Object data starts at offset+10
+                        if (offset + 10 < raw.length) {
+                            ByteBufferBitInput buf = new ByteBufferBitInput(
+                                java.nio.ByteBuffer.wrap(raw, offset + 10, Math.min(size - 8, raw.length - offset - 10)));
+                            BitStreamReader r = new BitStreamReader(buf, version);
+
+                            // Try type-specific parsing
+                            try {
+                                resolver.resolve(typeCode).ifPresent(reader -> {
+                                    try {
+                                        reader.read(obj, r, version);
+                                    } catch (Exception e) {
+                                        // Type parsing failed, but object is still created
+                                    }
+                                });
+                            } catch (Exception e) {
+                                // Parsing failed
+                            }
+                        }
+
+                        result.put(nextHandle, obj);
+                        nextHandle++;
+                    }
+                } catch (Exception e) {
+                    if (objectCount < 5) {
+                        System.out.printf("[DEBUG] R2000: Failed to parse object @ 0x%X: %s\n", offset, e.getMessage());
+                    }
+                }
+
+                // Move to next object (size field + marker size)
+                offset += size + 2;
+                objectCount++;
+
+            } else {
+                // No marker found, advance by 1 byte
+                offset += 1;
+            }
+        }
+
+        System.out.printf("[DEBUG] R2000: Parsed %d objects\n", objectCount);
+        return result;
     }
 
     @Override

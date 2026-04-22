@@ -466,6 +466,107 @@ Offset  Size  Type  설명
 
 ---
 
+## R2000 파일 구조 상세 (§3 변형 + §10/§23/§20)
+
+**⚠️ R2000은 R13/R14의 섹션 구조를 그대로 사용하지만, Locator 해석이 다름**
+
+### 파일 레이아웃
+
+```
+Offset      크기      설명
+----------  --------  ----
+0x0000-     ~94B      헤더 (R13과 동일: 버전문자열 + 미사용 + 코드페이지 + Locators)
+0x005E-     variable  Objects 섹션 (Classes + Handles + Objects 모두 포함)
+0x6B8B-     518B      Header Variables 섹션 (Locator[0]이 지시)
+```
+
+### R2000 Locator 구조
+
+R13/R14와 동일 (12바이트 × N):
+```
+[RL] record_number   (0 = Header, 1 = unused, 2 = unused, 3 = unused, ...)
+[RL] seeker         (파일 내 섹션 오프셋)
+[RL] size           (섹션 크기)
+```
+
+**핵심 차이점:** R13/R14에서는 locator[0]=Header, [1]=Classes, [2]=Handles, [3]=Objects인데,
+**R2000에서는 locator[0]=Header, [1+]=Objects(합침)**
+
+### Objects 섹션 내부 구조
+
+한 섹션에 Classes + Handles + Objects가 **순차적으로 배치**:
+
+#### 1️⃣ Classes 데이터 (R13/R14 형식, Sentinel 포함)
+```
+[16B]      Start Sentinel
+[RL 4B]    Data Size
+[N bytes]  Classes entries:
+           - classNum (BS)
+           - version (BS)
+           - appName (TV)
+           - cppName (TV)
+           - dxfName (TV)
+           - wasZombie (B)
+           - isEntity (BS)
+           ... 반복 ...
+[RS 2B]    CRC-16 (seed=0xC0C1)
+[16B]      End Sentinel (Start 비트반전)
+```
+
+#### 2️⃣ Handles 데이터 (페이지 기반, R13/R14 형식)
+```
+Loop (각 페이지):
+  [RS_BE 2B]      page_size (big-endian! ⚠️ 2032-2040 typical)
+  [UMC 1-3B]      handle_delta (누적)
+  [MC 1-3B]       offset_delta (누적, signed)
+  [...]           repeat until page_size reached
+  [RS_BE 2B]      crc (big-endian, seed=0xC0C1)
+
+Until: page_size == 2 (종료 신호)
+```
+
+**⚠️ 중요:**
+- `page_size`는 **RS_BE (big-endian)** - 가장 중요한 바이트가 먼저
+- `handle_delta` = UMC (Unsigned Modular Char, 항상 양수)
+- `offset_delta` = MC (Signed Modular Char, 음수 가능, 누적)
+- CRC는 각 페이지별로 계산
+
+#### 3️⃣ Objects 데이터 (offset 0부터 시작)
+```
+[MS 2+ B]       objectSize
+[BS 2B]         typeCode  
+[H variable]    objectHandle
+[BS 2B]         xDataSize
+[XData var]     xData (if xDataSize > 0)
+... 공통 헤더 ...
+... 타입별 데이터 ...
+
+다음 객체는 바로 이어짐 (패딩 없음)
+```
+
+**핵심:** Handles 섹션에서 생성된 offset 맵으로 각 객체 위치 파악
+
+### R2000 vs R13/R14 비교
+
+| 항목 | R13/R14 | R2000 |
+|-----|---------|-------|
+| 섹션 배치 | 별도 locator로 구분 | 합쳐짐 (동일 offset) |
+| Classes | 별도 섹션 | Objects 내 (Sentinel) |
+| Handles | 별도 섹션 | Objects 내 (페이지형) |
+| Objects | 별도 섹션 | Objects 내 (offset 0) |
+| 파싱 순서 | locator → section | section 내 순차추출 → handle map → objects |
+
+### R2000 vs R2004 비교
+
+| 항목 | R2000 | R2004 |
+|-----|-------|-------|
+| 압축 | 없음 | LZ77 (선택) |
+| 섹션구조 | 고정 (locator) | 동적 (섹션맵) |
+| Handle 포맷 | RS_BE pages | 동일 (RS_BE pages) |
+| Object 포맷 | offset 0부터 | offset 0부터 (동일) |
+
+---
+
 ## R2004 파일 구조 상세 (§4)
 
 ### 파일 헤더 0x80바이트 레이아웃

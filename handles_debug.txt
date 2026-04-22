@@ -1,4 +1,5 @@
-pair[0]: hDelta=0x77 cumH=0x77 oDelta=1 cumO=1
-pair[1]: hDelta=0x1F cumH=0x96 oDelta=0 cumO=1
-pair[2]: hDelta=0x8 cumH=0x9E oDelta=0 cumO=1
-pair[3]: hDelta=0x33 cumH=0xD1 oDelta=0 cumO=1
+pair[0]: hDelta=0x36 cumH=0x36 oDelta=40 cumO=40
+pair[1]: hDelta=0x28 cumH=0x5E oDelta=-2973 cumO=-2933
+pair[2]: hDelta=0x1FCA cumH=0x2028 oDelta=-541 cumO=-3474
+pair[3]: hDelta=0x10 cumH=0x2038 oDelta=43 cumO=-3431
+pair[4]: hDelta=0x206B cumH=0x40A3 oDelta=0 cumO=-3431

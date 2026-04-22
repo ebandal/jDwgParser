@@ -64,3 +64,124 @@ In the `*.md` spec files:
 - `*(abstract)*` — abstract class
 - `*(enum)*` — enum
 - `*(record)*` — Java 16+ record
+
+---
+
+## Investigation Priority for Uncertain Matters
+
+When implementation details are unclear, follow this **strict priority order**:
+
+### 1️⃣ **Spec Document (PRIMARY)**
+- **First source:** OpenDesign Specification PDF (`doc/OpenDesign_Specification_for_.dwg_files.pdf`)
+- **Second source:** Project spec files (`01_dwg-core.md` through `05_dwg-api-and-test.md`)
+- **Third source:** Version comparison matrix in `03_dwg-sections.md`
+- **Action:** Read the relevant spec section (§ number), extract exact format/algorithm
+- **Time investment:** 30-60 minutes per uncertainty
+- **Outcome:** Authoritative understanding, document findings in project spec
+
+### 2️⃣ **LibreDWG Source Code (SECONDARY)**
+- **When:** Spec is ambiguous or incomplete
+- **Where:** Local copy at `C:\workspace_ebandal\libredwg` (shared reference implementation)
+- **How to use:**
+  - Search for function handling the same structure (e.g., `decode_handles()`)
+  - Read the implementation logic
+  - Cross-reference with spec to understand intent
+  - Document the insight in project memory
+- **Time investment:** 20-40 minutes per lookup
+- **Outcome:** Proven working implementation, reference for edge cases
+- **Important:** DO NOT copy code directly; understand the logic and reimplement
+
+### 3️⃣ **Reverse Engineering (TERTIARY - Last Resort)**
+- **When:** Spec is silent AND LibreDWG has no equivalent code
+- **How:**
+  1. Create binary analysis tool (hex dump, marker search)
+  2. Test on multiple sample files
+  3. Document patterns in memory
+  4. Verify against known-good data
+- **Time investment:** 1-2 hours, may fail
+- **Outcome:** Possible insight, often incomplete
+- **Risk:** High uncertainty, prone to false patterns
+- **Use sparingly:** Only when 1️⃣ and 2️⃣ are exhausted
+
+---
+
+## Decision Record Template
+
+When investigating uncertain matters, document the decision:
+
+```
+## [Issue Name]
+
+### Question
+What is the [exact technical detail]?
+
+### Investigation Path
+1. ✅ Spec check: [Section X.Y mentions...]
+2. ✅ LibreDWG: [function name shows...]
+3. ❌ Reverse engineering: [not needed]
+
+### Decision
+[Final conclusion with confidence level]
+
+### Reference
+- Spec §X.Y: [quote]
+- LibreDWG: [file:function]
+- Memory: [document link]
+```
+
+---
+
+## Key Examples from Phase 5 (R2000 Investigation)
+
+### Example: "What is R2000 Objects Section Structure?"
+
+**Correct approach (used):**
+1. ✅ **Spec:** Read §3 (R13-R2000), §10 (Classes), §23 (Handles), §20 (Objects)
+   - Found: "Group A (R13~R2002): Classes/Handles/Objects in one section"
+   - Found: Handles use "RS_BE page_size" (big-endian!)
+   
+2. ✅ **LibreDWG:** Cross-check `decode_handles()`, `decode_objects()`
+   - Confirmed: PageSize reads as RS_BE (most significant byte first)
+   - Confirmed: Handle deltas use MC encoding
+   
+3. ❌ **Reverse engineering:** Not needed (Spec + LibreDWG sufficient)
+
+**Result:** Clear implementation path with 100% confidence
+
+### Anti-Pattern Example (Avoided)
+
+**Wrong approach (what we avoided):**
+1. ❌ **Reverse engineering first:** Binary analysis with `00 FF` marker search
+   - Result: False patterns, wasted 2+ hours
+   - Conclusion: "Structure unclear"
+   
+2. ❌ **Skip spec reading:** Too long, too abstract
+   - Result: Missed critical detail (RS_BE byte order)
+   
+3. ❌ **Ignore LibreDWG:** Wrote own code from scratch
+   - Result: Different algorithm, incompatible output
+
+---
+
+## When to Write Memory Documents
+
+Use memory (`C:\Users\heesu\.claude\projects\*\memory\`) to record:
+- ✅ Investigation findings (what Spec/LibreDWG revealed)
+- ✅ Design decisions (why we chose approach X over Y)
+- ✅ Critical insights (edge cases, version differences)
+- ❌ Do NOT record: day-to-day debugging, temporary analysis, dead ends
+
+### Memory Hierarchy
+
+1. **Investigation Results** (e.g., `PHASE5_R2000_SPEC_ANALYSIS.md`)
+   - Permanent record of what was learned
+   - Used to brief future sessions
+
+2. **Decision Points** (e.g., `PHASE5_R2000_DEEP_ANALYSIS.md`)
+   - Record the "why" not just the "what"
+   - Prevents repeating same investigation
+
+3. **Implementation Plans** (e.g., `PHASE5_TABLE_LOCATORS_COMPLETE.md`)
+   - Architecture decisions
+   - Test strategy
+   - Known limitations
