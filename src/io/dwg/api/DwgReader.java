@@ -68,11 +68,13 @@ public class DwgReader {
         for (Map.Entry<String, SectionInputStream> e : sections.entrySet()) {
             System.out.printf("[DEBUG]   '%s' -> %d bytes\n", e.getKey(), e.getValue().rawBytes().length);
         }
-        System.out.printf("[DEBUG] ==== Header section offsets ====\n");
-        for (Map.Entry<String, Long> e : headerFields.sectionOffsets().entrySet()) {
-            Long size = headerFields.sectionSizes().get(e.getKey());
-            System.out.printf("[DEBUG]   '%s' -> offset=0x%X, size=%d\n",
-                e.getKey(), e.getValue(), size != null ? size : -1);
+        if (headerFields.sectionOffsets() != null) {
+            System.out.printf("[DEBUG] ==== Header section offsets ====\n");
+            for (Map.Entry<String, Long> e : headerFields.sectionOffsets().entrySet()) {
+                Long size = headerFields.sectionSizes().get(e.getKey());
+                System.out.printf("[DEBUG]   '%s' -> offset=0x%X, size=%d\n",
+                    e.getKey(), e.getValue(), size != null ? size : -1);
+            }
         }
 
         // ⑤ Header 섹션 파싱

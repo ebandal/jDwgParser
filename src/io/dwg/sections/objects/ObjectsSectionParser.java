@@ -294,7 +294,10 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             try {
                 reader.read(obj, r, version);
             } catch (Exception e) {
-                // 타입별 파싱 실패 무시
+                if (e.getMessage() != null && e.getMessage().contains("Invalid BL opcode")) {
+                    System.err.printf("[WARN] Handle 0x%X: %s in reader %s%n",
+                        handle, e.getMessage(), reader.getClass().getSimpleName());
+                }
             }
         });
 
@@ -307,6 +310,11 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
         // numReactors (BL)
         int numReactors = r.readBitLong();
+
+        // Sanity check: if numReactors is unreasonably large, skip reactors
+        if (numReactors > 100000) {
+            numReactors = 0;
+        }
 
         // isXDic (B) - R2004+
         boolean hasXDic = false;

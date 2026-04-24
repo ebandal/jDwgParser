@@ -28,7 +28,15 @@ public class DictionaryObjectReader implements ObjectReader {
         dict.setDuplicateRecordCloning(dupCloning);
 
         // 3. numEntries (BL)
+        long beforeNumEntries = r.position();
         long numEntries = r.readBitLong();
+
+        // Safety check for invalid numEntries
+        if (numEntries < 0 || numEntries > 100000) {
+            System.err.printf("[WARN] DictionaryObjectReader: numEntries=%d at bit offset %d, skipping entries%n",
+                numEntries, beforeNumEntries);
+            return;
+        }
 
         // 4. entries - numEntries개의 (name, handle) 쌍
         for (int i = 0; i < numEntries; i++) {
