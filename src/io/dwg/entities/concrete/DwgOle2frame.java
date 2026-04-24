@@ -1,14 +1,14 @@
 package io.dwg.entities.concrete;
 
 import io.dwg.core.type.Point3D;
-import io.dwg.entities.AbstractDwgEntity;
+import io.dwg.entities.AbstractDwgObject;
 import io.dwg.entities.DwgObjectType;
 
 /**
- * OLE2FRAME 엔티티 (타입 0x3E)
+ * OLE2FRAME 오브젝트 (타입 0x3E)
  * OLE 객체 임베딩 (Microsoft Word, Excel 등)
  */
-public class DwgOle2frame extends AbstractDwgEntity {
+public class DwgOle2frame extends AbstractDwgObject {
     private Point3D insertionPoint;  // 삽입점
     private double[] scale;          // 스케일
     private double rotation;         // 회전각
@@ -17,6 +17,9 @@ public class DwgOle2frame extends AbstractDwgEntity {
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.OLE2FRAME; }
+
+    @Override
+    public boolean isEntity() { return false; }
 
     public Point3D insertionPoint() { return insertionPoint; }
     public double[] scale() { return scale; }

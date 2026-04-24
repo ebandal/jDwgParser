@@ -1,14 +1,14 @@
 package io.dwg.entities.concrete;
 
 import io.dwg.core.type.Point3D;
-import io.dwg.entities.AbstractDwgEntity;
+import io.dwg.entities.AbstractDwgObject;
 import io.dwg.entities.DwgObjectType;
 
 /**
- * BLOCK_HEADER 엔티티 (타입 0x30)
+ * BLOCK_HEADER 오브젝트 (타입 0x30)
  * 블록 정의의 시작 마커
  */
-public class DwgBlockHeader extends AbstractDwgEntity {
+public class DwgBlockHeader extends AbstractDwgObject {
     private String blockName;       // 블록 이름
     private int flags;              // 블록 플래그
     private Point3D basePoint;      // 블록의 기준점
@@ -16,6 +16,9 @@ public class DwgBlockHeader extends AbstractDwgEntity {
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.BLOCK_HEADER; }
+
+    @Override
+    public boolean isEntity() { return false; }
 
     public String blockName() { return blockName; }
     public int flags() { return flags; }

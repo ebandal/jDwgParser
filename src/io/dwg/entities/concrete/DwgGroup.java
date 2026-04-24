@@ -1,15 +1,15 @@
 package io.dwg.entities.concrete;
 
-import io.dwg.entities.AbstractDwgEntity;
+import io.dwg.entities.AbstractDwgObject;
 import io.dwg.entities.DwgObjectType;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * GROUP 엔티티 (타입 0x3C)
+ * GROUP 오브젝트 (타입 0x3C)
  * 여러 엔티티를 그룹화 (이름이 있는 그룹)
  */
-public class DwgGroup extends AbstractDwgEntity {
+public class DwgGroup extends AbstractDwgObject {
     private String groupName;        // 그룹 이름
     private boolean isUnnamed;       // 이름 없는 그룹 여부
     private boolean isSelectable;    // 선택 가능 여부
@@ -21,6 +21,9 @@ public class DwgGroup extends AbstractDwgEntity {
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.GROUP; }
+
+    @Override
+    public boolean isEntity() { return false; }
 
     public String groupName() { return groupName; }
     public boolean isUnnamed() { return isUnnamed; }
