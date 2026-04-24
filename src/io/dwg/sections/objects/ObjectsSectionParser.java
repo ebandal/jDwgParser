@@ -326,8 +326,10 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         ((AbstractDwgObject) obj).setHandle(handle);
         ((AbstractDwgObject) obj).setRawTypeCode(typeCode);
 
-        // 공통 헤더 파싱
-        parseCommonHeader(r, obj, version);
+        // 공통 헤더 파싱 - skip for DICTIONARY (has custom structure)
+        if (typeCode != 0x2A) {  // 0x2A = DICTIONARY
+            parseCommonHeader(r, obj, version);
+        }
 
         // 타입별 파싱
         resolver.resolve(typeCode).ifPresent(reader -> {
