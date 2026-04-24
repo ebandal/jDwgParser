@@ -346,6 +346,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
     }
 
     private DwgObject createObject(int typeCode) {
+        // First, try standard types
         DwgObjectType type = DwgObjectType.fromCode(typeCode);
         return switch (type) {
             case TEXT                -> new DwgText();
@@ -409,7 +410,23 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             case MLINESTYLE          -> new DwgMLineStyle();
             case LONG_TRANSACTION    -> new DwgLongTransaction();
             case LAYOUT              -> new DwgLayout();
-            default -> null;
+            case UNUSED              -> null;
+            case VP_ENT_HDR          -> null;
+            case PLACEHOLDER         -> null;
+            case VBA_PROJECT         -> null;
+            case UNKNOWN -> {
+                // Try custom type via classRegistry for R2000 custom classes
+                if (classRegistry != null) {
+                    var classDef = classRegistry.find(typeCode);
+                    if (classDef.isPresent()) {
+                        System.out.printf("[DEBUG] Found custom class definition for type code %d: %s\n",
+                            typeCode, classDef.get().dxfRecordName());
+                        // Use DwgXrecord as a generic container for custom types
+                        yield new DwgXrecord();
+                    }
+                }
+                yield null;
+            }
         };
     }
 
