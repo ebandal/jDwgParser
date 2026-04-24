@@ -54,6 +54,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             int successCount = 0;
             int failureCount = 0;
             int outOfRangeCount = 0;
+            Map<String, Integer> typeCodeStats = new HashMap<>();
 
             // Parse objects using handle offsets (all offsets are absolute byte positions in Objects section)
             for (Map.Entry<Long, Long> entry : sortedHandleOffsets()) {
@@ -74,17 +75,41 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                     if (obj != null) {
                         result.put(handle, obj);
                         successCount++;
+                        String typeStr = obj.objectType().toString();
+                        typeCodeStats.merge(typeStr + " (OK)", 1, Integer::sum);
                         if (successCount <= 5 || successCount % 100 == 0) {
                             System.out.printf("[DEBUG]   Handle 0x%X at offset 0x%X: SUCCESS\n",
                                 handle, offset);
                         }
                     } else {
                         failureCount++;
+                        // Try to determine failure type
+                        try {
+                            ByteBufferBitInput buf = new ByteBufferBitInput(raw);
+                            buf.seek((long) ((int)offset) * 8L);
+                            BitStreamReader r = new BitStreamReader(buf, version);
+                            int objSize = r.readModularShort();
+                            int typeCode = r.readBitShort();
+                            DwgObjectType type = DwgObjectType.fromCode(typeCode);
+                            String reason = (objSize <= 0) ? "BadObjSize" : "NoReader";
+                            typeCodeStats.merge(type + " (FAIL-" + reason + ")", 1, Integer::sum);
+                        } catch (Exception e2) {
+                            typeCodeStats.merge("Unknown (FAIL)", 1, Integer::sum);
+                        }
                     }
                 } catch (Exception e) {
                     System.out.printf("[DEBUG]   Handle 0x%X at offset 0x%X: Exception %s\n",
                         handle, offset, e.getMessage());
                     failureCount++;
+                    typeCodeStats.merge("Exception", 1, Integer::sum);
+                }
+            }
+
+            // Print type code statistics
+            if (!typeCodeStats.isEmpty()) {
+                System.out.printf("[DEBUG] Objects: Type code breakdown:%n");
+                for (Map.Entry<String, Integer> stat : typeCodeStats.entrySet()) {
+                    System.out.printf("[DEBUG]   %s: %d%n", stat.getKey(), stat.getValue());
                 }
             }
 
@@ -271,7 +296,16 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         // 객체 크기 (MS)
         int objSize = r.readModularShort();
         if (objSize <= 0) {
-            System.out.printf("[DEBUG] Handle 0x%X offset %d: objSize=%d INVALID\n", handle, byteOffset, objSize);
+            // Try to read type code anyway for statistics
+            try {
+                int typeCode = r.readBitShort();
+                DwgObjectType type = DwgObjectType.fromCode(typeCode);
+                if (byteOffset % 100 == 0) {
+                    System.err.printf("[FAIL] Handle 0x%X: type=%s objSize=%d%n", handle, type, objSize);
+                }
+            } catch (Exception e) {
+                // Ignore
+            }
             return null;
         }
 
@@ -280,6 +314,10 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
         DwgObject obj = createObject(typeCode);
         if (obj == null) {
+            DwgObjectType type = DwgObjectType.fromCode(typeCode);
+            if (byteOffset % 100 == 0) {
+                System.err.printf("[FAIL] Handle 0x%X: type=%s no_reader%n", handle, type);
+            }
             return null;
         }
 
@@ -416,10 +454,10 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             case MLINESTYLE          -> new DwgMLineStyle();
             case LONG_TRANSACTION    -> new DwgLongTransaction();
             case LAYOUT              -> new DwgLayout();
+            case PLACEHOLDER         -> new DwgPlaceholder();
+            case VBA_PROJECT         -> new DwgVbaProject();
             case UNUSED              -> null;
             case VP_ENT_HDR          -> null;
-            case PLACEHOLDER         -> null;
-            case VBA_PROJECT         -> null;
             case UNKNOWN -> {
                 // Try custom type via classRegistry for R2000 custom classes
                 if (classRegistry != null) {
