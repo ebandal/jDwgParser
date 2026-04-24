@@ -34,11 +34,14 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
         // 0x06-0x0B: Reserved (6 바이트)
         // 0x0C 이후: Header fields
 
+        System.out.printf("[DEBUG] R2000 Header: start position bits=%d\n", input.position());
+
         // 1. Version string (6 바이트): AC1015
         byte[] versionBytes = new byte[6];
         for (int i = 0; i < 6; i++) {
             versionBytes[i] = (byte) input.readRawChar();
         }
+        System.out.printf("[DEBUG] R2000 Header: after version bits=%d (byte=%d)\n", input.position(), input.position()/8);
         String version = new String(versionBytes, java.nio.charset.StandardCharsets.US_ASCII);
         if (!version.equals("AC1015")) {
             throw new IllegalArgumentException("Invalid R2000 version string: " + version);
@@ -48,33 +51,39 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
         for (int i = 0; i < 6; i++) {
             input.readRawChar();
         }
+        System.out.printf("[DEBUG] R2000 Header: after reserved bits=%d (byte=%d)\n", input.position(), input.position()/8);
 
         // 3. RC (1 바이트): unknown_0
         input.readRawChar();
+        System.out.printf("[DEBUG] R2000 Header: after unknown_0 bits=%d (byte=%d)\n", input.position(), input.position()/8);
 
         // 4. RL (4 바이트): preview address
         int previewAddr = input.readRawLong();
+        System.out.printf("[DEBUG] R2000 Header: after previewAddr bits=%d (byte=%d), previewAddr=0x%X\n", input.position(), input.position()/8, previewAddr);
         fields.setPreviewOffset(previewAddr & 0xFFFFFFFFL);
 
         // 5. RC (1 바이트): Dwg version (should be 0)
         input.readRawChar();
+        System.out.printf("[DEBUG] R2000 Header: after dwgVersion bits=%d (byte=%d)\n", input.position(), input.position()/8);
 
         // 6. RC (1 바이트): Maintenance version
         int maintVersion = input.readRawChar();
         fields.setMaintenanceVersion(maintVersion);
+        System.out.printf("[DEBUG] R2000 Header: after maintVersion bits=%d (byte=%d)\n", input.position(), input.position()/8);
 
         // 7. RS (2 바이트): Codepage
         short codePage = input.readRawShort();
         fields.setCodePage(codePage & 0xFFFF);
+        System.out.printf("[DEBUG] R2000 Header: after codePage bits=%d (byte=%d)\n", input.position(), input.position()/8);
 
-        // 8. RC (1 바이트): Number of sections
-        int sectionCount = input.readRawChar();
+        // 8. RL (4 바이트): Number of sections
+        // LibreDWG header.spec: PRE(R_2004a) { FIELD_RL (sections, 0); }
+        int sectionCount = input.readRawLong();
 
         // 9. 섹션 Locator 배열 읽기
-        // R2000 uses SAME format as R13: RL RL RL (12 bytes per locator)
-        // NOT RC RL RL (9 bytes) as initially thought
+        // LibreDWG decode.c line 327-329: RC + RL + RL = 9 bytes per locator
         // Format:
-        // - record_number: RL (4 bytes)
+        // - record_number: RC (1 byte)
         // - seeker: RL (4 bytes) - byte offset in file
         // - size: RL (4 bytes) - byte length
 
@@ -90,13 +99,16 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
             io.dwg.format.common.SectionType.OBJECTS.sectionName()
         };
 
-        // Read all section locators (12 bytes each, same as R13)
-        // Note: Only the first 4 locators are guaranteed to be standard sections (0-3)
-        // Auxiliary sections (records 4+) may exist but we handle only the main 4 for now
+        System.out.printf("[DEBUG] R2000: sectionCount=%d, position before locators: byte=%d\n",
+            sectionCount, input.position()/8);
         for (int i = 0; i < sectionCount; i++) {
-            int number = input.readRawLong();
-            long address = input.readRawLong() & 0xFFFFFFFFL;
-            long size = input.readRawLong() & 0xFFFFFFFFL;
+            long beforePos = input.position() / 8;
+            int number = input.readRawChar();          // RC (1 byte) - was RL (BUG FIX)
+            long address = input.readRawLong() & 0xFFFFFFFFL;  // RL (4 bytes)
+            long size = input.readRawLong() & 0xFFFFFFFFL;     // RL (4 bytes)
+
+            System.out.printf("[DEBUG] R2000 locator[%d] @byte%d: number=%d, address=0x%X, size=%d\n",
+                i, beforePos, number, address, size);
 
             io.dwg.format.r13.R13SectionLocator locator = new io.dwg.format.r13.R13SectionLocator(number, address, size);
             locators.add(locator);
@@ -106,26 +118,20 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
             if (number >= 0 && number < sectionNames.length) {
                 offsets.put(sectionNames[number], address);
                 sizes.put(sectionNames[number], size);
+                System.out.printf("[DEBUG] R2000: mapped to '%s'\n", sectionNames[number]);
             }
         }
 
         // 10. RS (2 바이트): CRC (skip for now, not validated)
         input.readRawShort();
 
-        // R2000 특수 처리: Objects/Classes/Handles를 하나로 합침
-        // R2000 파일 구조: [Header structure + Locators (~96 bytes)] [Objects section] [Header section data]
-        // Objects section = from position after locators to start of Header section
-        long objectsStartOffset = input.position() / 8;  // Convert bits to bytes
-
-        // Get Header section offset (locator number 0)
-        long headerOffset = offsets.getOrDefault(io.dwg.format.common.SectionType.HEADER.sectionName(), -1L);
-
-        // Objects section size = Header offset - Objects offset (if Header has valid locator)
-        if (headerOffset > 0 && headerOffset > objectsStartOffset) {
-            long objectsSize = headerOffset - objectsStartOffset;
-            offsets.put(io.dwg.format.common.SectionType.OBJECTS.sectionName(), objectsStartOffset);
-            sizes.put(io.dwg.format.common.SectionType.OBJECTS.sectionName(), objectsSize);
-        }
+        // R2000 Objects handling:
+        // In R2000, Objects are NOT a separate section with fixed start/end.
+        // Each object is located at an offset pointed to by Handles section entries.
+        // We remove the bogus "AcDb:AcDbObjects" entry (locator[3] with size=0)
+        // and let ObjectsSectionParser use handle offsets to locate objects in the file.
+        offsets.remove(io.dwg.format.common.SectionType.OBJECTS.sectionName());
+        sizes.remove(io.dwg.format.common.SectionType.OBJECTS.sectionName());
 
         fields.setSectionOffsets(offsets);
         fields.setSectionSizes(sizes);

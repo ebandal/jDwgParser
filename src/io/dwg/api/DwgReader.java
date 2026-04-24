@@ -63,6 +63,18 @@ public class DwgReader {
         input = new ByteBufferBitInput(data); // 처음부터 다시
         Map<String, SectionInputStream> sections = handler.readSections(input, headerFields);
 
+        // [DEBUG] sections map 내용 출력
+        System.out.printf("[DEBUG] ==== Sections map contents (%d entries) ====\n", sections.size());
+        for (Map.Entry<String, SectionInputStream> e : sections.entrySet()) {
+            System.out.printf("[DEBUG]   '%s' -> %d bytes\n", e.getKey(), e.getValue().rawBytes().length);
+        }
+        System.out.printf("[DEBUG] ==== Header section offsets ====\n");
+        for (Map.Entry<String, Long> e : headerFields.sectionOffsets().entrySet()) {
+            Long size = headerFields.sectionSizes().get(e.getKey());
+            System.out.printf("[DEBUG]   '%s' -> offset=0x%X, size=%d\n",
+                e.getKey(), e.getValue(), size != null ? size : -1);
+        }
+
         // ⑤ Header 섹션 파싱
         SectionInputStream headerStream = sections.get("AcDb:Header");
         if (headerStream != null) {
@@ -79,8 +91,10 @@ public class DwgReader {
                     new ClassesSectionParser().parse(classStream, version);
                 doc.setCustomClasses(classes);
                 classes.forEach(classRegistry::register);
+                System.out.printf("[DEBUG] Classes parsed: %d classes\n", classes.size());
             } catch (Exception e) {
                 System.out.printf("[WARN] Failed to parse Classes section: %s\n", e.getMessage());
+                e.printStackTrace();
             }
         }
         doc.setClassRegistry(classRegistry);
@@ -105,6 +119,12 @@ public class DwgReader {
         SectionInputStream objectsStream = sections.get("AcDb:AcDbObjects");
         if (objectsStream == null) {
             objectsStream = sections.get("AcDb:Objects");
+        }
+        // R2000: Objects are not a separate section - they are located via Handles offsets
+        // in the entire file. Use the whole file as the pseudo-section.
+        if (objectsStream == null && version == DwgVersion.R2000 && !handleRegistry.allHandles().isEmpty()) {
+            System.out.printf("[DEBUG] DwgReader: R2000 - using whole file as Objects stream (size=%d)\n", data.length);
+            objectsStream = new SectionInputStream(data, "AcDb:AcDbObjects");
         }
         System.out.printf("[DEBUG] DwgReader: objectsStream found: %b\n", objectsStream != null);
         if (objectsStream != null) {

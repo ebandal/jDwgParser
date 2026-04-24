@@ -262,8 +262,10 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
     private DwgObject parseObjectAt(byte[] raw, int byteOffset, DwgVersion version, long handle)
             throws Exception {
-        ByteBufferBitInput buf = new ByteBufferBitInput(
-            java.nio.ByteBuffer.wrap(raw, byteOffset, raw.length - byteOffset));
+        // Use the whole buffer and seek to the correct offset
+        // (ByteBufferBitInput constructor resets position to 0, so we must seek)
+        ByteBufferBitInput buf = new ByteBufferBitInput(raw);
+        buf.seek((long) byteOffset * 8L);
         BitStreamReader r = new BitStreamReader(buf, version);
 
         // 객체 크기 (MS)
@@ -278,12 +280,8 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
         DwgObject obj = createObject(typeCode);
         if (obj == null) {
-            System.out.printf("[DEBUG] Handle 0x%X offset %d: typeCode=%d NO OBJECT FACTORY\n",
-                handle, byteOffset, typeCode);
             return null;
         }
-        System.out.printf("[DEBUG] Handle 0x%X offset %d: objSize=%d typeCode=%d OK\n",
-            handle, byteOffset, objSize, typeCode);
 
         ((AbstractDwgObject) obj).setHandle(handle);
         ((AbstractDwgObject) obj).setRawTypeCode(typeCode);
@@ -419,8 +417,6 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                 if (classRegistry != null) {
                     var classDef = classRegistry.find(typeCode);
                     if (classDef.isPresent()) {
-                        System.out.printf("[DEBUG] Found custom class definition for type code %d: %s\n",
-                            typeCode, classDef.get().dxfRecordName());
                         // Use DwgXrecord as a generic container for custom types
                         yield new DwgXrecord();
                     }
@@ -431,17 +427,70 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
     }
 
     /**
+     * Parse R2000 Classes section from the start of Objects section.
+     * Returns the byte offset where Classes section ends.
+     */
+    private int parseR2000Classes(byte[] rawSection, DwgVersion version) throws Exception {
+        if (rawSection.length < 50) {
+            return -1;  // Too small for Classes section
+        }
+
+        // Classes section starts with Sentinel (16 bytes)
+        // Look for sentinel pattern or use ClassesSectionParser
+        // For now, skip Classes parsing (0x00-0x??) and let it be extracted
+
+        try {
+            // Try to extract and parse Classes from the start
+            // Classes: [Sentinel:16] [RL size:4] [data:N] [RS CRC:2] [Sentinel:16]
+            io.dwg.core.io.SectionInputStream classesStream =
+                new io.dwg.core.io.SectionInputStream(rawSection, "AcDb:Classes");
+            io.dwg.sections.classes.ClassesSectionParser classesParser =
+                new io.dwg.sections.classes.ClassesSectionParser();
+            java.util.List<io.dwg.sections.classes.DwgClassDefinition> classes =
+                classesParser.parse(classesStream, version);
+
+            if (classesParser instanceof io.dwg.sections.AbstractSectionParser) {
+                // Classes were parsed, populate classRegistry
+                if (classRegistry == null) {
+                    classRegistry = new DwgClassRegistry();
+                }
+                classes.forEach(classRegistry::register);
+                System.out.printf("[DEBUG] R2000: Parsed %d classes\n", classes.size());
+
+                // Return approximate end of Classes section (we don't know exact size without parsing)
+                // This is a limitation - we should track the parser position
+                return -1;  // Return -1 to indicate we couldn't determine exact end
+            }
+        } catch (Exception e) {
+            System.out.printf("[DEBUG] R2000: Classes parsing not fully implemented: %s\n", e.getMessage());
+        }
+
+        return -1;
+    }
+
+    /**
      * R2000-specific parser for combined Objects section.
-     * R2000 Objects section contains Handles + Objects interleaved.
+     * R2000 Objects section contains Classes + Handles + Objects interleaved.
      * Find Handles by scanning for RS_BE page_size markers (2000-2100 range).
      */
     private Map<Long, DwgObject> parseR2000Combined(SectionInputStream stream, DwgVersion version) throws Exception {
-        System.out.printf("[DEBUG] R2000: Parsing Objects section with embedded Handles\n");
+        System.out.printf("[DEBUG] R2000: Parsing Objects section with embedded Classes + Handles\n");
 
         byte[] rawSection = stream.rawBytes();
         System.out.printf("[DEBUG] R2000: Section size=%d bytes\n", rawSection.length);
 
-        // Step 1: Find Handles offset by scanning for RS_BE page_size markers
+        // Step 1A: Parse Classes section (at start of Objects section)
+        // Classes: [Sentinel:16] [RL:4] [data:N] [CRC:2] [Sentinel:16]
+        try {
+            int classesEnd = parseR2000Classes(rawSection, version);
+            if (classesEnd > 0) {
+                System.out.printf("[DEBUG] R2000: Classes section ends at offset 0x%X\n", classesEnd);
+            }
+        } catch (Exception e) {
+            System.out.printf("[DEBUG] R2000: Classes parsing failed: %s (continuing anyway)\n", e.getMessage());
+        }
+
+        // Step 1B: Find Handles offset by scanning for RS_BE page_size markers
         int handlesOffset = findR2000HandlesOffset(rawSection);
         if (handlesOffset < 0) {
             System.out.printf("[DEBUG] R2000: Handles offset not found, falling back to streaming parse\n");

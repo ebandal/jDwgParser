@@ -34,6 +34,11 @@ public class GroupObjectReader implements ObjectReader {
         // 4. numMembers (BL)
         long numMembers = r.readBitLong();
 
+        // Sanity check: if numMembers is unreasonably large, skip reading
+        if (numMembers > 100000) {
+            return;
+        }
+
         // 5. members - numMembers개의 핸들
         for (int i = 0; i < numMembers; i++) {
             long memberHandle = r.readBitLongLong();
