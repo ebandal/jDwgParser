@@ -77,9 +77,9 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                         successCount++;
                         String typeStr = obj.objectType().toString();
                         typeCodeStats.merge(typeStr + " (OK)", 1, Integer::sum);
-                        if (successCount <= 5 || successCount % 100 == 0) {
-                            System.out.printf("[DEBUG]   Handle 0x%X at offset 0x%X: SUCCESS\n",
-                                handle, offset);
+                        if (successCount <= 5 || successCount % 100 == 0 || obj.objectType().typeCode() == 0x4F) {
+                            System.out.printf("[DEBUG]   Handle 0x%X at offset 0x%X: SUCCESS type=%s\n",
+                                handle, offset, typeStr);
                         }
                     } else {
                         failureCount++;
@@ -91,7 +91,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                             int objSize = r.readModularShort();
                             int typeCode = r.readBitShort();
                             DwgObjectType type = DwgObjectType.fromCode(typeCode);
-                            String reason = (objSize <= 0) ? "BadObjSize" : "NoReader";
+                            String reason = (objSize < 0) ? "BadObjSize" : "NoReader";
                             typeCodeStats.merge(type + " (FAIL-" + reason + ")", 1, Integer::sum);
                         } catch (Exception e2) {
                             typeCodeStats.merge("Unknown (FAIL)", 1, Integer::sum);
@@ -295,6 +295,8 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
         // 객체 크기 (MS)
         int objSize = r.readModularShort();
+
+
         if (objSize <= 0) {
             // Try to read type code anyway for statistics
             try {
