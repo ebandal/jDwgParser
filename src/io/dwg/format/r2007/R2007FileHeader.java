@@ -55,23 +55,35 @@ public class R2007FileHeader {
         // Decode using Reed-Solomon
         byte[] decodedHeader = ReedSolomonDecoder.decodeR2007Data(rsEncodedHeader);
 
-        if (decodedHeader == null || decodedHeader.length < 224) {
+        if (decodedHeader == null || decodedHeader.length < 32) {
             System.out.println("[DEBUG] RS decoder failed or returned insufficient data. Length: " +
                 (decodedHeader == null ? "null" : decodedHeader.length));
-            // Fallback: use unencrypted header offset
-            h.pageMapOffset = ByteUtils.readLE64(unencryptedHeader, 0x20);
-            h.pageMapSizeComp = 0x10000;  // Default
-            h.pageMapSizeUncomp = 0x10000;
-            h.sectionsMapId = 0;
-            h.sectionsMapSizeComp = 0;
-            h.sectionsMapSizeUncomp = 0;
-            System.out.println("[DEBUG] Using fallback pageMapOffset: 0x" + Long.toHexString(h.pageMapOffset));
-            return h;
+            throw new Exception("RS decoding failed for R2007 header");
         }
 
-        // Extract fields from decoded header (offset 32 onwards)
-        // Dwg_R2007_Header structure (all LE64):
-        // +0: header_size
+        // Read metadata from decoded header (first 32 bytes)
+        long comprLen = ByteUtils.readLE32(decodedHeader, 24) & 0xFFFFFFFFL;
+
+        // Decompress the header if needed
+        byte[] decompressedHeader;
+        if (comprLen > 0) {
+            try {
+                int comprLenInt = (int)(comprLen & 0xFFFFFFFFL);
+                byte[] compressed = new byte[comprLenInt];
+                System.arraycopy(decodedHeader, 32, compressed, 0, comprLenInt);
+                Lz77Decompressor lz77 = new Lz77Decompressor();
+                decompressedHeader = lz77.decompress(compressed, 272);
+            } catch (Exception e) {
+                System.out.println("[DEBUG] LZ77 decompression failed: " + e.getMessage());
+                throw new Exception("Failed to decompress R2007 header: " + e.getMessage());
+            }
+        } else {
+            // Header is not compressed, use the raw decoded data
+            decompressedHeader = decodedHeader;
+        }
+
+        // Extract fields from decompressed header (all LE64)
+        // Dwg_R2007_Header structure:
         // +56: pages_map_offset
         // +80: pages_map_size_comp
         // +88: pages_map_size_uncomp
@@ -79,20 +91,22 @@ public class R2007FileHeader {
         // +128: sections_map_size_comp
         // +152: sections_map_size_uncomp
 
-        // NOTE: Full RS decoding + decompression is complex. For now, use pragmatic defaults
-        // that match the R2007+ file structure specification.
-        // The PageMap and SectionMap parsers handle the actual data correctly.
+        if (decompressedHeader.length < 160) {
+            System.out.println("[DEBUG] Decompressed header too small: " + decompressedHeader.length);
+            throw new Exception("Decompressed R2007 header too small");
+        }
 
-        // Use default offsets that work for most R2007 files:
-        // - PageMap starts at 0x100 (data section)
-        // - SectionMapId is typically 1
-        // - Sizes are estimated from common file patterns
-        h.pageMapOffset = 0x100;
-        h.pageMapSizeComp = 0x10000;      // 64KB compressed
-        h.pageMapSizeUncomp = 0x10000;    // 64KB uncompressed
-        h.sectionsMapId = 1;               // SectionMap is usually at page ID 1
-        h.sectionsMapSizeComp = 0x8000;   // 32KB compressed
-        h.sectionsMapSizeUncomp = 0x8000; // 32KB uncompressed
+        // Extract fields from decompressed header - all LE64
+        // Per libredwg dwg.h struct r2007_file_header
+        h.pageMapOffset = ByteUtils.readLE64(decompressedHeader, 56);
+        h.pageMapSizeComp = ByteUtils.readLE64(decompressedHeader, 80);
+        h.pageMapSizeUncomp = ByteUtils.readLE64(decompressedHeader, 88);
+        h.sectionsMapSizeComp = ByteUtils.readLE64(decompressedHeader, 176);
+        h.sectionsMapId = ByteUtils.readLE64(decompressedHeader, 192);
+        h.sectionsMapSizeUncomp = ByteUtils.readLE64(decompressedHeader, 200);
+
+        System.out.printf("[DEBUG] R2007 Header extracted: pageMapOffset=0x%X, comp=%d, uncomp=%d\n",
+            h.pageMapOffset, h.pageMapSizeComp, h.pageMapSizeUncomp);
 
         return h;
     }
