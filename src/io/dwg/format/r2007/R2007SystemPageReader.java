@@ -38,15 +38,10 @@ public class R2007SystemPageReader {
             rsData[i] = (byte) input.readRawChar();
         }
 
-        // RS decode (block_count blocks, 239 bytes each)
-        byte[] pedata = new byte[(int)(blockCount * 239)];
-        try {
-            // Simple RS decoding - would need proper implementation
-            // For now, assume RS decoder works (it does from our earlier fix)
-            System.out.println("[DEBUG] System page RS decode: blockCount=" + blockCount +
-                ", pesize=" + pesize + ", pageSize=" + pageSize);
-        } catch (Exception e) {
-            throw new Exception("RS decoding failed for system page: " + e.getMessage());
+        // RS decode: blockCount blocks of 255 bytes each → 239 bytes data per block
+        byte[] pedata = decodeRSBlocks(rsData, blockCount);
+        if (pedata == null) {
+            throw new Exception("RS decoding failed for system page");
         }
 
         // LZ77 decompress if needed
@@ -61,6 +56,54 @@ public class R2007SystemPageReader {
         }
 
         return decompressed;
+    }
+
+    /**
+     * Decode RS blocks from file data
+     * For system pages with blockCount blocks (stored INTERLEAVED byte-by-byte, like R2007 header)
+     * Input: blockCount * 255 bytes, where blocks are interleaved:
+     *        data[0 + j*blockCount], data[1 + j*blockCount], ..., data[blockCount-1 + j*blockCount]
+     * Output: blockCount * 239 bytes
+     */
+    private static byte[] decodeRSBlocks(byte[] rsData, long blockCount) {
+        if (blockCount < 0 || blockCount > Integer.MAX_VALUE) {
+            return null;
+        }
+
+        int blockCountInt = (int) blockCount;
+        byte[][] blocks = new byte[blockCountInt][255];
+
+        // Deinterleave: R2007 system pages are stored with blocks interleaved byte-by-byte
+        // Same pattern as R2007 header: data[i + j * blockCount] contains block[i][j]
+        for (int i = 0; i < blockCountInt; i++) {
+            for (int j = 0; j < 255; j++) {
+                int srcOffset = i + j * blockCountInt;
+                if (srcOffset < rsData.length) {
+                    blocks[i][j] = rsData[srcOffset];
+                }
+            }
+        }
+
+        System.out.println("[DEBUG] System page RS decode: blockCount=" + blockCountInt + " (interleaved)");
+
+        // Decode each block using ReedSolomonDecoder
+        for (int i = 0; i < blockCountInt; i++) {
+            int errors = ReedSolomonDecoder.decodeBlock(blocks[i], true);
+            if (errors < 0) {
+                System.out.println("[WARN] RS decode failed for block " + i);
+                // Continue anyway; some blocks may fail
+            } else {
+                System.out.println("[DEBUG]   Block " + i + ": " + errors + " errors corrected");
+            }
+        }
+
+        // Extract 239 bytes from each block and concatenate
+        byte[] result = new byte[blockCountInt * 239];
+        for (int i = 0; i < blockCountInt; i++) {
+            System.arraycopy(blocks[i], 0, result, i * 239, 239);
+        }
+
+        return result;
     }
 
     /**
