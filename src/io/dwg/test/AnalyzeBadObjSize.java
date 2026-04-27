@@ -1,128 +1,96 @@
 package io.dwg.test;
 
+import io.dwg.api.DwgReader;
 import io.dwg.core.io.BitStreamReader;
 import io.dwg.core.io.ByteBufferBitInput;
 import io.dwg.core.version.DwgVersion;
 import io.dwg.core.version.DwgVersionDetector;
+import io.dwg.entities.DwgObjectType;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 
 /**
- * Analyzes BadObjSize failures - objects with invalid (negative or zero) sizes.
- * This helps identify bit-stream reading alignment issues.
+ * Analyze BadObjSize failures to understand patterns.
  */
 public class AnalyzeBadObjSize {
-    static class BadObjInfo {
-        int typeCode;
-        int objSize;
-        long offset;
-        String typeName;
-
-        BadObjInfo(int typeCode, int objSize, long offset, String typeName) {
-            this.typeCode = typeCode;
-            this.objSize = objSize;
-            this.offset = offset;
-            this.typeName = typeName;
-        }
-    }
-
     public static void main(String[] args) throws Exception {
         System.out.println("═══════════════════════════════════════════════════════════════");
-        System.out.println("Analyzing BadObjSize Issues in Arc.dwg");
+        System.out.println("Analyzing BadObjSize Failures in Arc.dwg");
         System.out.println("═══════════════════════════════════════════════════════════════\n");
 
         byte[] data = Files.readAllBytes(Paths.get("./samples/2000/Arc.dwg"));
         DwgVersion version = DwgVersionDetector.detect(data);
 
-        System.out.printf("File: Arc.dwg (Version: %s)\n", version);
-        System.out.printf("File size: %d bytes\n\n", data.length);
+        var doc = DwgReader.defaultReader().open(data);
 
-        List<BadObjInfo> badObjs = new ArrayList<>();
+        System.out.printf("Total handles: %d\n", doc.handleRegistry().size());
+        System.out.printf("Successfully parsed: %d\n", doc.objectMap().size());
+        System.out.printf("Failed: %d\n\n", doc.handleRegistry().size() - doc.objectMap().size());
 
-        // Scan for objects with bad sizes
-        // Objects start around offset 0x4680 based on previous debug output
-        int startOffset = 0x4680;
-        int maxOffset = data.length - 10;
+        // Analyze BadObjSize failures
+        Map<String, Integer> sizePatterns = new TreeMap<>();
+        Map<String, Integer> typePatterns = new TreeMap<>();
+        int badSizeCount = 0;
+        int zeroSizeCount = 0;
+        int negativeSizeCount = 0;
 
-        ByteBufferBitInput globalBuf = new ByteBufferBitInput(data);
+        for (long handle : doc.handleRegistry().allHandles()) {
+            if (doc.objectMap().containsKey(handle)) {
+                continue;
+            }
 
-        try {
-            for (int offset = startOffset; offset < maxOffset; offset += 2) {
-                try {
-                    globalBuf.seek((long) offset * 8L);
-                    BitStreamReader r = new BitStreamReader(globalBuf, version);
+            var offsetOpt = doc.handleRegistry().offsetFor(handle);
+            if (offsetOpt.isEmpty()) continue;
 
-                    int objSize = r.readModularShort();
-                    if (objSize <= 0 || objSize > 100000) {
-                        // Found a bad size
-                        try {
-                            int typeCode = r.readBitShort();
-                            String typeName = getTypeName(typeCode);
-                            badObjs.add(new BadObjInfo(typeCode, objSize, offset, typeName));
-                        } catch (Exception e) {
-                            // Couldn't read type code
-                        }
+            int offset = (int)offsetOpt.get().longValue();
+
+            try {
+                ByteBufferBitInput buf = new ByteBufferBitInput(data);
+                buf.seek((long) offset * 8L);
+                BitStreamReader r = new BitStreamReader(buf, version);
+
+                int objSize = r.readModularShort();
+                int typeCode = r.readBitShort();
+
+                if (objSize <= 0) {
+                    badSizeCount++;
+                    if (objSize == 0) zeroSizeCount++;
+                    else negativeSizeCount++;
+
+                    String typeName = DwgObjectType.fromCode(typeCode).toString();
+                    String sizeKey = String.format("%s (size=%d)", typeName, objSize);
+                    sizePatterns.merge(sizeKey, 1, Integer::sum);
+                    typePatterns.merge(typeName, 1, Integer::sum);
+
+                    if (badSizeCount <= 20) {
+                        System.out.printf("  Handle 0x%X: type=%s size=%d\n", handle, typeName, objSize);
                     }
-                } catch (Exception e) {
-                    // Skip errors
                 }
+            } catch (Exception e) {
+                // Skip
             }
-        } catch (Exception e) {
-            // End of scan
         }
 
-        if (badObjs.isEmpty()) {
-            System.out.println("No BadObjSize issues found (all sizes valid)");
-        } else {
-            System.out.printf("Found %d objects with bad sizes:\n", badObjs.size());
-            System.out.println("───────────────────────────────────────────────────────────────");
-            System.out.printf("%-15s %-10s %-10s %-10s\n", "Type", "ObjSize", "Offset", "Hex Offset");
-            System.out.println("───────────────────────────────────────────────────────────────");
+        System.out.println("\n───────────────────────────────────────────────────────────────");
+        System.out.println("BadObjSize Summary:");
+        System.out.printf("  Total with size <= 0: %d\n", badSizeCount);
+        System.out.printf("  Zero size: %d\n", zeroSizeCount);
+        System.out.printf("  Negative size: %d\n", negativeSizeCount);
 
-            Map<String, Integer> typeCount = new TreeMap<>();
-            for (BadObjInfo info : badObjs) {
-                System.out.printf("%-15s %-10d 0x%-8X 0x%-8X\n",
-                    info.typeName, info.objSize, info.offset, info.offset);
-                typeCount.merge(info.typeName, 1, Integer::sum);
-            }
+        System.out.println("\n───────────────────────────────────────────────────────────────");
+        System.out.println("BadObjSize by Type:");
+        typePatterns.entrySet().stream()
+            .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
+            .forEach(e -> System.out.printf("  %s: %d\n", e.getKey(), e.getValue()));
 
-            System.out.println("\n───────────────────────────────────────────────────────────────");
-            System.out.println("Summary by Type:");
-            typeCount.forEach((type, count) ->
-                System.out.printf("  %s: %d objects\n", type, count)
-            );
-        }
+        System.out.println("\n───────────────────────────────────────────────────────────────");
+        System.out.println("Detailed Size Patterns (first 25):");
+        sizePatterns.entrySet().stream()
+            .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
+            .limit(25)
+            .forEach(e -> System.out.printf("  %s: %d\n", e.getKey(), e.getValue()));
 
         System.out.println("═══════════════════════════════════════════════════════════════");
-    }
-
-    static String getTypeName(int typeCode) {
-        return switch(typeCode) {
-            case 0x00 -> "UNUSED";
-            case 0x01 -> "TEXT";
-            case 0x04 -> "SEQEND";
-            case 0x05 -> "ENDBLK";
-            case 0x07 -> "INSERT";
-            case 0x11 -> "ARC";
-            case 0x12 -> "CIRCLE";
-            case 0x13 -> "LINE";
-            case 0x2A -> "DICTIONARY";
-            case 0x2D -> "LEADER";
-            case 0x32 -> "LTYPE";
-            case 0x33 -> "LAYER";
-            case 0x34 -> "STYLE";
-            case 0x35 -> "STYLE_ALT";
-            case 0x38 -> "LTYPE_CONTROL";
-            case 0x39 -> "LTYPE";
-            case 0x3C -> "GROUP";
-            case 0x3D -> "MLINESTYLE";
-            case 0x3E -> "OLE2FRAME";
-            case 0x40 -> "LONG_TRANSACTION";
-            case 0x4E -> "PLACEHOLDER";
-            case 0x4F -> "VBA_PROJECT";
-            case 0x50 -> "LAYOUT";
-            default -> String.format("0x%02X", typeCode);
-        };
     }
 }
