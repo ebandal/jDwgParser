@@ -26,25 +26,41 @@ public class R2007PageMapParser {
 
     /**
      * Parse PageMap from raw bytes (uncompressed)
-     * Structure: sequence of (pageId: LE32, size: LE32) pairs
+     * Format: Alternating LE32 values with zero padding
+     * Structure: val1(LE32) | 00 00 00 00 | val2(LE32) | 00 00 00 00 | ...
+     * Non-zero values are paired: (size, pageId), (size, pageId), ...
+     *
+     * Determined from Arc.dwg: values are stored as
+     * 0x400, 0x17, 0x400, 0x18, 0xA0, 0x3, 0x6DC0, 0x4, ...
+     * Which pairs as: (0x400, 0x17), (0x400, 0x18), (0xA0, 0x3), (0x6DC0, 0x4), ...
      */
     public static List<PageMapEntry> parsePageMap(byte[] pageMapData) throws Exception {
         List<PageMapEntry> pages = new ArrayList<>();
 
-        if (pageMapData == null || pageMapData.length < 8) {
+        if (pageMapData == null || pageMapData.length < 4) {
             return pages;
         }
 
-        for (int offset = 0; offset + 8 <= pageMapData.length; offset += 8) {
-            int pageId = readLE32(pageMapData, offset);
-            int size = readLE32(pageMapData, offset + 4);
+        // First, extract all non-zero LE32 values
+        java.util.List<Long> values = new java.util.ArrayList<>();
+        for (int offset = 0; offset + 4 <= pageMapData.length; offset += 4) {
+            long val = readLE32(pageMapData, offset) & 0xFFFFFFFFL;
+            if (val != 0) {
+                values.add(val);
+            }
+        }
 
-            // Check for end marker or invalid entries
-            if (pageId == 0 && size == 0) {
-                break;
+        // Pair them up: odd indices are sizes, even indices are pageIds
+        // So values[0] = size, values[1] = pageId, values[2] = size, values[3] = pageId, ...
+        for (int i = 0; i + 1 < values.size(); i += 2) {
+            long size = values.get(i);
+            long pageId = values.get(i + 1);
+
+            if (size == 0 && pageId == 0) {
+                break; // End marker
             }
 
-            pages.add(new PageMapEntry(pageId, size));
+            pages.add(new PageMapEntry((int) pageId, (int) size));
         }
 
         return pages;
