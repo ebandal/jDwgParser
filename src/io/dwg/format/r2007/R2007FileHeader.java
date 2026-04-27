@@ -20,6 +20,7 @@ public class R2007FileHeader {
     private long sectionsMapId;
     private long sectionsMapSizeComp;
     private long sectionsMapSizeUncomp;
+    private long sectionsMapCorrection;
 
     private R2007FileHeader() {}
 
@@ -106,6 +107,7 @@ public class R2007FileHeader {
         h.sectionsMapSizeComp = ByteUtils.readLE64(decompressedHeader, 176);
         h.sectionsMapId = ByteUtils.readLE64(decompressedHeader, 192);
         h.sectionsMapSizeUncomp = ByteUtils.readLE64(decompressedHeader, 200);
+        h.sectionsMapCorrection = ByteUtils.readLE64(decompressedHeader, 216);
 
         System.out.printf("[DEBUG] R2007 Header extracted: pageMapOffset=0x%X, comp=%d, uncomp=%d\n",
             h.pageMapOffset, h.pageMapSizeComp, h.pageMapSizeUncomp);
@@ -155,4 +157,5 @@ public class R2007FileHeader {
     public long sectionsMapId() { return sectionsMapId; }
     public long sectionsMapSizeComp() { return sectionsMapSizeComp; }
     public long sectionsMapSizeUncomp() { return sectionsMapSizeUncomp; }
+    public long sectionsMapCorrection() { return sectionsMapCorrection; }
 }
