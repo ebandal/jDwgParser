@@ -9,6 +9,7 @@ public enum DwgObjectType {
     ATTDEF(0x02),
     ATTRIB(0x03),
     SEQEND(0x04),
+    ENDBLK(0x05),
     INSERT(0x07),
     MINSERT(0x08),
     VERTEX_2D(0x0A),
@@ -53,6 +54,7 @@ public enum DwgObjectType {
     LTYPE(0x32),
     LAYER(0x33),
     STYLE(0x34),
+    STYLE_ALTERNATE(0x35),
     VIEW(0x36),
     UCS(0x37),
     VPORT(0x38),
@@ -62,6 +64,12 @@ public enum DwgObjectType {
     GROUP(0x3C),
     MLINESTYLE(0x3D),
     OLE2FRAME(0x3E),
+    APPID_CONTROL(0x42),
+    APPID_ALTERNATE(0x43),
+    DIMSTYLE_CONTROL(0x44),
+    DIMSTYLE_ALTERNATE(0x45),
+    VX_CONTROL(0x46),
+    MLINESTYLE_ALTERNATE(0x49),
     LONG_TRANSACTION(0x40),
     LWPLINE(0x4B),
     HATCH(0x4C),
@@ -69,6 +77,7 @@ public enum DwgObjectType {
     PLACEHOLDER(0x4E),
     VBA_PROJECT(0x4F),
     LAYOUT(0x50),
+    LAYOUT_ALTERNATE(0x62),
     UNKNOWN(-1);
 
     private final int typeCode;

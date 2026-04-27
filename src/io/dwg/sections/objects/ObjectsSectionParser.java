@@ -92,7 +92,10 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                             int typeCode = r.readBitShort();
                             DwgObjectType type = DwgObjectType.fromCode(typeCode);
                             String reason = (objSize < 0) ? "BadObjSize" : "NoReader";
-                            typeCodeStats.merge(type + " (FAIL-" + reason + ")", 1, Integer::sum);
+                            String typeStr = type == DwgObjectType.UNKNOWN
+                                ? String.format("UNKNOWN(0x%02X)", typeCode)
+                                : type.toString();
+                            typeCodeStats.merge(typeStr + " (FAIL-" + reason + ")", 1, Integer::sum);
                         } catch (Exception e2) {
                             typeCodeStats.merge("Unknown (FAIL)", 1, Integer::sum);
                         }
@@ -401,6 +404,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             case ATTDEF              -> new DwgAttdef();
             case ATTRIB              -> new DwgAttrib();
             case SEQEND              -> new DwgSeqEnd();
+            case ENDBLK              -> null;
             case INSERT              -> new DwgInsert();
             case MINSERT             -> new DwgMinsert();
             case VERTEX_2D           -> new DwgVertex2D();
@@ -460,8 +464,16 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             case LAYOUT              -> new DwgLayout();
             case PLACEHOLDER         -> new DwgPlaceholder();
             case VBA_PROJECT         -> new DwgVbaProject();
+            case LAYOUT_ALTERNATE    -> new DwgLayout();
             case UNUSED              -> null;
             case VP_ENT_HDR          -> null;
+            case STYLE_ALTERNATE     -> new DwgStyle();
+            case APPID_CONTROL       -> null;
+            case APPID_ALTERNATE     -> new DwgAppId();
+            case DIMSTYLE_CONTROL    -> null;
+            case DIMSTYLE_ALTERNATE  -> new DwgDimStyle();
+            case VX_CONTROL          -> null;
+            case MLINESTYLE_ALTERNATE -> new DwgMLineStyle();
             case UNKNOWN -> {
                 // Try custom type via classRegistry for R2000 custom classes
                 if (classRegistry != null) {
