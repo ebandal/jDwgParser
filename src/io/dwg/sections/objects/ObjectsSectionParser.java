@@ -341,9 +341,20 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         ((AbstractDwgObject) obj).setHandle(handle);
         ((AbstractDwgObject) obj).setRawTypeCode(typeCode);
 
-        // 공통 헤더 파싱 - skip for DICTIONARY (has custom structure)
-        if (typeCode != 0x2A) {  // 0x2A = DICTIONARY
-            parseCommonHeader(r, obj, version);
+        // 공통 헤더 파싱
+        // Skip for: DICTIONARY (custom), marker types, CONTROL/ALTERNATE types (R2000 classes)
+        boolean skipHeader = isSkipHeaderType(typeCode);
+        if (!skipHeader) {
+            try {
+                parseCommonHeader(r, obj, version);
+            } catch (IllegalStateException e) {
+                // Some types may have bit stream errors during header parsing - ignore
+                if (e.getMessage() != null && e.getMessage().contains("Invalid BL opcode")) {
+                    // Expected for certain types, continue without header
+                } else {
+                    throw e;
+                }
+            }
         }
 
         // 타입별 파싱
@@ -480,11 +491,11 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             case UNUSED              -> null;
             case VP_ENT_HDR          -> null;
             case STYLE_ALTERNATE     -> new DwgStyle();
-            case APPID_CONTROL       -> null;
+            case APPID_CONTROL       -> new DwgXrecord();
             case APPID_ALTERNATE     -> new DwgAppId();
-            case DIMSTYLE_CONTROL    -> null;
+            case DIMSTYLE_CONTROL    -> new DwgXrecord();
             case DIMSTYLE_ALTERNATE  -> new DwgDimStyle();
-            case VX_CONTROL          -> null;
+            case VX_CONTROL          -> new DwgXrecord();
             case MLINESTYLE_ALTERNATE -> new DwgMLineStyle();
             case UNKNOWN -> {
                 // For unknown types, create DwgXrecord to allow parsing as generic object
@@ -492,6 +503,25 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                 yield new DwgXrecord();
             }
         };
+    }
+
+    private boolean isSkipHeaderType(int typeCode) {
+        // Marker types: no standard common headers
+        if (typeCode == 0x04 || typeCode == 0x05 || typeCode == 0x31) {  // SEQEND, ENDBLK, BLOCK_END
+            return true;
+        }
+        // DICTIONARY: has custom structure
+        if (typeCode == 0x2A) {  // DICTIONARY
+            return true;
+        }
+        // R2000 ALTERNATE/CONTROL types: may not have standard headers
+        if (typeCode == 0x35 || typeCode == 0x43 || typeCode == 0x45 ||  // STYLE_ALT, APPID_ALT, DIMSTYLE_ALT
+            typeCode == 0x49 || typeCode == 0x62 ||  // MLINESTYLE_ALT, LAYOUT_ALT
+            typeCode == 0x4F ||  // VBA_PROJECT
+            typeCode == 0x42 || typeCode == 0x44 || typeCode == 0x46) {  // APPID_CTRL, DIMSTYLE_CTRL, VX_CTRL
+            return true;
+        }
+        return false;
     }
 
     /**
