@@ -254,6 +254,18 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                             // Type-specific parsing failed
                         }
                     });
+                } catch (IllegalStateException e) {
+                    // For marker types (SEQEND, BLOCK_END, ENDBLK), bit stream errors are expected
+                    // These types may not have standard headers in Objects section
+                    DwgObjectType objType = obj.objectType();
+                    if (objType == DwgObjectType.SEQEND || objType == DwgObjectType.BLOCK_END ||
+                        objType == DwgObjectType.ENDBLK) {
+                        // Treat as successfully parsed despite error
+                        // Object is already created and minimal fields are set
+                    } else {
+                        // Other types with parsing errors are problematic
+                        throw e;
+                    }
                 } catch (Exception e) {
                     // Common header parsing failed, but object is still valid
                 }
