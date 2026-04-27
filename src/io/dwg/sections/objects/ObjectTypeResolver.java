@@ -31,6 +31,7 @@ public class ObjectTypeResolver {
         resolver.register(new AttdefObjectReader());
         resolver.register(new AttribObjectReader());
         resolver.register(new SeqEndObjectReader());
+        resolver.register(new EndblkObjectReader());
         resolver.register(new InsertObjectReader());
         resolver.register(new MinsertObjectReader());
         resolver.register(new Vertex2DObjectReader());

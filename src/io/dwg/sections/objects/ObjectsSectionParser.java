@@ -404,7 +404,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             case ATTDEF              -> new DwgAttdef();
             case ATTRIB              -> new DwgAttrib();
             case SEQEND              -> new DwgSeqEnd();
-            case ENDBLK              -> null;
+            case ENDBLK              -> new DwgXrecord();
             case INSERT              -> new DwgInsert();
             case MINSERT             -> new DwgMinsert();
             case VERTEX_2D           -> new DwgVertex2D();
