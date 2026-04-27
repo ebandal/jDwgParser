@@ -56,51 +56,19 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
             throws Exception {
         Map<String, SectionInputStream> sections = new HashMap<>();
 
-        long pageMapOffset  = header.pageMapOffset();
-        long pageMapSizeComp = header.pageMapSizeComp();
-        long pageMapSizeUncomp = header.pageMapSizeUncomp();
-        long sectionsMapId = header.sectionMapId();
-        long sectionsMapSizeComp = header.sectionsMapSizeComp();
-        long sectionsMapSizeUncomp = header.sectionsMapSizeUncomp();
+        // NOTE: R2007+ structure is too complex to parse without proper RS header decoding
+        // Return empty sections to avoid crashes
+        if (header.pageMapOffset() == 0) return sections;
 
-        System.out.println("[DEBUG] readSections: pageMapOffset=0x" + Long.toHexString(pageMapOffset) +
-            " sectionMapId=" + sectionsMapId);
-
-        if (pageMapOffset == 0) {
-            System.out.println("[DEBUG] pageMapOffset is 0, returning empty sections");
-            return sections;
-        }
-
-        Lz77Decompressor lz77 = new Lz77Decompressor();
-
-        // For now, try to read SectionMap directly from a reasonable offset
-        // The exact offset depends on the RS-decoded header which we can't fully decode
-        // Try common offsets: 0x480 (after RS-encoded header)
-        System.out.println("[DEBUG] Trying direct SectionMap read from offset 0x480...");
-        byte[] smData = readRawBytes(input, 0x480, 0x10000);  // Read up to 64KB
-        R2007SectionMap sectionMap = R2007SectionMap.read(smData);
-        System.out.println("[DEBUG] SectionMap parsed, found " + sectionMap.descriptors().size() + " sections");
-
-        if (sectionMap.descriptors().isEmpty()) {
-            System.out.println("[DEBUG] No sections found, returning empty");
-            return sections;
-        }
-
-        // ④ 각 섹션 데이터 읽기
-        // For now, just return the sections as parsed from the SectionMap
-        // Full page assembly would require proper PageMap parsing
-        for (SectionDescriptor desc : sectionMap.descriptors()) {
-            try {
-                System.out.println("[DEBUG] Processing section: " + desc.name() +
-                    " (compressed=" + desc.compressedSize() + ", uncompressed=" + desc.uncompressedSize() + ")");
-                // TODO: Properly read section pages and decompress
-                // For now, return a placeholder
-                byte[] data = new byte[0];
-                sections.put(desc.name(), new SectionInputStream(data, desc.name()));
-            } catch (Exception e) {
-                System.out.println("[DEBUG]   → FAILED: " + e.getMessage());
-            }
-        }
+        // NOTE: R2007+ file structure is complex (RS encoding + LZ77 compression).
+        // Full implementation requires correctly decoding the RS-encoded header
+        // to extract exact PageMap and SectionMap offsets. For now, we return
+        // empty sections to prevent crashes on R2007+ files.
+        //
+        // Future work:
+        // 1. Fully debug RS header decoding
+        // 2. Find correct PageMap/SectionMap offsets in Arc.dwg
+        // 3. Implement proper section page assembly
 
         return sections;
     }
