@@ -18,6 +18,10 @@ public class FileHeaderFields {
     private long sectionMapOffset;  // R2004 only
     private long pageMapOffset;     // R2007+ only
     private long sectionMapId;      // R2007+ only (page ID of section map)
+    private long pageMapSizeComp;   // R2007+ only
+    private long pageMapSizeUncomp; // R2007+ only
+    private long sectionsMapSizeComp;   // R2007+ only
+    private long sectionsMapSizeUncomp; // R2007+ only
     private Map<String, Long> sectionOffsets;
     private Map<String, Long> sectionSizes;
     private List<?> sectionLocators;  // R13/R14/R2000 (R13SectionLocator or R2000SectionLocator)
@@ -134,6 +138,38 @@ public class FileHeaderFields {
 
     public void setSectionLocators(List<?> locators) {
         this.sectionLocators = locators;
+    }
+
+    public long pageMapSizeComp() {
+        return pageMapSizeComp;
+    }
+
+    public void setPageMapSizeComp(long size) {
+        this.pageMapSizeComp = size;
+    }
+
+    public long pageMapSizeUncomp() {
+        return pageMapSizeUncomp;
+    }
+
+    public void setPageMapSizeUncomp(long size) {
+        this.pageMapSizeUncomp = size;
+    }
+
+    public long sectionsMapSizeComp() {
+        return sectionsMapSizeComp;
+    }
+
+    public void setSectionsMapSizeComp(long size) {
+        this.sectionsMapSizeComp = size;
+    }
+
+    public long sectionsMapSizeUncomp() {
+        return sectionsMapSizeUncomp;
+    }
+
+    public void setSectionsMapSizeUncomp(long size) {
+        this.sectionsMapSizeUncomp = size;
     }
 
     @Override

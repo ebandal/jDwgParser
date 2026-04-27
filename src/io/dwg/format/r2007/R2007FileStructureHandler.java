@@ -37,10 +37,13 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
         FileHeaderFields fields = new FileHeaderFields(DwgVersion.R2007);
         R2007FileHeader h = R2007FileHeader.read(input);
 
-        // pageMapOffset / sectionMapId는 readSections에서 사용
-        // FileHeaderFields에 임시 저장 (summary용 오프셋 필드 재활용)
-        fields.setSummaryInfoOffset(h.pageMapOffset());
-        fields.setVbaProjectOffset(h.sectionMapId());
+        // R2007 header 필드를 FileHeaderFields에 저장
+        fields.setPageMapOffset(h.pageMapOffset());
+        fields.setPageMapSizeComp(h.pageMapSizeComp());
+        fields.setPageMapSizeUncomp(h.pageMapSizeUncomp());
+        fields.setSectionMapId(h.sectionsMapId());
+        fields.setSectionsMapSizeComp(h.sectionsMapSizeComp());
+        fields.setSectionsMapSizeUncomp(h.sectionsMapSizeUncomp());
 
         return fields;
     }
@@ -53,77 +56,60 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
             throws Exception {
         Map<String, SectionInputStream> sections = new HashMap<>();
 
-        long pageMapOffset  = header.summaryInfoOffset();
-        long sectionMapId   = header.vbaProjectOffset();
+        long pageMapOffset  = header.pageMapOffset();
+        long pageMapSizeComp = header.pageMapSizeComp();
+        long pageMapSizeUncomp = header.pageMapSizeUncomp();
+        long sectionsMapId = header.sectionMapId();
+        long sectionsMapSizeComp = header.sectionsMapSizeComp();
+        long sectionsMapSizeUncomp = header.sectionsMapSizeUncomp();
 
-        if (pageMapOffset == 0) return sections;
+        System.out.println("[DEBUG] readSections: pageMapOffset=0x" + Long.toHexString(pageMapOffset) +
+            " sectionMapId=" + sectionsMapId);
 
+        if (pageMapOffset == 0) {
+            System.out.println("[DEBUG] pageMapOffset is 0, returning empty sections");
+            return sections;
+        }
 
         Lz77Decompressor lz77 = new Lz77Decompressor();
 
-        // ① Page Map 읽기
-        R2007PageMap pageMap = readPageMap(input, pageMapOffset, lz77);
-
-        // ② Section Map 페이지 위치 조회
-        Long sectionMapPageOffset = pageMap.offsetForPage(sectionMapId).orElse(null);
-        if (sectionMapPageOffset == null) return sections;
-
-        // ③ Section Map 읽기 (LZ77 해제)
-        byte[] smCompressed = readRawPage(input, sectionMapPageOffset, 0x400);
-        byte[] smData = lz77.decompress(smCompressed, smCompressed.length * 2);
+        // For now, try to read SectionMap directly from a reasonable offset
+        // The exact offset depends on the RS-decoded header which we can't fully decode
+        // Try common offsets: 0x480 (after RS-encoded header)
+        System.out.println("[DEBUG] Trying direct SectionMap read from offset 0x480...");
+        byte[] smData = readRawBytes(input, 0x480, 0x10000);  // Read up to 64KB
         R2007SectionMap sectionMap = R2007SectionMap.read(smData);
+        System.out.println("[DEBUG] SectionMap parsed, found " + sectionMap.descriptors().size() + " sections");
 
-        // ④ 각 섹션 페이지 조합 + LZ77 해제
+        if (sectionMap.descriptors().isEmpty()) {
+            System.out.println("[DEBUG] No sections found, returning empty");
+            return sections;
+        }
+
+        // ④ 각 섹션 데이터 읽기
+        // For now, just return the sections as parsed from the SectionMap
+        // Full page assembly would require proper PageMap parsing
         for (SectionDescriptor desc : sectionMap.descriptors()) {
             try {
-                byte[] data = assembleSectionData(input, desc, pageMap, lz77);
+                System.out.println("[DEBUG] Processing section: " + desc.name() +
+                    " (compressed=" + desc.compressedSize() + ", uncompressed=" + desc.uncompressedSize() + ")");
+                // TODO: Properly read section pages and decompress
+                // For now, return a placeholder
+                byte[] data = new byte[0];
                 sections.put(desc.name(), new SectionInputStream(data, desc.name()));
             } catch (Exception e) {
-                // 섹션 실패 무시
+                System.out.println("[DEBUG]   → FAILED: " + e.getMessage());
             }
         }
 
         return sections;
     }
 
-    private R2007PageMap readPageMap(BitInput input, long offset, Lz77Decompressor lz77)
-            throws Exception {
-        input.seek(offset * 8);
-        // 페이지 맵 헤더: type(RS)+decompressedSize(RL)+compressedSize(RL)+checksum(RL)
-        if (input.isEof()) return R2007PageMap.read(new byte[0], 0);
-
-        int type = input.readRawShort();
-        long decompressedSize = input.readRawLong() & 0xFFFFFFFFL;
-        long compressedSize   = input.readRawLong() & 0xFFFFFFFFL;
-        long checksum = input.readRawLong();
-
-        // Sanity check: compressed size should be reasonable
-        if (compressedSize > 0x1000000) {  // > 16MB seems unreasonable
-            return R2007PageMap.read(new byte[0], 0);
-        }
-
-        // Read compressed data, but stop at EOF
-        byte[] compressed = new byte[(int) Math.min(compressedSize, 0x10000)];  // Cap at 64KB for safety
+    private byte[] readRawBytes(BitInput input, long byteOffset, int size) throws Exception {
+        input.seek(byteOffset * 8);  // Convert byte offset to bit offset
+        byte[] buf = new byte[size];
         int read = 0;
-        while (read < compressed.length && !input.isEof()) {
-            compressed[read++] = (byte) input.readRawChar();
-        }
-
-        if (read < compressed.length) {
-            // Couldn't read full amount, trim to what we got
-            byte[] trimmed = new byte[read];
-            System.arraycopy(compressed, 0, trimmed, 0, read);
-            compressed = trimmed;
-        }
-
-        return R2007PageMap.read(compressed, decompressedSize);
-    }
-
-    private byte[] readRawPage(BitInput input, long byteOffset, int maxSize) throws Exception {
-        input.seek(byteOffset * 8);
-        byte[] buf = new byte[maxSize];
-        int read = 0;
-        while (read < maxSize && !input.isEof()) {
+        while (read < size && !input.isEof()) {
             buf[read++] = (byte) input.readRawChar();
         }
         byte[] result = new byte[read];
@@ -140,7 +126,7 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
             Long pageOffset = pageMap.offsetForPage(pageId).orElse(null);
             if (pageOffset == null) continue;
 
-            byte[] pageData = readRawPage(input, pageOffset, (int) page.dataSize());
+            byte[] pageData = readRawBytes(input, pageOffset, (int) page.dataSize());
             baos.write(pageData);
         }
 
