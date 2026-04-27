@@ -16,6 +16,7 @@ public class R2007FileHeader {
     private long pageMapOffset;
     private long pageMapSizeComp;
     private long pageMapSizeUncomp;
+    private long pageMapCorrection;
     private long sectionsMapId;
     private long sectionsMapSizeComp;
     private long sectionsMapSizeUncomp;
@@ -98,6 +99,7 @@ public class R2007FileHeader {
 
         // Extract fields from decompressed header - all LE64
         // Per libredwg dwg.h struct r2007_file_header
+        h.pageMapCorrection = ByteUtils.readLE64(decompressedHeader, 24);  // repeat_count for system page
         h.pageMapOffset = ByteUtils.readLE64(decompressedHeader, 56);
         h.pageMapSizeComp = ByteUtils.readLE64(decompressedHeader, 80);
         h.pageMapSizeUncomp = ByteUtils.readLE64(decompressedHeader, 88);
@@ -147,6 +149,7 @@ public class R2007FileHeader {
     }
 
     public long pageMapOffset() { return pageMapOffset; }
+    public long pageMapCorrection() { return pageMapCorrection; }
     public long pageMapSizeComp() { return pageMapSizeComp; }
     public long pageMapSizeUncomp() { return pageMapSizeUncomp; }
     public long sectionsMapId() { return sectionsMapId; }
