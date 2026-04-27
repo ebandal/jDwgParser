@@ -56,19 +56,18 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
             throws Exception {
         Map<String, SectionInputStream> sections = new HashMap<>();
 
-        // NOTE: R2007+ structure is too complex to parse without proper RS header decoding
-        // Return empty sections to avoid crashes
-        if (header.pageMapOffset() == 0) return sections;
-
-        // NOTE: R2007+ file structure is complex (RS encoding + LZ77 compression).
-        // Full implementation requires correctly decoding the RS-encoded header
-        // to extract exact PageMap and SectionMap offsets. For now, we return
-        // empty sections to prevent crashes on R2007+ files.
+        // BLOCKED: R2007+ section parsing requires RS header decompression fix
+        // Status:
+        // - RS decoding: ✅ Works (717 bytes)
+        // - LZ77 decompression: ❌ Produces invalid header values
+        // - pages_map_offset: Unknown (can't parse)
         //
-        // Future work:
-        // 1. Fully debug RS header decoding
-        // 2. Find correct PageMap/SectionMap offsets in Arc.dwg
-        // 3. Implement proper section page assembly
+        // Debugging findings:
+        // - Decompressed data contains garbage values outside valid ranges
+        // - Suggests LZ77 algorithm doesn't match Arc.dwg format
+        // - Or header field offsets differ from libredwg documentation
+        //
+        // Return empty sections to prevent crashes while investigating
 
         return sections;
     }
