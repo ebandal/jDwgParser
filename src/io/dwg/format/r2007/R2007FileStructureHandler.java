@@ -99,7 +99,8 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
                 // Extract Objects section (Section 6)
                 if (sectionMap.size() > 6) {
                     R2007SectionMapParser.SectionMapEntry objectsSection = sectionMap.get(6);
-                    byte[] objectsData = extractObjectsData(fileData, objectsSection, pageMap);
+                    byte[] objectsData = extractObjectsData(fileData, objectsSection, pageMap,
+                        r2007Header.pageMapOffset());
                     if (objectsData != null && objectsData.length > 0) {
                         sections.put("Objects", new SectionInputStream(
                             objectsData, "Objects"));
@@ -119,7 +120,8 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
      */
     private byte[] extractObjectsData(byte[] fileData,
             R2007SectionMapParser.SectionMapEntry objectsSection,
-            java.util.List<R2007PageMapParser.PageMapEntry> pageMap) throws Exception {
+            java.util.List<R2007PageMapParser.PageMapEntry> pageMap,
+            long pageMapOffset) throws Exception {
 
         byte[] allObjectsData = new byte[(int)objectsSection.dataSize];
         int objectsOffset = 0;
@@ -131,13 +133,8 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
             long filePageOffset = -1, pageSize = -1, cumul = 0;
             for (R2007PageMapParser.PageMapEntry pm : pageMap) {
                 if (pm.pageId == page.id) {
-                    filePageOffset = 0x480L + pageMap.get(0).pageId + cumul;
-                    // Actually use the correct offset calculation from header
-                    for (R2007PageMapParser.PageMapEntry pm2 : pageMap) {
-                        if (pm2 == pm) break;
-                        cumul += pm2.size;
-                    }
-                    // This is an approximation - proper implementation needs FileHeaderFields
+                    filePageOffset = 0x480L + pageMapOffset + cumul;
+                    pageSize = pm.size;
                     break;
                 }
                 cumul += pm.size;
