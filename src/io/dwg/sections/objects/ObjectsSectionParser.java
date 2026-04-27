@@ -245,30 +245,21 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                 ((AbstractDwgObject) obj).setRawTypeCode(typeCode);
 
                 // Parse common header and type-specific data
-                try {
-                    parseCommonHeader(r, obj, version);
-                    resolver.resolve(typeCode).ifPresent(reader -> {
-                        try {
-                            reader.read(obj, r, version);
-                        } catch (Exception e) {
-                            // Type-specific parsing failed
-                        }
-                    });
-                } catch (IllegalStateException e) {
-                    // For marker types (SEQEND, BLOCK_END, ENDBLK), bit stream errors are expected
-                    // These types may not have standard headers in Objects section
-                    DwgObjectType objType = obj.objectType();
-                    if (objType == DwgObjectType.SEQEND || objType == DwgObjectType.BLOCK_END ||
-                        objType == DwgObjectType.ENDBLK) {
-                        // Treat as successfully parsed despite error
-                        // Object is already created and minimal fields are set
-                    } else {
-                        // Other types with parsing errors are problematic
-                        throw e;
+                boolean skipHeaderStreaming = isSkipHeaderType(typeCode);
+                if (!skipHeaderStreaming) {
+                    try {
+                        parseCommonHeader(r, obj, version);
+                    } catch (Exception e) {
+                        // Common header parsing failed, but object is still valid
                     }
-                } catch (Exception e) {
-                    // Common header parsing failed, but object is still valid
                 }
+                resolver.resolve(typeCode).ifPresent(reader -> {
+                    try {
+                        reader.read(obj, r, version);
+                    } catch (Exception e) {
+                        // Type-specific parsing failed
+                    }
+                });
 
                 // Store object
                 result.put(nextHandle, obj);
