@@ -28,15 +28,14 @@ public class R2007PageMap {
             data = compressed;
         }
 
-        // 각 항목: pageId(RL=4) + offset(RL=4)
+        // 각 항목: pageId(RL=4) + size(RL=4)
+        // pageId 0은 SectionMap (must be included), pageId > 0은 section data
         int pos = 0;
         long runningOffset = 0x480; // 헤더 이후 시작 오프셋 (R2007 기본값)
         while (pos + 8 <= data.length) {
             long pageId = ByteUtils.readLE32(data, pos);  pos += 4;
             long size   = ByteUtils.readLE32(data, pos);  pos += 4;
-            if (pageId > 0) {
-                map.pageOffsets.put(pageId, runningOffset);
-            }
+            map.pageOffsets.put(pageId, runningOffset);  // Include all pages, including pageId 0
             runningOffset += size;
         }
 
