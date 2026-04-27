@@ -475,15 +475,9 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             case VX_CONTROL          -> null;
             case MLINESTYLE_ALTERNATE -> new DwgMLineStyle();
             case UNKNOWN -> {
-                // Try custom type via classRegistry for R2000 custom classes
-                if (classRegistry != null) {
-                    var classDef = classRegistry.find(typeCode);
-                    if (classDef.isPresent()) {
-                        // Use DwgXrecord as a generic container for custom types
-                        yield new DwgXrecord();
-                    }
-                }
-                yield null;
+                // For unknown types, create DwgXrecord to allow parsing as generic object
+                // This handles custom R2000 types (0xF401-0xFC01) and other extensions
+                yield new DwgXrecord();
             }
         };
     }
