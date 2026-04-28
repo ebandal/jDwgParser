@@ -8,6 +8,7 @@ public class ByteLevelLz77Decompressor implements Lz77DecompressorInterface {
 
     @Override
     public byte[] decompress(byte[] compressed, int expectedSize) throws Exception {
-        return decode.util.R2004Lz77.decompress(compressed, expectedSize);
+        Lz77Decompressor lz77 = new Lz77Decompressor();
+        return lz77.decompress(compressed, expectedSize);
     }
 }

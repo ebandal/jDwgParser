@@ -13,8 +13,6 @@ import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
-
-import decode.util.R2004Lz77;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -440,9 +438,10 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
                 }
 
                 if (page.compSize < page.decompSize) {
-                    // Need to decompress using verified R2004Lz77
+                    // Need to decompress using verified Lz77
                     try {
-                        byte[] pageDecomp = R2004Lz77.decompress(compressedData, page.decompSize);
+                        io.dwg.core.util.Lz77Decompressor lz77 = new io.dwg.core.util.Lz77Decompressor();
+                        byte[] pageDecomp = lz77.decompress(compressedData, page.decompSize);
                         decompressed.write(pageDecomp);
                         System.out.printf("[DEBUG] R2004: Section %d page decompressed %d -> %d bytes\n",
                             sectionNum, page.compSize, pageDecomp.length);
@@ -535,7 +534,8 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
             // Decompress if needed
             byte[] mapData = compressedData;
             if (compressionType == 2 && compSize < decompSize) {
-                mapData = R2004Lz77.decompress(compressedData, decompSize);
+                io.dwg.core.util.Lz77Decompressor lz77 = new io.dwg.core.util.Lz77Decompressor();
+                mapData = lz77.decompress(compressedData, decompSize);
                 System.out.printf("[DEBUG] R2004: Section map decompressed %d -> %d bytes\n",
                     compSize, mapData.length);
             }
