@@ -6,6 +6,7 @@ import io.dwg.core.io.ByteBufferBitInput;
 import io.dwg.core.io.SectionInputStream;
 import io.dwg.core.util.Lz77Decompressor;
 import io.dwg.core.util.Lz77Compressor;
+import io.dwg.core.util.ReedSolomon251Decoder;
 import io.dwg.core.version.DwgVersion;
 import io.dwg.format.common.AbstractFileStructureHandler;
 import io.dwg.format.common.FileHeaderFields;
@@ -155,6 +156,15 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
                     if (srcOffset < rsData.length) {
                         blocks[i][j] = rsData[srcOffset];
                     }
+                }
+            }
+
+            // Apply RS(255,251) error correction to each block
+            for (int i = 0; i < blockCount; i++) {
+                int corrected = ReedSolomon251Decoder.decodeBlock(blocks[i], true);
+                if (corrected < 0) {
+                    System.err.println("[WARN] RS(255,251) decode failed for block " + i +
+                        " in Objects section page " + p);
                 }
             }
 
