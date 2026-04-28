@@ -517,6 +517,25 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             case DIMSTYLE_ALTERNATE  -> new DwgDimStyle();
             case VX_CONTROL          -> new DwgXrecord();
             case MLINESTYLE_ALTERNATE -> new DwgMLineStyle();
+            case IMAGE               -> new DwgImage();
+            case WIPEOUT             -> new DwgWipeout();
+            case XREF                -> new DwgXref();
+            case UNDERLAY            -> new DwgUnderlay();
+            case SURFACE             -> new DwgSurface();
+            case MESH                -> new DwgMesh();
+            case SCALE               -> new DwgScale();
+            case VISUALSTYLE         -> new DwgVisualStyle();
+            case ACAD_FIELD          -> new DwgField();
+            case ACAD_PROXY_ENTITY   -> new DwgProxyEntity();
+            case ACAD_DICTIONARYVAR  -> new DwgDictionaryVar();
+            case ACAD_TABLE          -> new DwgTable();
+            case ACAD_SCALE_LIST     -> new DwgScaleList();
+            case ACAD_TABLESTYLE     -> new DwgTableStyle();
+            case ACAD_CELLSTYLE      -> new DwgCellStyle();
+            case ACAD_PLOTSTYLE      -> new DwgPlotStyle();
+            case ACAD_MATERIAL       -> new DwgMaterial();
+            case ACAD_DATASOURCE     -> new DwgDataSource();
+            case ACAD_PERSSUBENTMANAGER -> new DwgPersSubentManager();
             case UNKNOWN -> {
                 // For unknown types, create DwgXrecord to allow parsing as generic object
                 // This handles custom R2000 types (0xF401-0xFC01) and other extensions

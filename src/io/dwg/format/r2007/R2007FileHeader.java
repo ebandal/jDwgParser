@@ -66,6 +66,16 @@ public class R2007FileHeader {
         // Read metadata from decoded header (first 32 bytes)
         long comprLen = ByteUtils.readLE32(decodedHeader, 24) & 0xFFFFFFFFL;
 
+        // VALIDATION: Sanity check for corrupted comprLen
+        // Reasonable compressed header size: 50-300 bytes
+        // Available data: decodedHeader.length - 32
+        if (comprLen == 0 || comprLen > 1000 || comprLen > decodedHeader.length - 32) {
+            System.out.printf("[WARN] R2007/R2010+ header: Invalid comprLen=%d (available=%d)\n",
+                comprLen, decodedHeader.length - 32);
+            System.out.println("[WARN] RS decoder likely corrupted for this R2010+ file");
+            throw new Exception("R2010+ RS decoding failed: corrupted comprLen field");
+        }
+
         // Decompress the header if needed
         byte[] decompressedHeader;
         if (comprLen > 0) {

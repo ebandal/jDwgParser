@@ -438,9 +438,9 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
                 }
 
                 if (page.compSize < page.decompSize) {
-                    // Need to decompress using verified Lz77
+                    // R2004 uses R2004-specific LZ77 decompression (not generic R2007)
                     try {
-                        io.dwg.core.util.Lz77Decompressor lz77 = new io.dwg.core.util.Lz77Decompressor();
+                        io.dwg.core.util.R2004Lz77Decompressor lz77 = new io.dwg.core.util.R2004Lz77Decompressor();
                         byte[] pageDecomp = lz77.decompress(compressedData, page.decompSize);
                         decompressed.write(pageDecomp);
                         System.out.printf("[DEBUG] R2004: Section %d page decompressed %d -> %d bytes\n",
@@ -534,7 +534,8 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
             // Decompress if needed
             byte[] mapData = compressedData;
             if (compressionType == 2 && compSize < decompSize) {
-                io.dwg.core.util.Lz77Decompressor lz77 = new io.dwg.core.util.Lz77Decompressor();
+                // R2004 uses R2004-specific LZ77 decompression
+                io.dwg.core.util.R2004Lz77Decompressor lz77 = new io.dwg.core.util.R2004Lz77Decompressor();
                 mapData = lz77.decompress(compressedData, decompSize);
                 System.out.printf("[DEBUG] R2004: Section map decompressed %d -> %d bytes\n",
                     compSize, mapData.length);

@@ -89,6 +89,25 @@ public class ObjectTypeResolver {
         resolver.register(new DictionaryObjectReader());
         resolver.register(new GroupObjectReader());
         resolver.register(new XrecordObjectReader());
+        resolver.register(new ImageObjectReader());
+        resolver.register(new WipeoutObjectReader());
+        resolver.register(new XrefObjectReader());
+        resolver.register(new UnderlayObjectReader());
+        resolver.register(new SurfaceObjectReader());
+        resolver.register(new MeshObjectReader());
+        resolver.register(new ScaleObjectReader());
+        resolver.register(new VisualStyleObjectReader());
+        resolver.register(new FieldObjectReader());
+        resolver.register(new ProxyEntityObjectReader());
+        resolver.register(new DictionaryVarObjectReader());
+        resolver.register(new TableObjectReader());
+        resolver.register(new ScaleListObjectReader());
+        resolver.register(new TableStyleObjectReader());
+        resolver.register(new CellStyleObjectReader());
+        resolver.register(new PlotStyleObjectReader());
+        resolver.register(new MaterialObjectReader());
+        resolver.register(new DataSourceObjectReader());
+        resolver.register(new PersSubentManagerObjectReader());
         return resolver;
     }
 }
