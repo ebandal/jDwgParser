@@ -117,8 +117,9 @@ public class TestObjectsExtractionV2 {
                     System.arraycopy(fileData, (int)filePageOffset, rsData, 0, (int)pageSize);
 
                     // RS decode: R2007 data pages use RS(255, 251)
-                    // block_count = (comp_size + 0xFB - 1) / 0xFB  where 0xFB = 251
-                    long blockCount = (page.compSize + 0xFB - 1) / 0xFB;
+                    // Per libredwg: round compSize to multiple of 8, then calculate blockCount
+                    long pesize = (page.compSize + 7) & ~7L;
+                    long blockCount = (pesize + 250) / 251;
 
                     // Deinterleave and RS decode
                     byte[][] blocks = new byte[(int)blockCount][255];

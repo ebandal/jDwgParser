@@ -116,7 +116,9 @@ public class TestObjectsExtractionAllFiles {
                     System.arraycopy(fileData, (int)filePageOffset, rsData, 0, (int)pageSize);
 
                     // RS decode: RS(255, 251)
-                    long blockCount = (page.compSize + 0xFB - 1) / 0xFB;
+                    // Per libredwg: round compSize to multiple of 8, then calculate blockCount
+                    long pesize = (page.compSize + 7) & ~7L;
+                    long blockCount = (pesize + 250) / 251;
                     byte[][] blocks = new byte[(int)blockCount][255];
                     for (int i = 0; i < blockCount; i++) {
                         for (int j = 0; j < 255; j++) {
