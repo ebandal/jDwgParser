@@ -159,6 +159,19 @@ public class HandlesParsingUtil {
                 pairsRead++;
             }
 
+            // R2007+ Handles: Align to byte boundary before reading CRC
+            // Variable-length pair encoding may leave stream at non-byte-aligned position
+            long currentPos = reader.position();
+            if ((currentPos % 8) != 0) {
+                // Skip padding bits to reach next byte boundary
+                int paddingBits = 8 - (int)(currentPos % 8);
+                reader.getInput().readBits(paddingBits);
+                if (pairsRead < 10 || pairsRead % 50 == 0) {
+                    System.out.printf("[DEBUG] HandlesParsingUtil: Byte-aligned from bit pos %d (skip %d bits)\n",
+                        currentPos, paddingBits);
+                }
+            }
+
             // CRC 읽기 (big-endian, seed=0xC0C1)
             int crc = reader.readBigEndianShort();
             System.out.printf("[DEBUG] HandlesParsingUtil: Page %d: %d pairs, %d bytes, CRC=0x%04X\n",
