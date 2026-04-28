@@ -97,14 +97,29 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
                 java.util.List<R2007SectionMapParser.SectionMapEntry> sectionMap =
                     R2007SectionMapParser.parseSectionMap(sectionMapDecompressed);
 
-                // Extract Objects section (Section 6)
-                if (sectionMap.size() > 6) {
-                    R2007SectionMapParser.SectionMapEntry objectsSection = sectionMap.get(6);
-                    byte[] objectsData = extractObjectsData(fileData, objectsSection, pageMap,
+                // Extract all sections from SectionMap
+                // Known section indices:
+                // 0-5: Auxiliary sections (various metadata)
+                // 6: Objects section (handles/entities)
+                // 7+: More auxiliary sections
+                for (int i = 0; i < sectionMap.size(); i++) {
+                    R2007SectionMapParser.SectionMapEntry section = sectionMap.get(i);
+                    byte[] sectionData = extractObjectsData(fileData, section, pageMap,
                         r2007Header.pageMapOffset());
-                    if (objectsData != null && objectsData.length > 0) {
-                        sections.put("Objects", new SectionInputStream(
-                            objectsData, "Objects"));
+
+                    if (sectionData != null && sectionData.length > 0) {
+                        // Map sections by index, known sections get proper names
+                        String sectionName;
+                        if (i == 6) {
+                            sectionName = "AcDb:AcDbObjects";
+                        } else if (i == 9) {
+                            sectionName = "AcDb:Handles";
+                        } else {
+                            sectionName = "Section" + i;
+                        }
+                        sections.put(sectionName, new SectionInputStream(sectionData, sectionName));
+                        System.out.printf("[DEBUG] R2007: Section %d = '%s' (%d bytes)\n",
+                            i, sectionName, sectionData.length);
                     }
                 }
             }
