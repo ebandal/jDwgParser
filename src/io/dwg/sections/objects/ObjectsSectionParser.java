@@ -44,9 +44,37 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         System.out.printf("[DEBUG] Objects: version=%s, handles=%d\n",
             version, handles != null ? handles.allHandles().size() : 0);
 
+        // Check if offset-based parsing is viable
+        // For R2007+, Handles format can be corrupted - detect and use sequential parsing
+        boolean useSequentialParsing = false;
+
+        if (handles != null && !handles.allHandles().isEmpty() && version.from(DwgVersion.R2007)) {
+            // R2007+: Check if handle offsets are corrupted (negative or way out of range)
+            byte[] raw = stream.rawBytes();
+            long negativeCount = 0;
+            long outOfRangeCount = 0;
+
+            for (long h : handles.allHandles()) {
+                var offset = handles.offsetFor(h);
+                if (offset.isPresent()) {
+                    long off = offset.get();
+                    if (off < 0) negativeCount++;
+                    if (off < 0 || off >= raw.length) outOfRangeCount++;
+                }
+            }
+
+            // If >20% of offsets are invalid, use sequential parsing
+            double invalidRatio = (double) outOfRangeCount / handles.allHandles().size();
+            if (invalidRatio > 0.2) {
+                System.out.printf("[DEBUG] Objects: R2007+ detected %d negative offsets, %d out-of-range (%.1f%%) - switching to sequential parsing\n",
+                    negativeCount, outOfRangeCount, invalidRatio * 100);
+                useSequentialParsing = true;
+            }
+        }
+
         // All DWG versions (R13~R2018) use offset-based parsing when handle registry is available
         // Objects section starts at offset 0 with no header
-        if (handles != null && !handles.allHandles().isEmpty()) {
+        if (!useSequentialParsing && handles != null && !handles.allHandles().isEmpty()) {
             byte[] raw = stream.rawBytes();
             System.out.printf("[DEBUG] Objects: Offset-based parsing, %d handles, section size=%d bytes\n",
                 handles.allHandles().size(), raw.length);
@@ -119,10 +147,11 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             System.out.printf("[DEBUG] Objects: Offset-based parse complete: %d/%d success, %d failed, %d skipped (out-of-range)\n",
                 successCount, handles.allHandles().size() - outOfRangeCount, failureCount, outOfRangeCount);
         } else {
-            // No handle registry: extract and parse for R2000
-            System.out.printf("[DEBUG] Objects: No handle registry, processing R2000 combined section\n");
+            // No handle registry or corrupted offsets: use sequential parsing
+            System.out.printf("[DEBUG] Objects: Using sequential parsing%s\n",
+                useSequentialParsing ? " (R2007+ offset-based fallback)" : "");
 
-            if (version == DwgVersion.R2000) {
+            if (version == DwgVersion.R2000 && !useSequentialParsing) {
                 result = parseR2000Combined(stream, version);
             } else {
                 result = parseStreaming(stream, version);
