@@ -220,7 +220,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         Map<Long, DwgObject> result = new HashMap<>();
         byte[] raw = stream.rawBytes();
         long nextHandle = 1;
-        int offset = 0;  // Objects section starts at offset 0 (no header)
+        int offset = 0;  // Objects section starts at offset 0 (no header per spec)
         int parsedCount = 0;
         int attemptCount = 0;
 
