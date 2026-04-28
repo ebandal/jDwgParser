@@ -163,7 +163,9 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
             System.arraycopy(fileData, (int)filePageOffset, rsData, 0, (int)pageSize);
 
             // Deinterleave blocks for RS(255,251)
-            long blockCount = (page.compSize + 0xFB - 1) / 0xFB;
+            // Per libredwg: round compSize to multiple of 8, then calculate blockCount
+            long pesize = (page.compSize + 7) & ~7L;  // Round to nearest multiple of 8
+            long blockCount = (pesize + 250) / 251;
             byte[][] blocks = new byte[(int)blockCount][255];
             for (int i = 0; i < blockCount; i++) {
                 for (int j = 0; j < 255; j++) {

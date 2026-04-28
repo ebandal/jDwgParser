@@ -210,4 +210,4 @@ pair[208]: hDelta=0x278 cumH=0x4302F0 oDelta=1 cumO=-104186486
 pair[209]: hDelta=0x113C8D cumH=0x543F7D oDelta=1 cumO=-104186485
 pair[210]: hDelta=0x1A82B cumH=0x55E7A8 oDelta=1 cumO=-104186484
 pair[211]: hDelta=0x11A9B8 cumH=0x679160 oDelta=1 cumO=-104186483
-pair[0]: hDelta=0x1166D7 cumH=0x78F837 oDelta=0 cumO=-104186483
+pair[212]: hDelta=0x167CE cumH=0x68F92E oDelta=1 cumO=-104186482

@@ -120,10 +120,11 @@ public class HandlesParsingUtil {
 
             System.out.printf("[DEBUG] HandlesParsingUtil: Page %d size=%d\n", pageNum, pageSize);
 
-            // Handle-offset 쌍 파싱 (pageSize - 4 bytes)
+            // Handle-offset 쌍 파싱 (pageSize - 2 bytes: only subtract size field, CRC is after pairs)
+            // Page structure: [pageSize(2)] [pairs(pageSize-2)] [CRC(2)] [Total: pageSize+2]
             int pairsRead = 0;
             int bytesRead = 0;
-            int pairsDataSize = pageSize - 4;  // Subtract 2 for page size, 2 for CRC
+            int pairsDataSize = pageSize - 2;  // pageSize includes 2-byte size field, pairs go from byte 2 to byte (pageSize-2)
 
             while (bytesRead < pairsDataSize && !reader.isEof()) {
                 long beforePos = reader.position();
