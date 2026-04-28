@@ -64,25 +64,21 @@ public class R2007FileHeader {
         }
 
         // Read metadata from decoded header (first 32 bytes)
-        long comprLen = ByteUtils.readLE32(decodedHeader, 24) & 0xFFFFFFFFL;
+        // libredwg reads compr_len as int32_t (signed) at offset 24
+        int comprLen = (int) ByteUtils.readLE32(decodedHeader, 24);
 
-        // VALIDATION: Sanity check for corrupted comprLen
-        // Reasonable compressed header size: 50-300 bytes
-        // Available data: decodedHeader.length - 32
-        if (comprLen == 0 || comprLen > 1000 || comprLen > decodedHeader.length - 32) {
-            System.out.printf("[WARN] R2007/R2010+ header: Invalid comprLen=%d (available=%d)\n",
-                comprLen, decodedHeader.length - 32);
-            System.out.println("[WARN] RS decoder likely corrupted for this R2010+ file");
-            throw new Exception("R2010+ RS decoding failed: corrupted comprLen field");
+        // Sanity check: comprLen must fit in available data (decodedHeader.length - 32)
+        if (comprLen < 0 || comprLen > decodedHeader.length - 32) {
+            throw new Exception("R2007 header: invalid comprLen=" + comprLen
+                + " (available=" + (decodedHeader.length - 32) + ")");
         }
 
         // Decompress the header if needed
         byte[] decompressedHeader;
         if (comprLen > 0) {
             try {
-                int comprLenInt = (int)(comprLen & 0xFFFFFFFFL);
-                byte[] compressed = new byte[comprLenInt];
-                System.arraycopy(decodedHeader, 32, compressed, 0, comprLenInt);
+                byte[] compressed = new byte[comprLen];
+                System.arraycopy(decodedHeader, 32, compressed, 0, comprLen);
                 Lz77Decompressor lz77 = new Lz77Decompressor();
                 decompressedHeader = lz77.decompress(compressed, 272);
             } catch (Exception e) {

@@ -32,7 +32,12 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
 
     @Override
     public boolean supports(DwgVersion version) {
-        return version == DwgVersion.R2004;
+        // libredwg uses decode_R2004 for R2010+ as well (see decode.c line 222-226).
+        // R2010, R2013, R2018 share the R2004 file structure with different version strings.
+        return version == DwgVersion.R2004
+            || version == DwgVersion.R2010
+            || version == DwgVersion.R2013
+            || version == DwgVersion.R2018;
     }
 
     // -------------------------------------------------------------------------
@@ -43,19 +48,22 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         FileHeaderFields fields = new FileHeaderFields(DwgVersion.R2004);
 
         // 파일 헤더 구조 (스펙 §4.1, DecoderR2004 기반):
-        // 0x00-0x05: "AC1018" (버전 문자열)
+        // 0x00-0x05: 버전 문자열 (AC1018=R2004, AC1024=R2010, AC1027=R2013, AC1032=R2018)
         // 0x06-0x79: 라이브 데이터 필드들 (미암호화)
         // 0x7A-0xE5: 암호화된 헤더 (0x6C 바이트)
         // 0xE6-0xFF: 패딩
 
-        // 1. 버전 문자열 (0x00-0x05) 검증
+        // 1. 버전 문자열 (0x00-0x05) 검증 - libredwg uses decode_R2004 for R2010+ as well
         byte[] versionBytes = new byte[6];
         for (int i = 0; i < 6; i++) {
             versionBytes[i] = (byte) input.readRawChar();
         }
         String version = new String(versionBytes, StandardCharsets.US_ASCII);
-        if (!version.equals("AC1018")) {
-            throw new IllegalArgumentException("Invalid R2004 version string: " + version);
+        if (!version.equals("AC1018")  // R2004
+            && !version.equals("AC1024")  // R2010
+            && !version.equals("AC1027")  // R2013
+            && !version.equals("AC1032")) { // R2018
+            throw new IllegalArgumentException("Invalid version string for R2004 family: " + version);
         }
 
         // 2. 라이브 데이터 필드 파싱 (0x06-0x7F, 0x7A바이트)

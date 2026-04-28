@@ -19,15 +19,15 @@ public class DwgFileStructureHandlerFactory {
             case R2000:
                 return new io.dwg.format.r2000.R2000FileStructureHandler();
             case R2004:
+            case R2010:
+            case R2013:
+            case R2018:
+                // libredwg's decode.c (line 222-226) uses decode_R2004 for R2010+ files.
+                // R2010, R2013, R2018 share R2004 file structure (only version string differs).
                 return new io.dwg.format.r2004.R2004FileStructureHandler();
             case R2007:
+                // R2007 uses its own RS-encoded format (the only version using RS).
                 return new io.dwg.format.r2007.R2007FileStructureHandler();
-            case R2010:
-                return new io.dwg.format.r2010.R2010FileStructureHandler();
-            case R2013:
-                return new io.dwg.format.r2007.R2013FileStructureHandler();
-            case R2018:
-                return new io.dwg.format.r2007.R2018FileStructureHandler();
             default:
                 throw new DwgVersionException("Unsupported version: " + version);
         }

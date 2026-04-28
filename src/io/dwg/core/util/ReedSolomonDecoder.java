@@ -177,28 +177,20 @@ public class ReedSolomonDecoder {
 
         try {
             final int BLOCK_COUNT = 3;
-            final int BLOCK_SIZE = 255;
             final int DATA_SIZE = 239;
 
-            // R2007 stores the 3 RS-encoded blocks INTERLEAVED byte-by-byte, not as
-            // consecutive 255-byte runs. Deinterleave first:
-            //   block[i][j] = data[i + j * BLOCK_COUNT]
-            // Without this, syndromes are computed on mixed data from all 3 blocks
-            // and BM/Chien produce garbage roots.
-            byte[][] blocks = new byte[BLOCK_COUNT][BLOCK_SIZE];
-            for (int i = 0; i < BLOCK_COUNT; i++) {
-                for (int j = 0; j < BLOCK_SIZE; j++) {
-                    blocks[i][j] = data[i + j * BLOCK_COUNT];
-                }
-            }
-
-            for (int i = 0; i < BLOCK_COUNT; i++) {
-                decodeBlock(blocks[i], true);
-            }
-
+            // Match libredwg's decode_rs() exactly: deinterleave only 239 data bytes
+            // per block (skip 16 parity bytes per block), and DO NOT run RS error
+            // correction. libredwg has rs_decode_block() commented out for a reason:
+            // the BM algorithm produces incorrect "corrections" on valid R2010+ data.
+            //
+            // Deinterleave pattern: result[i * DATA_SIZE + j] = data[i + j * BLOCK_COUNT]
+            // for i in [0, BLOCK_COUNT) and j in [0, DATA_SIZE)
             byte[] result = new byte[BLOCK_COUNT * DATA_SIZE];
             for (int i = 0; i < BLOCK_COUNT; i++) {
-                System.arraycopy(blocks[i], 0, result, i * DATA_SIZE, DATA_SIZE);
+                for (int j = 0; j < DATA_SIZE; j++) {
+                    result[i * DATA_SIZE + j] = data[i + j * BLOCK_COUNT];
+                }
             }
             return result;
         } catch (Exception e) {
