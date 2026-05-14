@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(javac TestDegreeComparison.java)",
+      "Bash(java TestDegreeComparison)",
+      "Bash(javac TestEvaluationMethods.java)",
+      "Bash(java TestEvaluationMethods)",
+      "Bash(javac TestChienFixed.java)",
+      "Bash(java TestChienFixed)"
+    ]
+  }
+}

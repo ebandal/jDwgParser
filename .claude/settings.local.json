@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn clean:*)",
+      "PowerShell(mvn compile -q 2>&1)",
+      "PowerShell($env:PATH -split \";\")",
+      "Bash(javac -cp target/classes CircleGeomCheck.java)",
+      "Bash(java -cp target/classes:. CircleGeomCheck samples/2000/circle.dwg)",
+      "Bash(java -cp target/classes:. CircleGeomCheck samples/2004/circle.dwg)",
+      "Bash(javac -cp target/classes LineGeomCheck.java)",
+      "Bash(java -cp target/classes:. LineGeomCheck samples/2000/Line.dwg)",
+      "Bash(java -cp target/classes:. LineGeomCheck samples/2004/Arc.dwg)",
+      "Bash(java -cp target/classes:. LineGeomCheck samples/2000/Arc.dwg)",
+      "Bash(javac -cp target/classes GeomBatchTest.java)",
+      "Bash(java -cp target/classes:. GeomBatchTest)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(java -cp target/classes:. QuickGeomStats)",
+      "Bash(java -cp target/classes:. FullTest)",
+      "Bash(tee /tmp/test_out.txt)",
+      "Bash(java -cp target/classes:. FullTest2)",
+      "Read(//c/workspace_ebandal/jDwgParser/**)",
+      "PowerShell(cd c:\\\\workspace_ebandal\\\\jDwgParser; java -cp \"target/classes;.\" FullTest2 2>$null | Where-Object { $_ -match \"^\\(FAIL|ERR|OK|Total\\)\" })",
+      "PowerShell(cd c:\\\\workspace_ebandal\\\\jDwgParser; $bytes = [System.IO.File]::ReadAllBytes\\(\"samples\\\\2007\\\\Arc.dwg\"\\); [System.Text.Encoding]::ASCII.GetString\\($bytes[0..5]\\))",
+      "PowerShell(cd c:\\\\workspace_ebandal\\\\jDwgParser; javac -cp target/classes TestR2007File.java 2>&1; java -cp \"target/classes;.\" TestR2007File samples/2007/Arc.dwg 2>&1 | Where-Object { $_ -match \"R2007|Testing|File|Version|Objects|Section|WARN|Sections|Handles|Objects\" } | Select-Object -First 50)",
+      "PowerShell(cd c:\\\\workspace_ebandal\\\\jDwgParser; @\\(\"samples\\\\2013\\\\Line.dwg\", \"samples\\\\2013\\\\Arc.dwg\", \"samples\\\\2013\\\\RAY.dwg\", \"samples\\\\2013\\\\circle.dwg\", \"samples\\\\2010\\\\Leader.dwg\", \"samples\\\\2010\\\\Arc.dwg\", \"samples\\\\r14\\\\v.dwg\", \"samples\\\\example_r13.dwg\", \"samples\\\\example_r14.dwg\"\\) | ForEach-Object { $b = [System.IO.File]::ReadAllBytes\\($_\\); \"$_ : \" + [System.Text.Encoding]::ASCII.GetString\\($b[0..5]\\) })",
+      "PowerShell(cd c:\\\\workspace_ebandal\\\\jDwgParser; java -cp \"target/classes;.\" TestR2007File samples/2013/Line.dwg 2>&1 | Where-Object { $_ -match \"Section|Handles|Object|WARN|pairs|R2004|R2007|sequential\" } | Select-Object -First 40)",
+      "PowerShell(cd c:\\\\workspace_ebandal\\\\jDwgParser; java -cp \"target/classes;.\" FullTest2 2>$null | Where-Object { $_ -match \"^Total\" })",
+      "PowerShell(python --version 2>&1)",
+      "PowerShell(python -c \"import ezdxf; print\\('ezdxf:', ezdxf.__version__\\)\" 2>&1)",
+      "Bash(python -c \"import ezdxf; print\\('ezdxf:', ezdxf.__version__\\)\")",
+      "Bash(which python3 *)",
+      "Read(//usr/**)"
+    ]
+  }
+}
