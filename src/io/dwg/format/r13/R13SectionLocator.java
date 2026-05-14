@@ -19,7 +19,7 @@ public class R13SectionLocator {
     }
 
     public static R13SectionLocator read(BitInput input) {
-        int recordNumber = input.readRawLong();
+        int recordNumber = input.readRawChar();   // RC (1 byte) per libredwg
         long seeker = input.readRawLong() & 0xFFFFFFFFL;
         long size = input.readRawLong() & 0xFFFFFFFFL;
         return new R13SectionLocator(recordNumber, seeker, size);
@@ -44,14 +44,16 @@ public class R13SectionLocator {
     }
 
     /**
-     * recordNumber → SectionType 이름 매핑
+     * recordNumber → SectionType 이름 매핑 (per libredwg section_names[] in decode.c)
      */
     public String toSectionName() {
         return switch (recordNumber) {
             case 0 -> SectionType.HEADER.sectionName();
             case 1 -> SectionType.CLASSES.sectionName();
             case 2 -> SectionType.HANDLES.sectionName();
-            case 3 -> SectionType.OBJECTS.sectionName();
+            case 3 -> SectionType.OBJ_FREE_SPACE.sectionName();
+            case 4 -> SectionType.TEMPLATE.sectionName();
+            case 5 -> SectionType.AUX_HEADER.sectionName();
             default -> "Unknown[" + recordNumber + "]";
         };
     }
