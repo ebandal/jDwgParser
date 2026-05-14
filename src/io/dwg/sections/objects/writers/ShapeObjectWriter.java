@@ -1,0 +1,25 @@
+package io.dwg.sections.objects.writers;
+
+import io.dwg.core.io.BitStreamWriter;
+import io.dwg.core.type.Point3D;
+import io.dwg.core.version.DwgVersion;
+import io.dwg.entities.DwgObject;
+import io.dwg.entities.DwgObjectType;
+import io.dwg.entities.concrete.DwgShape;
+import io.dwg.sections.objects.ObjectWriter;
+
+public class ShapeObjectWriter implements ObjectWriter {
+    @Override
+    public int objectType() { return DwgObjectType.SHAPE.typeCode(); }
+
+    @Override
+    public void write(DwgObject source, BitStreamWriter w, DwgVersion v) throws Exception {
+        DwgShape shape = (DwgShape) source;
+        Point3D pt = shape.insertionPoint();
+        w.write3RawDouble(new double[]{pt.x(), pt.y(), pt.z()});
+        w.writeBitDouble(shape.scale());
+        w.writeVariableText(shape.shapeName());
+        w.writeBitDouble(shape.angle());
+        w.writeBitExtrusion(shape.extrusion());
+    }
+}
