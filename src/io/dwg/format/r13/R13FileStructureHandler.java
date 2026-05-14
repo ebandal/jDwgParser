@@ -44,31 +44,34 @@ public class R13FileStructureHandler extends AbstractFileStructureHandler {
             throw new IllegalArgumentException("Invalid R13 version string: " + version);
         }
 
-        // 2. Reserved (6 바이트)
-        for (int i = 0; i < 6; i++) {
+        // 2. Reserved (5 바이트) per libredwg: version magic is 11 bytes total (6+5)
+        for (int i = 0; i < 5; i++) {
             input.readRawChar();
         }
 
-        // 3. RC (1 바이트): zero_one_or_three
+        // 3. RC (1 바이트): maint_rel_version (byte 11, per header.spec)
         input.readRawChar();
 
-        // 4. RL (4 바이트): thumbnail_address
+        // 4. RC (1 바이트): zero_one_or_three (byte 12)
+        input.readRawChar();
+
+        // 5. RL (4 바이트): thumbnail_address (bytes 13-16)
         int thumbnailAddress = input.readRawLong();
         fields.setPreviewOffset(thumbnailAddress & 0xFFFFFFFFL);
 
-        // 5. RC (1 바이트): dwg_version
+        // 6. RC (1 바이트): dwg_version (byte 17)
         input.readRawChar();
 
-        // 6. RC (1 바이트): maint_version
+        // 7. RC (1 바이트): maint_version (byte 18)
         int maintVersion = input.readRawChar();
         fields.setMaintenanceVersion(maintVersion);
 
-        // 7. RS (2 바이트): codepage
+        // 8. RS (2 바이트): codepage (bytes 19-20)
         short codePage = input.readRawShort();
         fields.setCodePage(codePage & 0xFFFF);
 
-        // 8. RC (1 바이트): sections (섹션 개수)
-        int sectionCount = input.readRawChar();
+        // 9. RL (4 바이트): sections count (bytes 21-24) per libredwg PRE(R_2004a)
+        int sectionCount = input.readRawLong();
         System.out.printf("[DEBUG] R13: Found %d sections\n", sectionCount);
 
         // 9. 섹션 Locator 배열 읽기
@@ -114,59 +117,31 @@ public class R13FileStructureHandler extends AbstractFileStructureHandler {
         System.out.printf("[DEBUG] R13: Reading %d sections\n", header.sectionOffsets().size());
 
         // 각 섹션을 읽음
+        // R13/R14 section structure (per libredwg):
+        //   Header (0), Classes (1): 16-byte start sentinel + data + 16-byte end sentinel + 2-byte CRC
+        //   Handles (2): raw RS_BE paged data, NO sentinels
+        //   ObjFreeSpace, Template, AuxHeader: skip if addr=0 or size=0
         for (String sectionName : header.sectionOffsets().keySet()) {
             try {
                 long offset = header.sectionOffsets().get(sectionName);
                 long size = header.sectionSizes().get(sectionName);
 
-                System.out.printf("[DEBUG] R13: Reading section '%s' at offset 0x%X, size=0x%X\n",
-                    sectionName, offset, size);
-
-                // 파일의 offset 위치로 이동 (바이트 단위를 비트 단위로 변환)
-                input.seek(offset * 8);
-
-                // R13 섹션 구조:
-                // [Section Start Sentinel: 16 bytes]
-                // [Actual section data]
-                // [Section End Sentinel: 16 bytes]
-                // [CRC: 2 bytes]
-                // 총 크기 = 16 + data + 16 + 2
-
-                // 시작 sentinel 읽기 (16 바이트)
-                byte[] startSentinel = new byte[16];
-                for (int i = 0; i < 16; i++) {
-                    startSentinel[i] = (byte) input.readRawChar();
-                }
-                System.out.printf("[DEBUG] R13: Section '%s' start sentinel: %s\n",
-                    sectionName, formatHex(startSentinel, 0, Math.min(16, startSentinel.length)));
-
-                // 실제 데이터 크기 = 전체 크기 - sentinel(16) - sentinel(16) - CRC(2)
-                long dataSize = size - 34;
-                if (dataSize < 0) {
-                    System.err.printf("[DEBUG] R13: Invalid section size for '%s': %d\n", sectionName, size);
+                if (offset == 0 || size == 0) {
+                    System.out.printf("[DEBUG] R13: Skipping empty section '%s'\n", sectionName);
                     continue;
                 }
 
-                // 섹션 데이터를 읽음
-                byte[] sectionData = new byte[(int) dataSize];
-                for (int i = 0; i < dataSize; i++) {
-                    sectionData[i] = (byte) input.readRawChar();
-                }
+                System.out.printf("[DEBUG] R13: Reading section '%s' at offset 0x%X, size=0x%X\n",
+                    sectionName, offset, size);
 
-                // 끝 sentinel 읽기 (16 바이트)
-                byte[] endSentinel = new byte[16];
-                for (int i = 0; i < 16; i++) {
-                    endSentinel[i] = (byte) input.readRawChar();
-                }
-                System.out.printf("[DEBUG] R13: Section '%s' end sentinel: %s\n",
-                    sectionName, formatHex(endSentinel, 0, Math.min(16, endSentinel.length)));
+                input.seek(offset * 8);
 
-                // CRC 읽기 (2 바이트)
-                short crc = input.readRawShort();
-                System.out.printf("[DEBUG] R13: Section '%s' CRC: 0x%04X\n", sectionName, crc & 0xFFFF);
+                // Read full section bytes — Header/Classes parsers read their own sentinels
+                byte[] sectionData = new byte[(int) size];
+                for (int i = 0; i < size; i++) sectionData[i] = (byte) input.readRawChar();
 
                 sections.put(sectionName, new SectionInputStream(sectionData, sectionName));
-                System.out.printf("[DEBUG] R13: Section '%s' read: %d bytes of actual data\n", sectionName, sectionData.length);
+                System.out.printf("[DEBUG] R13: Section '%s' read: %d bytes\n", sectionName, sectionData.length);
 
             } catch (Exception e) {
                 System.err.printf("[DEBUG] R13: Failed to read section '%s': %s\n", sectionName, e.getMessage());
@@ -175,17 +150,6 @@ public class R13FileStructureHandler extends AbstractFileStructureHandler {
         }
 
         return sections;
-    }
-
-    /**
-     * 바이트 배열을 16진수 문자열로 변환 (디버그용)
-     */
-    private String formatHex(byte[] data, int offset, int length) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = offset; i < offset + length && i < data.length; i++) {
-            sb.append(String.format("%02X ", data[i] & 0xFF));
-        }
-        return sb.toString();
     }
 
     @Override

@@ -122,10 +122,13 @@ public class DwgReader {
         if (objectsStream == null) {
             objectsStream = sections.get("AcDb:Objects");
         }
-        // R2000: Objects are not a separate section - they are located via Handles offsets
-        // in the entire file. Use the whole file as the pseudo-section.
-        if (objectsStream == null && version == DwgVersion.R2000 && !handleRegistry.allHandles().isEmpty()) {
-            System.out.printf("[DEBUG] DwgReader: R2000 - using whole file as Objects stream (size=%d)\n", data.length);
+        // R13/R14/R2000: Objects are not a separate named section.
+        // They are located via offsets in the Handles section.
+        // Use the whole file as the pseudo-section so HandleRegistry offsets resolve correctly.
+        boolean isPreR2004 = version == DwgVersion.R13 || version == DwgVersion.R14
+                          || version == DwgVersion.R2000;
+        if (objectsStream == null && isPreR2004 && !handleRegistry.allHandles().isEmpty()) {
+            System.out.printf("[DEBUG] DwgReader: %s - using whole file as Objects stream (size=%d)\n", version, data.length);
             objectsStream = new SectionInputStream(data, "AcDb:AcDbObjects");
         }
         System.out.printf("[DEBUG] DwgReader: objectsStream found: %b\n", objectsStream != null);

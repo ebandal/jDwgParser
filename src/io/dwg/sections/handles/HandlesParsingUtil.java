@@ -25,55 +25,56 @@ public class HandlesParsingUtil {
      * - 반복, block_size <= 2일 때 종료
      */
     public static void parseHandlesBlocksR13(BitInput input, HandleRegistry registry) {
-        long lastHandle = 0;
-        long lastOffset = 0;
         int pageNum = 0;
 
         while (!input.isEof()) {
-            // Block size 읽기 (big-endian)
+            // Per libredwg: last_handle and last_offset reset to 0 per page
+            long lastHandle = 0;
+            long lastOffset = 0;
+
+            // Per libredwg: startpos is BEFORE reading section_size
+            long blockStartBit = input.position();
+
             int byte1 = input.readRawChar() & 0xFF;
+            if (input.isEof()) break;
             int byte2 = input.readRawChar() & 0xFF;
             int blockSize = (byte1 << 8) | byte2;  // RS_BE
 
             if (blockSize <= 2) {
-                System.out.printf("[DEBUG] HandlesParsingUtil: Termination block (size=%d)\n", blockSize);
+                // Termination block: size=2 means no data, just CRC follows
+                if (!input.isEof()) { input.readRawChar(); input.readRawChar(); } // skip CRC
                 break;
             }
 
-            if (blockSize < 2 || blockSize > 2040) {
+            if (blockSize > 2040) {
                 System.out.printf("[DEBUG] HandlesParsingUtil: Invalid block size %d, stopping\n", blockSize);
                 break;
             }
 
-            System.out.printf("[DEBUG] HandlesParsingUtil: Block %d size=%d\n", pageNum, blockSize);
+            // Per libredwg: data end = startpos + blockSize (blockSize includes the 2-byte header)
+            long dataEndBit = blockStartBit + (long) blockSize * 8;
 
-            // Handle-offset 쌍 파싱 (blockSize - 4 bytes: 앞의 size 2바이트 + 뒤의 CRC 2바이트 제외)
-            int pairsSize = blockSize - 4;
-            int pairsRead = 0;
-
-            while (pairsRead < pairsSize && !input.isEof()) {
+            int pairCount = 0;
+            while (input.position() < dataEndBit && !input.isEof()) {
                 int handleDelta = readUnsignedModularChar(input);
                 if (handleDelta == 0) break;
+                if (input.position() > dataEndBit) break;
 
                 int offsetDelta = readSignedModularChar(input);
 
                 lastHandle += handleDelta;
                 lastOffset += offsetDelta;
-
-                if (pairsRead < 3) {
-                    System.out.printf("[DEBUG] HandlesParsingUtil:   pair: handle=0x%X offset=0x%X\n",
-                        lastHandle, lastOffset);
-                }
-
                 registry.put(lastHandle, lastOffset);
-                pairsRead++;
+                pairCount++;
             }
 
-            // CRC 읽기 (big-endian)
-            byte1 = input.readRawChar() & 0xFF;
-            byte2 = input.readRawChar() & 0xFF;
-            int crc = (byte1 << 8) | byte2;  // RS_BE
-            System.out.printf("[DEBUG] HandlesParsingUtil: Block %d CRC=0x%04X\n", pageNum, crc);
+            // Seek past data, read CRC (RS little-endian per libredwg bit_read_RS)
+            input.seek(dataEndBit);
+            if (!input.isEof()) {
+                input.readRawShort(); // CRC (LE)
+                if (pageNum == 0) System.out.printf("[DEBUG] HandlesParsingUtil: Block %d size=%d pairs=%d\n",
+                    pageNum, blockSize, pairCount);
+            }
 
             pageNum++;
         }
@@ -207,23 +208,28 @@ public class HandlesParsingUtil {
 
     /**
      * MC (signed modular char) 읽기
-     * 음수 플래그는 마지막 바이트의 bit 6 (0x40)
+     * Per libredwg bits.c bit_read_MC():
+     *   - Non-last bytes: 7 bits (0x7F mask) contribute to value
+     *   - Last byte (high bit=0): bit 6 (0x40) is sign flag, cleared before use (0xBF mask)
+     *     so only bits 0-5 contribute to the last byte's value
      */
     private static int readSignedModularChar(BitInput input) {
         int result = 0;
         int shift = 0;
-        int b;
-        do {
-            b = input.readRawChar() & 0xFF;
-            result |= (b & 0x7F) << (shift * 7);
-            shift++;
-        } while ((b & 0x80) != 0);
-
-        // 음수 플래그 처리 (0x40)
-        if ((b & 0x40) != 0) {
-            result = -result;
+        while (true) {
+            int b = input.readRawChar() & 0xFF;
+            if ((b & 0x80) != 0) {
+                // Not the last byte: all 7 bits contribute
+                result |= (b & 0x7F) << (shift * 7);
+                shift++;
+            } else {
+                // Last byte: bit 6 is sign, clear it before computing value (per libredwg: byte &= 0xBF)
+                boolean negative = (b & 0x40) != 0;
+                b &= 0xBF;  // clear sign bit from value
+                result |= (b & 0x7F) << (shift * 7);
+                return negative ? -result : result;
+            }
         }
-        return result;
     }
 
     /**
