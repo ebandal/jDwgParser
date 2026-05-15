@@ -175,22 +175,21 @@ public class BitStreamReader {
 
     /**
      * §2.7: Modular Short (MS) 읽기
-     * 비트 레벨 읽기: byte alignment 강제 안 함 (readRawShort() 대신 readBits(16) 사용)
+     * RS (Raw Short)는 LE16 포맷 — libredwg bit_read_MS 참조.
+     * MS는 항상 양수(sign bit 없음). libredwg BITCODE_MS = uint32_t.
      */
     public int readModularShort() {
         int result = 0;
         int shift = 0;
         int w;
         do {
-            w = input.readBits(16) & 0xFFFF;  // Bit-level: no forced alignment
+            // LE16: low byte first, then high byte (matches libredwg bit_read_RS)
+            int lo = input.readBits(8) & 0xFF;
+            int hi = input.readBits(8) & 0xFF;
+            w = lo | (hi << 8);
             result |= (w & 0x7FFF) << (shift * 15);
             shift++;
         } while ((w & 0x8000) != 0);
-
-        // 음수 플래그 처리
-        if ((w & 0x4000) != 0) {
-            result = -result;
-        }
         return result;
     }
 
