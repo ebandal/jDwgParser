@@ -208,141 +208,185 @@ public class Lz77Decompressor {
     }
 
     private void copyCompressedBytes(int length) {
-        // Spec version 5.0 page 30: copy literal bytes with special byte reversal rules
-        // This matches libredwg's copy_compressed_bytes() function exactly
+        // Direct port of libredwg copy_compressed_bytes() from decode_r2007.c
+        // Macros: copy_1(o)=1 byte; copy_2(o)=REVERSED 2 bytes; copy_3(o)=REVERSED 3 bytes;
+        //         copy_4(o)=4 bytes straight; copy_8(o)=8 bytes straight;
+        //         copy_16(o)=16 bytes with 8-byte half-swap
         while (length >= 32) {
-            // copy_16(16): src[24..31] to dst, src[16..23] to dst[8..]
+            // copy_16(16): dst[0..7]=src[24..31], dst[8..15]=src[16..23]
             System.arraycopy(src, srcPos + 24, dst, dstPos, 8);
             System.arraycopy(src, srcPos + 16, dst, dstPos + 8, 8);
             dstPos += 16;
-
-            // copy_16(0): src[8..15] to dst, src[0..7] to dst[8..]
+            // copy_16(0): dst[0..7]=src[8..15], dst[8..15]=src[0..7]
             System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
             System.arraycopy(src, srcPos + 0, dst, dstPos + 8, 8);
             dstPos += 16;
-
             srcPos += 32;
             length -= 32;
         }
 
-        // Handle remaining bytes < 32 - matches libredwg's switch cases exactly
         switch (length) {
             case 0: break;
             case 1:
-                dst[dstPos++] = src[srcPos + 0];
-                srcPos += 1;
-                break;
-            case 2:
-                dst[dstPos++] = src[srcPos + 1];
-                dst[dstPos++] = src[srcPos + 0];
-                srcPos += 2;
-                break;
-            case 3:
-                dst[dstPos++] = src[srcPos + 2];
-                dst[dstPos++] = src[srcPos + 1];
-                dst[dstPos++] = src[srcPos + 0];
-                srcPos += 3;
-                break;
-            case 4:
-                System.arraycopy(src, srcPos, dst, dstPos, 4);
-                dstPos += 4;
-                srcPos += 4;
-                break;
-            case 5:
+                dst[dstPos++] = src[srcPos];
+                srcPos += 1; break;
+            case 2:  // copy_2(0)
+                dst[dstPos++] = src[srcPos + 1]; dst[dstPos++] = src[srcPos];
+                srcPos += 2; break;
+            case 3:  // copy_3(0)
+                dst[dstPos++] = src[srcPos + 2]; dst[dstPos++] = src[srcPos + 1]; dst[dstPos++] = src[srcPos];
+                srcPos += 3; break;
+            case 4:  // copy_4(0)
+                System.arraycopy(src, srcPos, dst, dstPos, 4); dstPos += 4;
+                srcPos += 4; break;
+            case 5:  // copy_1(4); copy_4(0)
                 dst[dstPos++] = src[srcPos + 4];
-                System.arraycopy(src, srcPos, dst, dstPos, 4);
-                dstPos += 4;
-                srcPos += 5;
-                break;
-            case 6:
+                System.arraycopy(src, srcPos, dst, dstPos, 4); dstPos += 4;
+                srcPos += 5; break;
+            case 6:  // copy_1(5); copy_4(1); copy_1(0)
                 dst[dstPos++] = src[srcPos + 5];
-                System.arraycopy(src, srcPos + 1, dst, dstPos, 4);
-                dstPos += 4;
-                dst[dstPos++] = src[srcPos + 0];
-                srcPos += 6;
-                break;
-            case 7:
-                dst[dstPos++] = src[srcPos + 5];
-                dst[dstPos++] = src[srcPos + 6];
-                System.arraycopy(src, srcPos + 1, dst, dstPos, 4);
-                dstPos += 4;
-                dst[dstPos++] = src[srcPos + 0];
-                srcPos += 7;
-                break;
-            case 8:
-                System.arraycopy(src, srcPos, dst, dstPos, 8);
-                dstPos += 8;
-                srcPos += 8;
-                break;
-            case 9:
+                System.arraycopy(src, srcPos + 1, dst, dstPos, 4); dstPos += 4;
+                dst[dstPos++] = src[srcPos];
+                srcPos += 6; break;
+            case 7:  // copy_2(5); copy_4(1); copy_1(0)
+                dst[dstPos++] = src[srcPos + 6]; dst[dstPos++] = src[srcPos + 5];
+                System.arraycopy(src, srcPos + 1, dst, dstPos, 4); dstPos += 4;
+                dst[dstPos++] = src[srcPos];
+                srcPos += 7; break;
+            case 8:  // copy_8(0)
+                System.arraycopy(src, srcPos, dst, dstPos, 8); dstPos += 8;
+                srcPos += 8; break;
+            case 9:  // copy_1(8); copy_8(0)
                 dst[dstPos++] = src[srcPos + 8];
-                System.arraycopy(src, srcPos, dst, dstPos, 8);
-                dstPos += 8;
-                srcPos += 9;
-                break;
-            case 10:
+                System.arraycopy(src, srcPos, dst, dstPos, 8); dstPos += 8;
+                srcPos += 9; break;
+            case 10:  // copy_1(9); copy_8(1); copy_1(0)
                 dst[dstPos++] = src[srcPos + 9];
-                System.arraycopy(src, srcPos + 1, dst, dstPos, 8);
-                dstPos += 8;
-                dst[dstPos++] = src[srcPos + 0];
-                srcPos += 10;
-                break;
-            case 11:
-                dst[dstPos++] = src[srcPos + 9];
-                dst[dstPos++] = src[srcPos + 10];
-                System.arraycopy(src, srcPos + 1, dst, dstPos, 8);
-                dstPos += 8;
-                dst[dstPos++] = src[srcPos + 0];
-                srcPos += 11;
-                break;
-            case 12:
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 4);
-                dstPos += 4;
-                System.arraycopy(src, srcPos, dst, dstPos, 8);
-                dstPos += 8;
-                srcPos += 12;
-                break;
-            case 13:
+                System.arraycopy(src, srcPos + 1, dst, dstPos, 8); dstPos += 8;
+                dst[dstPos++] = src[srcPos];
+                srcPos += 10; break;
+            case 11:  // copy_2(9); copy_8(1); copy_1(0)
+                dst[dstPos++] = src[srcPos + 10]; dst[dstPos++] = src[srcPos + 9];
+                System.arraycopy(src, srcPos + 1, dst, dstPos, 8); dstPos += 8;
+                dst[dstPos++] = src[srcPos];
+                srcPos += 11; break;
+            case 12:  // copy_4(8); copy_8(0)
+                System.arraycopy(src, srcPos + 8, dst, dstPos, 4); dstPos += 4;
+                System.arraycopy(src, srcPos, dst, dstPos, 8); dstPos += 8;
+                srcPos += 12; break;
+            case 13:  // copy_1(12); copy_4(8); copy_8(0)
                 dst[dstPos++] = src[srcPos + 12];
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 4);
-                dstPos += 4;
-                System.arraycopy(src, srcPos + 0, dst, dstPos, 8);
-                dstPos += 8;
-                srcPos += 13;
-                break;
-            case 14:
+                System.arraycopy(src, srcPos + 8, dst, dstPos, 4); dstPos += 4;
+                System.arraycopy(src, srcPos, dst, dstPos, 8); dstPos += 8;
+                srcPos += 13; break;
+            case 14:  // copy_1(13); copy_4(9); copy_8(1); copy_1(0)
                 dst[dstPos++] = src[srcPos + 13];
-                System.arraycopy(src, srcPos + 9, dst, dstPos, 4);
-                dstPos += 4;
-                System.arraycopy(src, srcPos + 1, dst, dstPos, 8);
-                dstPos += 8;
-                srcPos += 14;
-                break;
-            case 15:
-                dst[dstPos++] = src[srcPos + 14];
-                dst[dstPos++] = src[srcPos + 15];
-                System.arraycopy(src, srcPos + 9, dst, dstPos, 4);
-                dstPos += 4;
-                System.arraycopy(src, srcPos + 1, dst, dstPos, 8);
-                dstPos += 8;
-                srcPos += 15;
-                break;
-            case 16:
-                // copy_16(16) + copy_16(0)
-                System.arraycopy(src, srcPos + 24, dst, dstPos, 8);
-                System.arraycopy(src, srcPos + 16, dst, dstPos + 8, 8);
-                dstPos += 16;
+                System.arraycopy(src, srcPos + 9, dst, dstPos, 4); dstPos += 4;
+                System.arraycopy(src, srcPos + 1, dst, dstPos, 8); dstPos += 8;
+                dst[dstPos++] = src[srcPos];
+                srcPos += 14; break;
+            case 15:  // copy_2(13); copy_4(9); copy_8(1); copy_1(0)
+                dst[dstPos++] = src[srcPos + 14]; dst[dstPos++] = src[srcPos + 13];
+                System.arraycopy(src, srcPos + 9, dst, dstPos, 4); dstPos += 4;
+                System.arraycopy(src, srcPos + 1, dst, dstPos, 8); dstPos += 8;
+                dst[dstPos++] = src[srcPos];
+                srcPos += 15; break;
+            case 16:  // copy_16(0)
                 System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
-                System.arraycopy(src, srcPos + 0, dst, dstPos + 8, 8);
-                dstPos += 16;
-                srcPos += 16;
-                break;
-            default:
-                // For 17-31, just copy sequentially as fallback
-                System.arraycopy(src, srcPos, dst, dstPos, length);
-                dstPos += length;
-                srcPos += length;
-                break;
+                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
+                srcPos += 16; break;
+            case 17:  // copy_8(9); copy_1(8); copy_8(0)
+                System.arraycopy(src, srcPos + 9, dst, dstPos, 8); dstPos += 8;
+                dst[dstPos++] = src[srcPos + 8];
+                System.arraycopy(src, srcPos, dst, dstPos, 8); dstPos += 8;
+                srcPos += 17; break;
+            case 18:  // copy_1(17); copy_16(1); copy_1(0)
+                dst[dstPos++] = src[srcPos + 17];
+                System.arraycopy(src, srcPos + 9, dst, dstPos, 8);
+                System.arraycopy(src, srcPos + 1, dst, dstPos + 8, 8); dstPos += 16;
+                dst[dstPos++] = src[srcPos];
+                srcPos += 18; break;
+            case 19:  // copy_3(16); copy_16(0)
+                dst[dstPos++] = src[srcPos + 18]; dst[dstPos++] = src[srcPos + 17]; dst[dstPos++] = src[srcPos + 16];
+                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
+                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
+                srcPos += 19; break;
+            case 20:  // copy_4(16); copy_16(0)
+                System.arraycopy(src, srcPos + 16, dst, dstPos, 4); dstPos += 4;
+                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
+                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
+                srcPos += 20; break;
+            case 21:  // copy_1(20); copy_4(16); copy_16(0)
+                dst[dstPos++] = src[srcPos + 20];
+                System.arraycopy(src, srcPos + 16, dst, dstPos, 4); dstPos += 4;
+                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
+                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
+                srcPos += 21; break;
+            case 22:  // copy_2(20); copy_4(16); copy_16(0)
+                dst[dstPos++] = src[srcPos + 21]; dst[dstPos++] = src[srcPos + 20];
+                System.arraycopy(src, srcPos + 16, dst, dstPos, 4); dstPos += 4;
+                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
+                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
+                srcPos += 22; break;
+            case 23:  // copy_3(20); copy_4(16); copy_16(0)
+                dst[dstPos++] = src[srcPos + 22]; dst[dstPos++] = src[srcPos + 21]; dst[dstPos++] = src[srcPos + 20];
+                System.arraycopy(src, srcPos + 16, dst, dstPos, 4); dstPos += 4;
+                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
+                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
+                srcPos += 23; break;
+            case 24:  // copy_8(16); copy_16(0)
+                System.arraycopy(src, srcPos + 16, dst, dstPos, 8); dstPos += 8;
+                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
+                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
+                srcPos += 24; break;
+            case 25:  // copy_8(17); copy_1(16); copy_16(0)
+                System.arraycopy(src, srcPos + 17, dst, dstPos, 8); dstPos += 8;
+                dst[dstPos++] = src[srcPos + 16];
+                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
+                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
+                srcPos += 25; break;
+            case 26:  // copy_1(25); copy_8(17); copy_1(16); copy_16(0)
+                dst[dstPos++] = src[srcPos + 25];
+                System.arraycopy(src, srcPos + 17, dst, dstPos, 8); dstPos += 8;
+                dst[dstPos++] = src[srcPos + 16];
+                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
+                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
+                srcPos += 26; break;
+            case 27:  // copy_2(25); copy_8(17); copy_1(16); copy_16(0)
+                dst[dstPos++] = src[srcPos + 26]; dst[dstPos++] = src[srcPos + 25];
+                System.arraycopy(src, srcPos + 17, dst, dstPos, 8); dstPos += 8;
+                dst[dstPos++] = src[srcPos + 16];
+                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
+                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
+                srcPos += 27; break;
+            case 28:  // copy_4(24); copy_8(16); copy_16(0)
+                System.arraycopy(src, srcPos + 24, dst, dstPos, 4); dstPos += 4;
+                System.arraycopy(src, srcPos + 16, dst, dstPos, 8); dstPos += 8;
+                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
+                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
+                srcPos += 28; break;
+            case 29:  // copy_1(28); copy_4(24); copy_8(16); copy_16(0)
+                dst[dstPos++] = src[srcPos + 28];
+                System.arraycopy(src, srcPos + 24, dst, dstPos, 4); dstPos += 4;
+                System.arraycopy(src, srcPos + 16, dst, dstPos, 8); dstPos += 8;
+                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
+                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
+                srcPos += 29; break;
+            case 30:  // copy_2(28); copy_4(24); copy_8(16); copy_16(0)
+                dst[dstPos++] = src[srcPos + 29]; dst[dstPos++] = src[srcPos + 28];
+                System.arraycopy(src, srcPos + 24, dst, dstPos, 4); dstPos += 4;
+                System.arraycopy(src, srcPos + 16, dst, dstPos, 8); dstPos += 8;
+                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
+                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
+                srcPos += 30; break;
+            case 31:  // copy_1(30); copy_4(26); copy_8(18); copy_16(2); copy_2(0)
+                dst[dstPos++] = src[srcPos + 30];
+                System.arraycopy(src, srcPos + 26, dst, dstPos, 4); dstPos += 4;
+                System.arraycopy(src, srcPos + 18, dst, dstPos, 8); dstPos += 8;
+                System.arraycopy(src, srcPos + 10, dst, dstPos, 8);
+                System.arraycopy(src, srcPos + 2, dst, dstPos + 8, 8); dstPos += 16;
+                dst[dstPos++] = src[srcPos + 1]; dst[dstPos++] = src[srcPos];
+                srcPos += 31; break;
         }
     }
 

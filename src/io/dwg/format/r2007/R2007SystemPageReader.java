@@ -1,7 +1,6 @@
 package io.dwg.format.r2007;
 
 import io.dwg.core.io.BitInput;
-import io.dwg.core.util.ReedSolomonDecoder;
 import io.dwg.core.util.Lz77Decompressor;
 
 /**
@@ -59,11 +58,11 @@ public class R2007SystemPageReader {
     }
 
     /**
-     * Decode RS blocks from file data
-     * For system pages with blockCount blocks (stored INTERLEAVED byte-by-byte, like R2007 header)
-     * Input: blockCount * 255 bytes, where blocks are interleaved:
-     *        data[0 + j*blockCount], data[1 + j*blockCount], ..., data[blockCount-1 + j*blockCount]
-     * Output: blockCount * 239 bytes
+     * Decode RS blocks from file data.
+     * Match libredwg decode_rs() exactly: deinterleave only 239 data bytes per block,
+     * skip the 16 parity bytes, and do NOT run RS error correction.
+     * libredwg has rs_decode_block() commented out because BM produces incorrect
+     * "corrections" on valid R2010+ data.
      */
     private static byte[] decodeRSBlocks(byte[] rsData, long blockCount) {
         if (blockCount < 0 || blockCount > Integer.MAX_VALUE) {
@@ -71,36 +70,16 @@ public class R2007SystemPageReader {
         }
 
         int blockCountInt = (int) blockCount;
-        byte[][] blocks = new byte[blockCountInt][255];
+        final int DATA_SIZE = 239;
 
-        // Deinterleave: R2007 system pages are stored with blocks interleaved byte-by-byte
-        // Same pattern as R2007 header: data[i + j * blockCount] contains block[i][j]
+        byte[] result = new byte[blockCountInt * DATA_SIZE];
         for (int i = 0; i < blockCountInt; i++) {
-            for (int j = 0; j < 255; j++) {
+            for (int j = 0; j < DATA_SIZE; j++) {
                 int srcOffset = i + j * blockCountInt;
                 if (srcOffset < rsData.length) {
-                    blocks[i][j] = rsData[srcOffset];
+                    result[i * DATA_SIZE + j] = rsData[srcOffset];
                 }
             }
-        }
-
-        System.out.println("[DEBUG] System page RS decode: blockCount=" + blockCountInt + " (interleaved)");
-
-        // Decode each block using ReedSolomonDecoder
-        for (int i = 0; i < blockCountInt; i++) {
-            int errors = ReedSolomonDecoder.decodeBlock(blocks[i], true);
-            if (errors < 0) {
-                System.out.println("[WARN] RS decode failed for block " + i);
-                // Continue anyway; some blocks may fail
-            } else {
-                System.out.println("[DEBUG]   Block " + i + ": " + errors + " errors corrected");
-            }
-        }
-
-        // Extract 239 bytes from each block and concatenate
-        byte[] result = new byte[blockCountInt * 239];
-        for (int i = 0; i < blockCountInt; i++) {
-            System.arraycopy(blocks[i], 0, result, i * 239, 239);
         }
 
         return result;
