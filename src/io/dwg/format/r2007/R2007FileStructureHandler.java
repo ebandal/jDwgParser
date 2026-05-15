@@ -108,15 +108,7 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
                         r2007Header.pageMapOffset());
 
                     if (sectionData != null && sectionData.length > 0) {
-                        // Map sections by index, known sections get proper names
-                        String sectionName;
-                        if (i == 6) {
-                            sectionName = "AcDb:AcDbObjects";
-                        } else if (i == 9) {
-                            sectionName = "AcDb:Handles";
-                        } else {
-                            sectionName = "Section" + i;
-                        }
+                        String sectionName = section.sectionName;
                         sections.put(sectionName, new SectionInputStream(sectionData, sectionName));
                         System.out.printf("[DEBUG] R2007: Section %d = '%s' (%d bytes)\n",
                             i, sectionName, sectionData.length);

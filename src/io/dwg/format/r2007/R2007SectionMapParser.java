@@ -123,17 +123,14 @@ public class R2007SectionMapParser {
                 break;
             }
 
-            // Extract section name (UTF-8 bytes)
+            // Extract section name (UTF-16LE per R2007 spec — nameLength is byte count)
             String sectionName = "Section_" + sectionIndex;
             if (nameLength > 0 && offset + nameLength <= sectionMapData.length) {
                 byte[] nameBytes = new byte[(int) nameLength];
                 System.arraycopy(sectionMapData, offset, nameBytes, 0, (int) nameLength);
-                try {
-                    sectionName = new String(nameBytes, "UTF-8").trim();
-                } catch (Exception e) {
-                    // Fallback to generic name if UTF-8 decode fails
-                    sectionName = "Section_" + sectionIndex;
-                }
+                String decoded = new String(nameBytes, java.nio.charset.StandardCharsets.UTF_16LE);
+                int nullIdx = decoded.indexOf('\0');
+                sectionName = (nullIdx >= 0 ? decoded.substring(0, nullIdx) : decoded).trim();
                 offset += (int) nameLength;
             }
 

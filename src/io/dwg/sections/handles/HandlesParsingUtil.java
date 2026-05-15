@@ -96,34 +96,21 @@ public class HandlesParsingUtil {
         long lastHandle = 0;
         long lastOffset = 0;
         int pageNum = 0;
-        java.io.PrintWriter debugFile = null;
-        try {
-            debugFile = new java.io.PrintWriter(new java.io.FileWriter("handles_debug.txt"));
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
 
         while (!reader.isEof()) {
             // Page size 읽기 (big-endian)
-            long posBeforePageSize = reader.position();
             int pageSize = reader.readBigEndianShort();
 
             if (pageSize <= 2) {
-                System.out.printf("[DEBUG] HandlesParsingUtil: Termination page (size=%d)\n", pageSize);
                 break;
             }
 
             if (pageSize < 2 || pageSize > 2040) {
-                System.out.printf("[DEBUG] HandlesParsingUtil: Invalid page size %d at bit pos %d (bytes: %d.%d), stopping\n",
-                    pageSize, posBeforePageSize, posBeforePageSize / 8, posBeforePageSize % 8);
                 break;
             }
 
-            System.out.printf("[DEBUG] HandlesParsingUtil: Page %d size=%d\n", pageNum, pageSize);
-
             // Handle-offset 쌍 파싱 (pageSize - 2 bytes: only subtract size field, CRC is after pairs)
             // Page structure: [pageSize(2)] [pairs(pageSize-2)] [CRC(2)] [Total: pageSize+2]
-            int pairsRead = 0;
             int bytesRead = 0;
             int pairsDataSize = pageSize - 2;  // pageSize includes 2-byte size field, pairs go from byte 2 to byte (pageSize-2)
 
@@ -138,56 +125,28 @@ public class HandlesParsingUtil {
                 int offsetDelta = reader.readModularChar();
 
                 long afterPos = reader.position();
-                int bytesReadThisPair = (int)((afterPos - beforePos) / 8);
-                bytesRead += bytesReadThisPair;
+                bytesRead += (int)((afterPos - beforePos) / 8);
 
                 lastHandle += handleDelta;
                 lastOffset += offsetDelta;
 
-                // Debug output to file for all pairs
-                if (debugFile != null) {
-                    debugFile.printf("pair[%d]: hDelta=0x%X cumH=0x%X oDelta=%d cumO=%d\n",
-                        pairsRead, handleDelta, lastHandle, offsetDelta, lastOffset);
-                    debugFile.flush();
-                }
-
-                // Debug output for first 20 pairs and every 50th pair
-                if (pairsRead < 20 || pairsRead % 50 == 0) {
-                    System.out.printf("[DEBUG] HandlesParsingUtil:   pair[%d]: hDelta=0x%X(→0x%X) oDelta=%d(→%d) (%db)\n",
-                        pairsRead, handleDelta, lastHandle, offsetDelta, lastOffset, bytesReadThisPair);
-                }
-
                 registry.put(lastHandle, lastOffset);
-                pairsRead++;
             }
 
-            // R2007+ Handles: Align to byte boundary before reading CRC
-            // Variable-length pair encoding may leave stream at non-byte-aligned position
+            // Align to byte boundary before reading CRC
             long currentPos = reader.position();
             if ((currentPos % 8) != 0) {
-                // Skip padding bits to reach next byte boundary
                 int paddingBits = 8 - (int)(currentPos % 8);
                 reader.getInput().readBits(paddingBits);
-                if (pairsRead < 10 || pairsRead % 50 == 0) {
-                    System.out.printf("[DEBUG] HandlesParsingUtil: Byte-aligned from bit pos %d (skip %d bits)\n",
-                        currentPos, paddingBits);
-                }
             }
 
             // CRC 읽기 (big-endian, seed=0xC0C1)
-            int crc = reader.readBigEndianShort();
-            System.out.printf("[DEBUG] HandlesParsingUtil: Page %d: %d pairs, %d bytes, CRC=0x%04X\n",
-                pageNum, pairsRead, bytesRead, crc);
-
+            reader.readBigEndianShort();
             pageNum++;
         }
 
         System.out.printf("[DEBUG] HandlesParsingUtil: Parsed %d pages, total handles=%d\n",
             pageNum, registry.allHandles().size());
-
-        if (debugFile != null) {
-            debugFile.close();
-        }
     }
 
     /**
