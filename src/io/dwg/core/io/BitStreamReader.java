@@ -23,7 +23,11 @@ public class BitStreamReader {
     public int readBitShort() {
         int opcode = input.readBits(2);
         switch (opcode) {
-            case 0b00: return input.readBits(16) & 0xFFFF;
+            case 0b00: {
+                int lo = input.readBits(8) & 0xFF;
+                int hi = input.readBits(8) & 0xFF;
+                return lo | (hi << 8);
+            }
             case 0b01: return input.readBits(8) & 0xFF;
             case 0b10: return 0;
             case 0b11: return 256;
@@ -293,7 +297,7 @@ public class BitStreamReader {
         int length = readBitShort();
         byte[] bytes = new byte[length];
         for (int i = 0; i < length; i++) {
-            bytes[i] = (byte)input.readRawChar();
+            bytes[i] = (byte)(input.readBits(8) & 0xFF);
         }
         return new String(bytes, StandardCharsets.US_ASCII);
     }
@@ -306,8 +310,8 @@ public class BitStreamReader {
         int charCount = readBitShort();
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < charCount; i++) {
-            int low = input.readRawChar() & 0xFF;
-            int high = input.readRawChar() & 0xFF;
+            int low = input.readBits(8) & 0xFF;
+            int high = input.readBits(8) & 0xFF;
             sb.append((char)((high << 8) | low));
         }
         return sb.toString();
