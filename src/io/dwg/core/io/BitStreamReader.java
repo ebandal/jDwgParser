@@ -46,7 +46,7 @@ public class BitStreamReader {
             case 0b00: return readBits32();  // Read 32 bits
             case 0b01: return input.readBits(8) & 0xFF;
             case 0b10: return 0;
-            case 0b11: throw new IllegalStateException("Invalid BL opcode 11");
+            case 0b11: return 256;
             default: throw new IllegalStateException();
         }
     }
@@ -60,20 +60,49 @@ public class BitStreamReader {
     }
 
     /**
+     * R2010+ UMC (Unsigned Modular Count): variable-length unsigned integer.
+     * Each RC byte: bit7=continuation, bits6-0=7 value bits (LSB first across bytes).
+     * Equivalent to libredwg bit_read_UMC.
+     */
+    public long readUMC() {
+        long result = 0;
+        int shift = 0;
+        for (int i = 0; i < 8; i++) {
+            int b = input.readBits(8) & 0xFF;
+            result |= (long)(b & 0x7F) << shift;
+            shift += 7;
+            if ((b & 0x80) == 0) break;
+        }
+        return result;
+    }
+
+    /**
+     * R2010+ BOT (Bit Object Type): 2-bit BB + 8 or 16 bits.
+     * BB=00: type = next 8 bits (0-255)
+     * BB=01: type = next 8 bits + 0x1F0 (extended)
+     * BB=10/11: type = next 16 bits LE
+     * Equivalent to libredwg bit_read_BOT.
+     */
+    public int readBOT() {
+        int bb = input.readBits(2);
+        if (bb == 0) return input.readBits(8) & 0xFF;
+        else if (bb == 1) return (input.readBits(8) & 0xFF) + 0x1F0;
+        else {
+            int lo = input.readBits(8) & 0xFF;
+            int hi = input.readBits(8) & 0xFF;
+            return lo | (hi << 8);
+        }
+    }
+
+    /**
      * §2.4: BitLongLong (BLL) 읽기
-     * 가변 길이: 1~3비트 바이트 수 + 데이터
+     * 3-bit len = number of bytes to follow (LE). Per libredwg bit_read_BLL().
+     * len=0 → 0; len=1 → RC; len=2 → RS; len=4 → RL; others → len LE bytes.
      */
     public long readBitLongLong() {
-        int bytesOpcode = input.readBits(3);
-        int byteCount;
-        if (bytesOpcode == 0) byteCount = 1;
-        else if (bytesOpcode == 1) byteCount = 2;
-        else if (bytesOpcode == 2) byteCount = 4;
-        else if (bytesOpcode == 3) byteCount = 8;
-        else byteCount = bytesOpcode - 3;
-
+        int len = input.readBits(3);
         long result = 0;
-        for (int i = 0; i < byteCount; i++) {
+        for (int i = 0; i < len; i++) {
             result |= (long)(input.readBits(8) & 0xFF) << (i * 8);
         }
         return result;
@@ -107,6 +136,53 @@ public class BitStreamReader {
             case 0b11: throw new IllegalStateException("Invalid BDWMD opcode 11");
             default: throw new IllegalStateException();
         }
+    }
+
+    /**
+     * DD (Default Double) 읽기 - libredwg bit_read_DD()
+     * 2비트 opcode:
+     *   00 = 기본값 반환
+     *   01 = 스트림에서 바이트[0-3] 읽기, 기본값 바이트[4-7] 유지
+     *   10 = 스트림에서 바이트 6개([4,5,0,1,2,3] 순서) 읽기, 기본값 바이트[6-7] 유지
+     *   11 = 전체 8바이트 읽기
+     */
+    public double readDD(double def) {
+        int opcode = input.readBits(2);
+        switch (opcode) {
+            case 0b00: return def;
+            case 0b11: return readRawDoubleNoAlign();
+            case 0b01: {
+                // read bytes [0,1,2,3] from stream; keep default bytes [4,5,6,7]
+                long defBits = Double.doubleToRawLongBits(def);
+                long lo = (long)(input.readBits(8) & 0xFF)
+                        | (long)(input.readBits(8) & 0xFF) << 8
+                        | (long)(input.readBits(8) & 0xFF) << 16
+                        | (long)(input.readBits(8) & 0xFF) << 24;
+                return Double.longBitsToDouble(lo | (defBits & 0xFFFFFFFF00000000L));
+            }
+            case 0b10: {
+                // read bytes in stream order [4,5,0,1,2,3]; keep default bytes [6,7]
+                long defBits = Double.doubleToRawLongBits(def);
+                long b4 = (long)(input.readBits(8) & 0xFF) << 32;
+                long b5 = (long)(input.readBits(8) & 0xFF) << 40;
+                long lo = (long)(input.readBits(8) & 0xFF)
+                        | (long)(input.readBits(8) & 0xFF) << 8
+                        | (long)(input.readBits(8) & 0xFF) << 16
+                        | (long)(input.readBits(8) & 0xFF) << 24;
+                return Double.longBitsToDouble(b4 | b5 | lo | (defBits & 0xFFFF000000000000L));
+            }
+            default: throw new IllegalStateException();
+        }
+    }
+
+    /** 2DD: x와 y를 각각 DD로 읽기 */
+    public double[] read2DD(double defX, double defY) {
+        return new double[]{readDD(defX), readDD(defY)};
+    }
+
+    /** 3DD: x, y, z를 각각 DD로 읽기 */
+    public double[] read3DD(double defX, double defY, double defZ) {
+        return new double[]{readDD(defX), readDD(defY), readDD(defZ)};
     }
 
     /**
