@@ -17,22 +17,12 @@ public class HandlesParsingUtil {
 
     /**
      * R13/R14 Handles 섹션 파싱 (블록 기반)
-     *
-     * 형식:
-     * - [RS_BE] block_size (= 페이지 크기, max 2040)
-     * - [page_size - 4 bytes] handle-offset 델타 쌍
-     * - [RS_BE] crc
-     * - 반복, block_size <= 2일 때 종료
      */
     public static void parseHandlesBlocksR13(BitInput input, HandleRegistry registry) {
-        int pageNum = 0;
-
         while (!input.isEof()) {
-            // Per libredwg: last_handle and last_offset reset to 0 per page
             long lastHandle = 0;
             long lastOffset = 0;
 
-            // Per libredwg: startpos is BEFORE reading section_size
             long blockStartBit = input.position();
 
             int byte1 = input.readRawChar() & 0xFF;
@@ -41,20 +31,16 @@ public class HandlesParsingUtil {
             int blockSize = (byte1 << 8) | byte2;  // RS_BE
 
             if (blockSize <= 2) {
-                // Termination block: size=2 means no data, just CRC follows
-                if (!input.isEof()) { input.readRawChar(); input.readRawChar(); } // skip CRC
+                if (!input.isEof()) { input.readRawChar(); input.readRawChar(); }
                 break;
             }
 
             if (blockSize > 2040) {
-                System.out.printf("[DEBUG] HandlesParsingUtil: Invalid block size %d, stopping\n", blockSize);
                 break;
             }
 
-            // Per libredwg: data end = startpos + blockSize (blockSize includes the 2-byte header)
             long dataEndBit = blockStartBit + (long) blockSize * 8;
 
-            int pairCount = 0;
             while (input.position() < dataEndBit && !input.isEof()) {
                 int handleDelta = readUnsignedModularChar(input);
                 if (handleDelta == 0) break;
@@ -65,40 +51,23 @@ public class HandlesParsingUtil {
                 lastHandle += handleDelta;
                 lastOffset += offsetDelta;
                 registry.put(lastHandle, lastOffset);
-                pairCount++;
             }
 
-            // Seek past data, read CRC (RS little-endian per libredwg bit_read_RS)
             input.seek(dataEndBit);
             if (!input.isEof()) {
                 input.readRawShort(); // CRC (LE)
-                if (pageNum == 0) System.out.printf("[DEBUG] HandlesParsingUtil: Block %d size=%d pairs=%d\n",
-                    pageNum, blockSize, pairCount);
             }
-
-            pageNum++;
         }
-
-        System.out.printf("[DEBUG] HandlesParsingUtil: Parsed %d blocks, total handles=%d\n",
-            pageNum, registry.allHandles().size());
     }
 
     /**
      * R2000+ Handles 섹션 파싱 (페이지 기반, LZ77 해제 후)
-     *
-     * 압축되지 않은 스트림에서 읽음:
-     * - [RS_BE] page_size (max 2040)
-     * - [page_size - 4 bytes] handle-offset 델타 쌍
-     * - [RS_BE] crc
-     * - 반복, page_size <= 2일 때 종료
      */
     public static void parseHandlesPagesR2000(BitStreamReader reader, HandleRegistry registry) {
         long lastHandle = 0;
         long lastOffset = 0;
-        int pageNum = 0;
 
         while (!reader.isEof()) {
-            // Page size 읽기 (big-endian)
             int pageSize = reader.readBigEndianShort();
 
             if (pageSize <= 2) {
@@ -109,19 +78,15 @@ public class HandlesParsingUtil {
                 break;
             }
 
-            // Handle-offset 쌍 파싱 (pageSize - 2 bytes: only subtract size field, CRC is after pairs)
-            // Page structure: [pageSize(2)] [pairs(pageSize-2)] [CRC(2)] [Total: pageSize+2]
             int bytesRead = 0;
-            int pairsDataSize = pageSize - 2;  // pageSize includes 2-byte size field, pairs go from byte 2 to byte (pageSize-2)
+            int pairsDataSize = pageSize - 2;
 
             while (bytesRead < pairsDataSize && !reader.isEof()) {
                 long beforePos = reader.position();
 
-                // handle_delta: UMC (unsigned)
                 int handleDelta = reader.readUnsignedModularChar();
                 if (handleDelta == 0) break;
 
-                // offset_delta: MC (signed)
                 int offsetDelta = reader.readModularChar();
 
                 long afterPos = reader.position();
@@ -133,26 +98,16 @@ public class HandlesParsingUtil {
                 registry.put(lastHandle, lastOffset);
             }
 
-            // Align to byte boundary before reading CRC
             long currentPos = reader.position();
             if ((currentPos % 8) != 0) {
                 int paddingBits = 8 - (int)(currentPos % 8);
                 reader.getInput().readBits(paddingBits);
             }
 
-            // CRC 읽기 (big-endian, seed=0xC0C1)
             reader.readBigEndianShort();
-            pageNum++;
         }
-
-        System.out.printf("[DEBUG] HandlesParsingUtil: Parsed %d pages, total handles=%d\n",
-            pageNum, registry.allHandles().size());
     }
 
-    /**
-     * UMC (unsigned modular char) 읽기
-     * MC 인코딩이지만 부호는 없음 (항상 양수)
-     */
     private static int readUnsignedModularChar(BitInput input) {
         int result = 0;
         int shift = 0;
@@ -170,7 +125,6 @@ public class HandlesParsingUtil {
      * Per libredwg bits.c bit_read_MC():
      *   - Non-last bytes: 7 bits (0x7F mask) contribute to value
      *   - Last byte (high bit=0): bit 6 (0x40) is sign flag, cleared before use (0xBF mask)
-     *     so only bits 0-5 contribute to the last byte's value
      */
     private static int readSignedModularChar(BitInput input) {
         int result = 0;
@@ -178,23 +132,17 @@ public class HandlesParsingUtil {
         while (true) {
             int b = input.readRawChar() & 0xFF;
             if ((b & 0x80) != 0) {
-                // Not the last byte: all 7 bits contribute
                 result |= (b & 0x7F) << (shift * 7);
                 shift++;
             } else {
-                // Last byte: bit 6 is sign, clear it before computing value (per libredwg: byte &= 0xBF)
                 boolean negative = (b & 0x40) != 0;
-                b &= 0xBF;  // clear sign bit from value
+                b &= 0xBF;
                 result |= (b & 0x7F) << (shift * 7);
                 return negative ? -result : result;
             }
         }
     }
 
-    /**
-     * 누적 오프셋 계산 (모든 버전 동일)
-     * Handles의 offset_delta는 누적되어야 함
-     */
     public static long accumulateOffset(long currentOffset, int delta) {
         return currentOffset + delta;
     }

@@ -11,7 +11,7 @@ import io.dwg.sections.objects.ObjectReader;
 
 /**
  * 3DFACE 엔티티 리더 (타입 0x1C)
- * 3개 또는 4개의 3D 점으로 정의된 면
+ * 스펙 §20 / libredwg dwg.spec DWG_ENTITY(_3DFACE)
  */
 public class Face3DObjectReader implements ObjectReader {
 
@@ -24,32 +24,37 @@ public class Face3DObjectReader implements ObjectReader {
         EntityHeaderReader.readCommonEntityData(r, v);
 
         DwgFace3D face = (DwgFace3D) target;
-
-        // 4개의 3D 점 읽기
         Point3D[] points = new Point3D[4];
 
         if (v.until(DwgVersion.R14)) {
-            // R13/R14: 각 점을 개별적으로 읽음
+            // R13/R14: 4 × 3BD
             for (int i = 0; i < 4; i++) {
-                double[] p = r.read3RawDouble();
+                double[] p = r.read3BitDouble();
                 points[i] = new Point3D(p[0], p[1], p[2]);
             }
         } else {
-            // R2000+: 압축된 형식
-            double[] firstPt = r.read3RawDouble();
-            double firstX = firstPt[0];
-            double firstY = firstPt[1];
-            double firstZ = firstPt[2];
+            // R2000+: has_no_flags(B), z_is_zero(B), corner1(RD,RD,[RD]),
+            //         corner2/3/4 as 3DD relative to previous
+            boolean hasNoFlags = r.getInput().readBit();
+            boolean zIsZero    = r.getInput().readBit();
 
-            // 나머지 3개의 점을 상대 좌표로 읽음
-            double[] p1 = r.read3RawDouble();
-            double[] p2 = r.read3RawDouble();
-            double[] p3 = r.read3RawDouble();
+            double x1 = r.readRawDouble();
+            double y1 = r.readRawDouble();
+            double z1 = zIsZero ? 0.0 : r.readRawDouble();
+            points[0] = new Point3D(x1, y1, z1);
 
-            points[0] = new Point3D(firstX, firstY, firstZ);
-            points[1] = new Point3D(firstX + p1[0], firstY + p1[1], firstZ + p1[2]);
-            points[2] = new Point3D(firstX + p2[0], firstY + p2[1], firstZ + p2[2]);
-            points[3] = new Point3D(firstX + p3[0], firstY + p3[1], firstZ + p3[2]);
+            double[] p2 = r.read3DD(x1, y1, z1);
+            points[1] = new Point3D(p2[0], p2[1], p2[2]);
+
+            double[] p3 = r.read3DD(p2[0], p2[1], p2[2]);
+            points[2] = new Point3D(p3[0], p3[1], p3[2]);
+
+            double[] p4 = r.read3DD(p3[0], p3[1], p3[2]);
+            points[3] = new Point3D(p4[0], p4[1], p4[2]);
+
+            if (!hasNoFlags) {
+                r.readBitShort(); // invis_flags (BS)
+            }
         }
 
         face.setPoints(points);

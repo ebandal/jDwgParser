@@ -53,43 +53,30 @@ public class DwgWriter {
 
         FileHeaderFields headerFields = new FileHeaderFields(version);
 
-        // 섹션 직렬화
         Map<String, byte[]> sections = new HashMap<>();
 
-        // Header 섹션 작성
         if (document.header() != null) {
             HeaderSectionWriter headerWriter = new HeaderSectionWriter();
             sections.put(headerWriter.sectionName(),
                 headerWriter.write(document.header(), version).toByteArray());
         }
 
-        // Classes 섹션 작성
         if (document.customClasses() != null && !document.customClasses().isEmpty()) {
             ClassesSectionWriter classesWriter = new ClassesSectionWriter();
             sections.put(classesWriter.sectionName(),
                 classesWriter.write(document.customClasses(), version).toByteArray());
         }
 
-        // Handles 섹션 작성
         if (document.handleRegistry() != null) {
             HandlesSectionWriter handlesWriter = new HandlesSectionWriter();
             sections.put(handlesWriter.sectionName(),
                 handlesWriter.write(document.handleRegistry(), version).toByteArray());
         }
 
-        // Objects 섹션 작성
         ObjectsSectionWriter objectsWriter = new ObjectsSectionWriter();
         sections.put(objectsWriter.sectionName(),
             objectsWriter.write(document.objectMap(), version).toByteArray());
 
-        System.out.println("[DEBUG] DwgWriter: version=" + version + ", sections=" + sections.size());
-        for (String sectionName : sections.keySet()) {
-            byte[] data = sections.get(sectionName);
-            System.out.println("  [DEBUG] Section '" + sectionName + "': " + data.length + " bytes");
-        }
-
-        // R13/R14/R2000: 섹션 로케이터 사전 계산
-        long sectionMapOffset = 0;
         if (version == DwgVersion.R13 || version == DwgVersion.R14 || version == DwgVersion.R2000) {
             String[] order = {
                 SectionType.HEADER.sectionName(),
@@ -97,7 +84,6 @@ public class DwgWriter {
                 SectionType.HANDLES.sectionName(),
                 SectionType.OBJECTS.sectionName()
             };
-            // Header size = 6+6+1+4+1+1+2+1 + sectionCount×12 + 2
             int sectionCount = 0;
             for (String name : order) {
                 if (sections.containsKey(name)) sectionCount++;
@@ -114,48 +100,30 @@ public class DwgWriter {
                 currentOffset += totalSize;
             }
             headerFields.setSectionLocators(locators);
-            System.out.println("[DEBUG] R13/R14/R2000: Locators for " + sectionCount + " sections calculated");
-        }
-        // R2004+: 섹션맵 오프셋 계산
-        else if (version.isR2004OrLater()) {
+        } else if (version.isR2004OrLater()) {
             long totalSectionSize = 0;
             for (byte[] sectionData : sections.values()) {
                 totalSectionSize += sectionData.length;
             }
 
             if (version.isR2007OrLater()) {
-                // R2007+ uses page-based addressing with Page Map
-                // Data layout: [0x480 header] [section pages] [section map page] [page map]
-                long baseOffset = 0x480;  // Header size in R2007
-
-                // Section Map will be page 1
+                long baseOffset = 0x480;
                 long sectionMapPageId = 1;
-
-                // Page Map will start after section data and section map page
-                // Estimate section map page size (will be LZ77 compressed)
-                long estimatedSectionMapSize = Math.max(512, totalSectionSize / 10);  // rough estimate
+                long estimatedSectionMapSize = Math.max(512, totalSectionSize / 10);
                 long pageMapOffset = baseOffset + totalSectionSize + estimatedSectionMapSize;
 
                 headerFields.setPageMapOffset(pageMapOffset);
                 headerFields.setSectionMapId(sectionMapPageId);
-                System.out.println("[DEBUG] R2007: pageMapOffset=0x" + Long.toHexString(pageMapOffset) +
-                    ", sectionMapId=" + sectionMapPageId);
             } else {
-                // R2004: direct offset to section map
-                sectionMapOffset = 0x100 + totalSectionSize;
+                long sectionMapOffset = 0x100 + totalSectionSize;
                 headerFields.setSectionMapOffset(sectionMapOffset);
-                System.out.println("[DEBUG] R2004: Calculated section map offset: 0x" + Long.toHexString(sectionMapOffset));
             }
         }
 
         BitOutput output = new ByteBufferBitOutput();
         handler.writeHeader(output, headerFields);
-        System.out.println("[DEBUG] After writeHeader: output position=" + output.position());
         handler.writeSections(output, sections, headerFields);
-        System.out.println("[DEBUG] After writeSections: output position=" + output.position());
 
-        byte[] result = output.toByteArray();
-        System.out.println("[DEBUG] Final output: " + result.length + " bytes");
-        return result;
+        return output.toByteArray();
     }
 }

@@ -69,11 +69,8 @@ public class EntityHeaderReader {
             } else {
                 previewSize = readRawLong(input);
             }
-            // skip preview bytes
-            long cap = Math.min(previewSize, 0x100000L);
-            for (long i = 0; i < cap; i++) {
-                input.readBits(8);
-            }
+            // O(1) seek past preview bytes; invalid size throws and fails entity gracefully
+            r.seek(r.position() + previewSize * 8L);
         }
 
         // 2. R13/R14 only: bitsize (RL) appears here, after preview_exists
@@ -109,12 +106,19 @@ public class EntityHeaderReader {
 
         // 9. Color
         if (v.from(DwgVersion.R2004)) {
-            // ENC: BS raw value, upper byte = flags
+            // ENC: BS raw value, upper byte = flags. Order per libredwg common_entity_data.spec:
+            // 0x20=alpha_raw (BL from dat), 0x40=handle (hdl_dat/dat), 0x80=rgb (BL, only if !0x40)
             int colorRaw = r.readBitShort();
             int flags = (colorRaw >> 8) & 0xFF;
-            if ((flags & 0x80) != 0) r.readBitLong();      // color.rgb (BL)
-            if ((flags & 0x40) != 0) readHandle(input);    // color.handle (H) DBCOLOR ref
-            if ((flags & 0x20) != 0) readRawLong(input);   // color.alpha_raw (BL, no alignment)
+            if ((flags & 0x20) != 0) r.readBitLong();      // color.alpha_raw (BL) — first
+            if ((flags & 0x40) != 0) {
+                if (!v.from(DwgVersion.R2010)) {
+                    readHandle(input);  // color.handle from dat (R2004-R2007 only)
+                }
+                // R2010+: color.handle lives in hdl_dat — not in main stream
+            } else if ((flags & 0x80) != 0) {
+                r.readBitLong();        // color.rgb (BL) — only when no color handle
+            }
         } else if (v.from(DwgVersion.R13)) {
             // CMC for R13-R2003: just a BS color index
             r.readBitShort();

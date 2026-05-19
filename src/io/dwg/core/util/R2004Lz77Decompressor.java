@@ -23,20 +23,10 @@ public class R2004Lz77Decompressor {
             return new byte[0];
         }
 
-        // DEBUG: Show first bytes of compressed data
-        System.out.printf("[LZ77] Decompressing %d bytes (expected %d output)\n", compressed.length, expectedSize);
-        System.out.print("[LZ77] First 32 bytes: ");
-        for (int i = 0; i < Math.min(32, compressed.length); i++) {
-            System.out.printf("%02X ", compressed[i] & 0xFF);
-        }
-        System.out.println();
-
         // Read first opcode
         int opcode1 = readRC();
-        System.out.printf("[LZ77] Initial opcode=0x%02X\n", opcode1);
 
         // If (opcode1 & 0xF0) == 0, handle as initial literal run
-        // copy_bytes returns the next byte as the new opcode
         if ((opcode1 & 0xF0) == 0) {
             int litLen = readLiteralLength(opcode1);
             opcode1 = copyBytes(litLen);
@@ -108,36 +98,22 @@ public class R2004Lz77Decompressor {
         return java.util.Arrays.copyOf(dst, dstIdx);
     }
 
-    /**
-     * Read one byte from src (bit_read_RC equivalent).
-     * Returns -1 on EOF but casts to 0xFF for safety.
-     */
     private int readRC() {
         if (srcIdx >= src.length) return 0;
         return src[srcIdx++] & 0xFF;
     }
 
-    /**
-     * Copy lit_length bytes from src to dst, then read and return next byte.
-     * Direct port of libredwg copy_bytes().
-     */
     private int copyBytes(int litLength) {
         for (int i = 0; i < litLength; i++) {
             if (srcIdx >= src.length || dstIdx >= dst.length) break;
             dst[dstIdx++] = src[srcIdx++];
         }
-        // copy_bytes returns the next byte as next opcode
         return readRC();
     }
 
     /**
      * Read R2004 encoded literal length.
      * Direct port of libredwg read_literal_length().
-     *
-     * If (opcode & 0xF) == 0:
-     *   Accumulate 0xFF for each zero byte read
-     *   Add 0xF + lastbyte (non-zero byte)
-     * Result is lowbits + 3.
      */
     private int readLiteralLength(int opcode) {
         int lowbits = opcode & 0xF;
@@ -156,11 +132,6 @@ public class R2004Lz77Decompressor {
     /**
      * Read R2004 encoded number of compressed bytes.
      * Direct port of libredwg read_compressed_bytes().
-     *
-     * If (opcode & bits) == 0:
-     *   Accumulate 0xFF for each zero byte read
-     *   Add lastbyte + bits
-     * Result is compressed_bytes + 2.
      */
     private int readCompressedBytes(int opcode, int bits) {
         int compressedBytes = opcode & bits;
@@ -179,11 +150,6 @@ public class R2004Lz77Decompressor {
     /**
      * Read R2004 two-byte offset.
      * Direct port of libredwg two_byte_offset().
-     *
-     * offset |= (firstByte >> 2)
-     * offset |= secondByte << 6
-     * offset += plus
-     * Returns firstByte (becomes next opcode).
      */
     private int twoByteOffset(int plus, int[] offsetRef) {
         int firstByte = readRC();
