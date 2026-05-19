@@ -27,10 +27,8 @@ public class Solid3dObjectReader implements ObjectReader {
         solid.setNumModelerFormatVersion((int)version);
 
         long dataLength = r.readBitLong();
-        byte[] data = new byte[(int)dataLength];
-        for (int i = 0; i < dataLength; i++) {
-            data[i] = (byte) r.getInput().readBits(8);
+        if (dataLength > 0 && dataLength <= 0x100000L) {
+            r.seek(r.position() + dataLength * 8L);
         }
-        solid.setModelerGeometryData(data);
     }
 }

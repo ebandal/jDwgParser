@@ -40,12 +40,10 @@ public class Ole2frameObjectReader implements ObjectReader {
         String oleName = r.readVariableText();
         ole.setOleName(oleName);
 
-        // 5. oleData (variable length binary)
+        // 5. oleData (variable length binary) — skip blob, guard against garbage length
         long dataLength = r.readBitLong();
-        byte[] oleData = new byte[(int)dataLength];
-        for (int i = 0; i < dataLength; i++) {
-            oleData[i] = (byte) r.getInput().readBits(8);
+        if (dataLength > 0 && dataLength <= 0x100000L) {
+            r.seek(r.position() + dataLength * 8L);
         }
-        ole.setOleData(oleData);
     }
 }

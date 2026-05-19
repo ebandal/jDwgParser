@@ -27,12 +27,9 @@ public class RegionObjectReader implements ObjectReader {
         long version = r.readBitLong();
         region.setNumModelerFormatVersion((int)version);
 
-        // 2. modelerGeometryData (SAT data - variable length)
         long dataLength = r.readBitLong();
-        byte[] data = new byte[(int)dataLength];
-        for (int i = 0; i < dataLength; i++) {
-            data[i] = (byte) r.getInput().readBits(8);
+        if (dataLength > 0 && dataLength <= 0x100000L) {
+            r.seek(r.position() + dataLength * 8L);
         }
-        region.setModelerGeometryData(data);
     }
 }

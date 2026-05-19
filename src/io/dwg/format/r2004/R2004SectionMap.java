@@ -18,8 +18,6 @@ public class R2004SectionMap {
     public static R2004SectionMap read(BitInput input, long sectionMapByteOffset) throws Exception {
         R2004SectionMap map = new R2004SectionMap();
 
-        System.out.printf("[DEBUG] R2004SectionMap.read: sectionMapByteOffset=0x%X\n", sectionMapByteOffset);
-
         // R2004 section map structure:
         // At sectionMapByteOffset + 0x100:
         //   RL section_type (must be 0x41630e3b)
@@ -29,99 +27,41 @@ public class R2004SectionMap {
         //   RL checksum
         // Then compressed section map data
 
-        // Seek to section map page header (page 1 offset = section start + 0x100)
         long pageHeaderOffset = sectionMapByteOffset + 0x100;
         long actualOffset = pageHeaderOffset * 8;
         input.seek(actualOffset);
 
-        // Read page header (32 bytes) - appears to be unencrypted or pre-decrypted
         byte[] pageHeader = new byte[32];
         for (int i = 0; i < 32; i++) {
             pageHeader[i] = (byte) input.readRawChar();
         }
 
-        // Parse header as little-endian 32-bit integers
         long page_type = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 0);
-        System.out.printf("[DEBUG] R2004SectionMap: page_type=0x%08X\n", page_type);
 
         if (page_type != 0x41630e3bL) {
-            System.out.printf("[WARN] R2004SectionMap: Invalid page_type 0x%08X, expected 0x41630e3b\n", page_type);
             return map;
         }
 
-        // IMPORTANT: Section map page header uses different field order/meaning than regular sections
-        // Reading known values first:
-        // offset 0x00: page_type (0x41630E3B)
-        // offset 0x04: field at 0x04 (0x90 - unknown meaning)
-        // offset 0x08: comp_data_size (149 - matches data we actually read)
-        // offset 0x0C: field at 0x0C (0x02 - NOT decompressed size, too small)
-        // offset 0x1C: field at 0x1C (0x200 = 512 - might be actual decompressed size)
-
-        long field_0x04 = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 4);
         long comp_data_size = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 8);
-        long field_0x0C = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 12);
-        long decomp_data_size = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 28);  // Try offset 0x1C instead
-        long address = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 16);
-        long unknown = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 20);
-        long page_header_crc = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 24);
-
-        System.out.printf("[DEBUG] R2004SectionMap: field_0x04=0x%08X, decomp_size=%d, comp_size=%d, address=0x%X\n",
-            field_0x04, decomp_data_size, comp_data_size, address);
+        long decomp_data_size = io.dwg.core.util.ByteUtils.readLE32(pageHeader, 28);
 
         if (decomp_data_size <= 0 || decomp_data_size > 1000000) {
-            System.out.printf("[WARN] R2004SectionMap: unreasonable decomp_data_size %d\n", decomp_data_size);
             return map;
         }
 
-        // Read compressed data
         byte[] compressedData = new byte[(int)comp_data_size];
         for (int i = 0; i < comp_data_size; i++) {
             compressedData[i] = (byte) input.readRawChar();
         }
 
-        System.out.printf("[DEBUG] R2004SectionMap: Read %d bytes of compressed data\n", compressedData.length);
-
-        // DEBUG: Print first 32 bytes of compressed data
-        System.out.printf("[DEBUG] R2004SectionMap: First 32 bytes of compressed (hex):\n  ");
-        for (int i = 0; i < Math.min(32, compressedData.length); i++) {
-            System.out.printf("%02X ", compressedData[i] & 0xFF);
-        }
-        System.out.println();
-
-        // Decompress using correct R2004 LZ77 algorithm (LibreDWG-based)
         byte[] sectionMapData;
         try {
             io.dwg.core.util.R2004Lz77Decompressor decompressor = new io.dwg.core.util.R2004Lz77Decompressor();
             sectionMapData = decompressor.decompress(compressedData, (int)decomp_data_size);
-            System.out.printf("[DEBUG] R2004SectionMap: Decompressed to %d bytes\n", sectionMapData.length);
         } catch (Exception e) {
-            System.out.printf("[WARN] R2004SectionMap: Decompression failed: %s\n", e.getMessage());
-            e.printStackTrace();
             return map;
         }
 
-        // DEBUG: Print first 256 bytes of decompressed data
-        System.out.printf("[DEBUG] R2004SectionMap: First 256 bytes decompressed (hex):\n");
-        for (int i = 0; i < Math.min(256, sectionMapData.length); i += 16) {
-            System.out.printf("  0x%04X: ", i);
-            for (int j = 0; j < 16 && i + j < sectionMapData.length; j++) {
-                System.out.printf("%02X ", sectionMapData[i + j] & 0xFF);
-            }
-            System.out.print("  |");
-            for (int j = 0; j < 16 && i + j < sectionMapData.length; j++) {
-                byte b = sectionMapData[i + j];
-                System.out.print((b >= 32 && b < 127) ? (char)b : '.');
-            }
-            System.out.println("|");
-        }
-
-        // Parse R2004 Section Map: Simple pairs of (SectionID, Size)
-        // Each entry is: [4 bytes Section ID] [4 bytes Size]
-        // Sections are stored sequentially starting at offset 0x100
-
-        int pos = 0;
-
-        // Map section IDs to canonical names
         java.util.Map<Integer, String> sectionNames = new java.util.HashMap<>();
         sectionNames.put(0, "(Empty)");
         sectionNames.put(1, "AcDb:Header");
@@ -146,52 +86,29 @@ public class R2004SectionMap {
         sectionNames.put(27, "AcDb:Preview");
         sectionNames.put(28, "AcDb:AppInfoHistory");
 
-        System.out.printf("[DEBUG] R2004SectionMap: Parsing %d bytes as section entries\n", sectionMapData.length);
-
-        // Each section map entry is 8 bytes:
-        // [0-1]: section ID (2 bytes LE)
-        // [2-7]: other data (6 bytes) - purpose TBD, will determine from section headers
+        int pos = 0;
         while (pos + 8 <= sectionMapData.length) {
             try {
-                // Read all 8 bytes
                 byte[] entryBytes = new byte[8];
                 for (int i = 0; i < 8; i++) {
                     entryBytes[i] = sectionMapData[pos + i];
                 }
 
-                // Parse section ID (bytes 0-1, LE)
                 int sectionId = (entryBytes[0] & 0xFF) | ((entryBytes[1] & 0xFF) << 8);
-
-                // Read remaining 6 bytes as hex for analysis
-                System.out.printf("[DEBUG] R2004SectionMap entry: ID=%2d  data=%02X %02X %02X %02X %02X %02X\n",
-                    sectionId,
-                    entryBytes[2] & 0xFF, entryBytes[3] & 0xFF, entryBytes[4] & 0xFF,
-                    entryBytes[5] & 0xFF, entryBytes[6] & 0xFF, entryBytes[7] & 0xFF);
-
                 pos += 8;
 
                 String name = sectionNames.getOrDefault(sectionId, "Unknown(" + sectionId + ")");
 
-                // Create descriptor without size (will be determined from actual section headers)
                 if (sectionId >= 0 && sectionId <= 28) {
                     SectionDescriptor desc = new SectionDescriptor(name);
-                    desc.setOffset(0); // Offset will be set when reading section data
-                    desc.setUncompressedSize(0); // Size will be determined from section headers
+                    desc.setOffset(0);
+                    desc.setUncompressedSize(0);
                     map.descriptors.add(desc);
                 }
 
             } catch (Exception e) {
-                System.out.printf("[ERROR] R2004SectionMap: Failed to parse at offset %d: %s\n", pos, e.getMessage());
                 break;
             }
-        }
-
-        System.out.printf("[DEBUG] R2004SectionMap: Loaded %d sections\n", map.descriptors.size());
-
-        // Debug: Print extracted section names
-        System.out.println("[DEBUG] R2004SectionMap: Extracted sections:");
-        for (SectionDescriptor desc : map.descriptors) {
-            System.out.printf("  %-25s\n", desc.name());
         }
 
         return map;
@@ -205,11 +122,4 @@ public class R2004SectionMap {
         return descriptors.stream().filter(d -> d.name().equals(name)).findFirst();
     }
 
-    private static String parseUtf16Name(byte[] bytes) {
-        int len = 0;
-        while (len + 1 < bytes.length && (bytes[len] != 0 || bytes[len + 1] != 0)) {
-            len += 2;
-        }
-        return new String(bytes, 0, len, java.nio.charset.StandardCharsets.UTF_16LE);
-    }
 }

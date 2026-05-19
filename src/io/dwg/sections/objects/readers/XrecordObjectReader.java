@@ -23,12 +23,9 @@ public class XrecordObjectReader implements ObjectReader {
         int recType = r.readBitShort();
         xrecord.setRecordType(recType);
 
-        // 2. recordData (variable length binary)
         long dataLength = r.readBitLong();
-        byte[] data = new byte[(int)dataLength];
-        for (int i = 0; i < dataLength; i++) {
-            data[i] = (byte) r.getInput().readBits(8);
+        if (dataLength > 0 && dataLength <= 0x100000L) {
+            r.seek(r.position() + dataLength * 8L);
         }
-        xrecord.setRecordData(data);
     }
 }
