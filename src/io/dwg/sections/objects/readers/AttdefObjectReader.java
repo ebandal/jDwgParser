@@ -82,7 +82,12 @@ public class AttdefObjectReader implements ObjectReader {
 
             // AcDbAttributeDefinition subclass
             if (v.from(DwgVersion.R2010)) r.getInput().readRawChar(); // is_locked_in_block
-            if (v.from(DwgVersion.R2018)) r.getInput().readRawChar(); // mtext_type (skip embedded subclass)
+            if (v.from(DwgVersion.R2018)) {
+                int mtextType = r.getInput().readRawChar(); // mtext_type
+                if (mtextType > 1) {
+                    EntityHeaderReader.skipMTextEmbedded(r, v);
+                }
+            }
             attdef.setTag(r.readVariableText());
             r.readBitShort();   // field_length
             attdef.setFlags(r.getInput().readRawChar());

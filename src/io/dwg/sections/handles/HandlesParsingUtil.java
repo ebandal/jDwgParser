@@ -65,7 +65,6 @@ public class HandlesParsingUtil {
      */
     public static void parseHandlesPagesR2000(BitStreamReader reader, HandleRegistry registry) {
         long lastHandle = 0;
-        long lastOffset = 0;
 
         while (!reader.isEof()) {
             int pageSize = reader.readBigEndianShort();
@@ -74,9 +73,13 @@ public class HandlesParsingUtil {
                 break;
             }
 
-            if (pageSize < 2 || pageSize > 2040) {
+            if (pageSize > 2040) {
                 break;
             }
+
+            // Per libredwg: last_offset is a local variable reset to 0 for each page.
+            // Each page's first MC value is the absolute byte offset of the first object.
+            long lastOffset = 0;
 
             int bytesRead = 0;
             int pairsDataSize = pageSize - 2;

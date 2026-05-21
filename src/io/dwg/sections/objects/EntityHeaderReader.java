@@ -184,6 +184,64 @@ public class EntityHeaderReader {
         return Double.longBitsToDouble(bits);
     }
 
+    /**
+     * Skip embedded AcDbMTextObjectEmbedded subclass (R2018+).
+     * Called when ATTRIB/ATTDEF mtext_type > 1 (multi-line attribute).
+     * Fields from libredwg AcDbMTextObjectEmbedded_fields in dwg_spec_shared.h.
+     */
+    public static void skipMTextEmbedded(BitStreamReader r, DwgVersion v) throws Exception {
+        BitInput input = r.getInput();
+        // Common entity data portion of embedded MTEXT
+        input.readBits(2);      // entmode (BB)
+        r.readBitLong();        // num_reactors (BL)
+        input.readBit();        // is_xdic_missing (B)
+        input.readBit();        // has_ds_data (B)
+        r.readBitShort();       // color.raw (BSx = BS)
+        r.readBitDouble();      // ltype_scale (BD)
+        input.readBits(2);      // ltype_flags (BB)
+        input.readBits(2);      // plotstyle_flags (BB)
+        input.readBits(2);      // material_flags (BB)
+        input.readBits(8);      // shadow_flags (RC)
+        input.readBit();        // has_full_visualstyle (B)
+        input.readBit();        // has_face_visualstyle (B)
+        input.readBit();        // has_edge_visualstyle (B)
+        r.readBitShort();       // invisible (BS)
+        input.readBits(8);      // linewt (RC)
+        r.readHandle();         // layer handle
+
+        // Embedded MTEXT object fields (non-DXF order)
+        r.read3BitDouble();     // ins_pt (3BD)
+        r.read3BitDouble();     // extrusion (3BD)
+        r.read3BitDouble();     // x_axis_dir (3BD)
+        r.readBitDouble();      // rect_width (BD)
+        r.readBitDouble();      // rect_height (BD)
+        r.readBitDouble();      // text_height (BD)
+        r.readBitShort();       // attachment (BS)
+        r.readBitShort();       // flow_dir (BS)
+        r.readBitDouble();      // extents_height (BD)
+        r.readBitDouble();      // extents_width (BD)
+        r.readVariableText();   // text (T)
+        r.readHandle();         // style handle (HANDLE0)
+        r.readBitShort();       // linespace_style (BS)
+        r.readBitDouble();      // linespace_factor (BD)
+        input.readBit();        // unknown_b0 (B)
+        int bgFillFlag = r.readBitLong(); // bg_fill_flag (BL0)
+        // R2018: condition is (bgFillFlag & 1) per libredwg
+        if ((bgFillFlag & 1) != 0) {
+            r.readBitLong();    // bg_fill_scale (BL)
+            r.readCmColor();    // bg_fill_color (CMC = BS+BL+RC for R2004+)
+            r.readBitLong();    // bg_fill_trans (BL)
+        }
+        input.readBit();        // is_not_annotative (B)
+        input.readBit();        // is_really_locked (B)
+
+        // Non-DXF: annotative data
+        int annotSize = r.readBitShort(); // annotative_data_size (BS)
+        for (int i = 0; i < annotSize; i++) {
+            input.readBits(8);  // annotative_data bytes (BINARY)
+        }
+    }
+
     // --- private helpers ---
 
     private static long readRawLong(BitInput input) {

@@ -72,7 +72,12 @@ public class AttribObjectReader implements ObjectReader {
 
         // AcDbAttribute subclass
         if (v.from(DwgVersion.R2010)) r.getInput().readRawChar(); // is_locked_in_block
-        if (v.from(DwgVersion.R2018)) r.getInput().readRawChar(); // mtext_type
+        if (v.from(DwgVersion.R2018)) {
+            int mtextType = r.getInput().readRawChar(); // mtext_type
+            if (mtextType > 1) {
+                EntityHeaderReader.skipMTextEmbedded(r, v);
+            }
+        }
         if (v.from(DwgVersion.R13)) {
             attrib.setTag(r.readVariableText());
             r.readBitShort();   // field_length

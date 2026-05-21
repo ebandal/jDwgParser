@@ -94,9 +94,8 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         long nextHandle = 1;
         long bitOffset = 0;
 
-        // FIX 1: create buffer once and seek per iteration;
-        // ByteBuffer.wrap(raw, offset, ...) + new ByteBufferBitInput(buf) is broken because
-        // the constructor calls buffer.position(0), discarding the wrap() offset every time.
+        // Create buffer once and seek per iteration — ByteBuffer.wrap() loses the offset
+        // because the ByteBufferBitInput constructor calls buffer.position(0).
         ByteBufferBitInput bbuf = new ByteBufferBitInput(raw);
 
         while (bitOffset < (long)(raw.length - 6) * 8L) {
@@ -105,16 +104,19 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                 bbuf.seek(bitOffset);
                 BitStreamReader r = new BitStreamReader(bbuf, version);
 
-                int objSizeBits = r.readModularShort();
+                // MS returns object size in BYTES (libredwg: obj->size = bit_read_MS(dat); dat->size = obj->size)
+                int objSizeBytes = r.readModularShort();
 
-                // R2010+: UMC (handlestream_size) between MS and type code
+                // R2010+: UMC (handlestream_size in bits) comes between MS and type code.
+                // obj->address = dat->byte after UMC; next object at (obj->address + obj->size).
                 if (version.from(DwgVersion.R2010)) {
                     r.readUMC();
                 }
 
-                long afterMsBitPos = bbuf.position();
+                // Bit position of obj->address (start of object data, after MS+UMC)
+                long objDataStartBit = bbuf.position();
 
-                if (objSizeBits <= 0 || objSizeBits > 0x200000) {
+                if (objSizeBytes <= 0 || objSizeBytes > 0x40000) {
                     bitOffset = startBitOffset + 16;
                     continue;
                 }
@@ -129,8 +131,8 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
                 DwgObject obj = createObject(typeCode);
                 if (obj == null) {
-                    // FIX 3: advance using bit positions (objSizeBits is in bits, not bytes)
-                    bitOffset = afterMsBitPos + objSizeBits;
+                    // Next object starts at obj->address + obj->size (both in bytes → bits)
+                    bitOffset = objDataStartBit + (long)objSizeBytes * 8L;
                     continue;
                 }
 
@@ -156,8 +158,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                 result.put(nextHandle, obj);
                 nextHandle++;
 
-                // FIX 3: objSizeBits is the object size in bits starting from afterMsBitPos
-                bitOffset = afterMsBitPos + objSizeBits;
+                bitOffset = objDataStartBit + (long)objSizeBytes * 8L;
 
             } catch (Exception e) {
                 bitOffset = startBitOffset + 16;
@@ -177,30 +178,21 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
     private DwgObject parseObjectAt(byte[] raw, int byteOffset, DwgVersion version, long handle)
             throws Exception {
-        // Use the whole buffer and seek to the correct offset
-        // (ByteBufferBitInput constructor resets position to 0, so we must seek)
         ByteBufferBitInput buf = new ByteBufferBitInput(raw);
         buf.seek((long) byteOffset * 8L);
         BitStreamReader r = new BitStreamReader(buf, version);
 
         int objSize = r.readModularShort();
+        if (objSize <= 0) return null;
 
-        if (objSize <= 0) {
-            return null;
-        }
-
-        // R2010+: UMC (handlestream_size) comes between MS and type code
         if (version.from(DwgVersion.R2010)) {
-            r.readUMC(); // skip handlestream_size
+            r.readUMC();
         }
 
-        // R2010+ uses BOT (Bit Object Type); pre-R2010 uses BS
         int typeCode = version.from(DwgVersion.R2010) ? r.readBOT() : r.readBitShort();
 
         DwgObject obj = createObject(typeCode);
-        if (obj == null) {
-            return null;
-        }
+        if (obj == null) return null;
 
         ((AbstractDwgObject) obj).setHandle(handle);
         ((AbstractDwgObject) obj).setRawTypeCode(typeCode);
@@ -210,11 +202,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             try {
                 parseCommonHeader(r, obj, version);
             } catch (IllegalStateException e) {
-                if (e.getMessage() != null && e.getMessage().contains("Invalid BL opcode")) {
-                    // Expected for certain types, continue without header
-                } else {
-                    throw e;
-                }
+                if (e.getMessage() == null || !e.getMessage().contains("Invalid BL opcode")) throw e;
             }
         }
 
