@@ -40,4 +40,19 @@ public class DwgSpline extends AbstractDwgEntity {
     public void addFitPoint(Point3D point) {
         this.fitPoints.add(point);
     }
+
+    private boolean rational;
+    private boolean closed;
+    private boolean periodic;
+    private List<Double> knots = new ArrayList<>();
+    private List<Double> weights = new ArrayList<>();   // 제어점마다 하나, 가중치가 없으면 비어 있음
+
+    public boolean isRational() { return rational; }
+    public boolean isClosed() { return closed; }
+    public boolean isPeriodic() { return periodic; }
+    public List<Double> knots() { return knots; }
+    public List<Double> weights() { return weights; }
+    public void setRational(boolean rational) { this.rational = rational; }
+    public void setClosed(boolean closed) { this.closed = closed; }
+    public void setPeriodic(boolean periodic) { this.periodic = periodic; }
 }

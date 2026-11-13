@@ -24,13 +24,8 @@ public class VertexPfaceObjectReader implements ObjectReader {
         EntityHeaderReader.readCommonEntityData(r, v);
 
         DwgVertexPface vertex = (DwgVertexPface) target;
-
-        // 1. location (3RD)
-        double[] loc = r.read3RawDouble();
+        vertex.setFlags(r.getInput().readBits(8));      // flags (RC)
+        double[] loc = r.read3BitDouble();              // point (3BD)
         vertex.setLocation(new Point3D(loc[0], loc[1], loc[2]));
-
-        // 2. flags (BS)
-        int flags = r.readBitShort();
-        vertex.setFlags(flags);
     }
 }

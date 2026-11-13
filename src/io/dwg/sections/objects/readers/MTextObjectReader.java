@@ -34,7 +34,9 @@ public class MTextObjectReader implements ObjectReader {
         mtext.setExtrusion(ext);
 
         // x_axis_dir (3BD)
-        r.read3BitDouble();
+        double[] dir = r.read3BitDouble();
+        mtext.setXAxisDirection(new Point3D(dir[0], dir[1], dir[2]));
+        mtext.setAngle(Math.atan2(dir[1], dir[0]));
 
         // rect_width (BD), [R2007+: rect_height (BD)], text_height (BD)
         double rectWidth = r.readBitDouble();

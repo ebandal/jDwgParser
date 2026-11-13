@@ -32,7 +32,7 @@ public class DwgLwPolyline extends AbstractDwgEntity {
     public List<Double> bulges() { return bulges; }
     public List<double[]> widths() { return widths; }
 
-    public boolean isClosed() { return (flags & 0x01) != 0; }
+    public boolean isClosed() { return (flags & 0x200) != 0; }
     public int vertexCount() { return vertices.size(); }
 
     public void setFlags(int flags) { this.flags = flags; }

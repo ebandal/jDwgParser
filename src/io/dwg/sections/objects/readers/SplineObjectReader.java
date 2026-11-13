@@ -42,9 +42,9 @@ public class SplineObjectReader implements ObjectReader {
 
         if ((scenario & 1) != 0) {
             // scenario 1: rational B-spline
-            r.getInput().readBit(); // rational
-            r.getInput().readBit(); // closed_b
-            r.getInput().readBit(); // periodic
+            spline.setRational(r.getInput().readBit());
+            spline.setClosed(r.getInput().readBit());
+            spline.setPeriodic(r.getInput().readBit());
             r.readBitDouble(); // knot_tol
             r.readBitDouble(); // ctrl_tol
             int numKnots    = r.readBitLong();
@@ -53,14 +53,14 @@ public class SplineObjectReader implements ObjectReader {
 
             // knots
             for (int i = 0; i < numKnots; i++) {
-                r.readBitDouble();
+                spline.knots().add(r.readBitDouble());
             }
 
             // control points
             for (int i = 0; i < numCtrlPts; i++) {
                 double[] pt = r.read3BitDouble();
                 spline.addControlPoint(new Point3D(pt[0], pt[1], pt[2]));
-                if (weighted) r.readBitDouble(); // weight
+                if (weighted) spline.weights().add(r.readBitDouble());
             }
         } else {
             // scenario 2: bezier spline

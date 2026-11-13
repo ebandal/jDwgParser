@@ -30,4 +30,12 @@ public class DwgLeader extends AbstractDwgEntity {
     public void setStyleName(String styleName) { this.styleName = styleName; }
     public void setArrow(int arrow) { this.arrow = arrow; }
     public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+
+    private int pathType;               // 0 = 직선 구간, 1 = 스플라인
+    private boolean arrowheadOn;
+
+    public int pathType() { return pathType; }
+    public boolean isArrowheadOn() { return arrowheadOn; }
+    public void setPathType(int pathType) { this.pathType = pathType; }
+    public void setArrowheadOn(boolean arrowheadOn) { this.arrowheadOn = arrowheadOn; }
 }

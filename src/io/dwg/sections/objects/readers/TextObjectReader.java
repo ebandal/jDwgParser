@@ -24,8 +24,13 @@ public class TextObjectReader implements ObjectReader {
         EntityHeaderReader.readEntityHeader(r, v);
         EntityHeaderReader.readCommonEntityData(r, v);
 
-        DwgText text = (DwgText) target;
+        readTextData((DwgText) target, r, v);
+    }
 
+    /**
+     * TEXT의 본문. ATTRIB도 같은 구성으로 시작하므로 함께 쓴다.
+     */
+    public static void readTextData(DwgText text, BitStreamReader r, DwgVersion v) throws Exception {
         if (v.until(DwgVersion.R13)) {
             // R13 이전: elevation(BD) + ins_pt(2RD)
             text.setElevation(r.readBitDouble());

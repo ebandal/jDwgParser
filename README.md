@@ -149,9 +149,9 @@ java -cp target/classes:target/dependency/* \
 
 자세한 테스트 가이드는 [TESTING.md](TESTING.md) 참조.
 
-### 렌더링으로 눈으로 확인 (R2000)
+### 렌더링으로 눈으로 확인
 
-R2000(AC1015) 도면의 모델 스페이스를 PNG로 그려 결과를 직접 확인할 수 있습니다.
+`DwgReader`로 읽은 도면의 모델 스페이스를 PNG로 그려 결과를 직접 확인할 수 있습니다. 검증된 버전은 R2000이고, R2004는 예제 한 개로 확인했습니다. R2007 이상은 아직 문자와 이름이 빠집니다.
 
 ```bash
 mvn compile

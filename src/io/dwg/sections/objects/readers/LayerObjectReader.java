@@ -34,7 +34,16 @@ public class LayerObjectReader implements ObjectReader {
         layer.setLocked((flags & 0x08) != 0);
 
         int[] colorData = r.readCmColor();
-        layer.setColor(new CmColor(colorData[0]));
+        int colorIndex = colorData[0];
+        if (colorData.length > 1) {
+            // R2004+ : 인덱스 필드는 쓰이지 않고, RGB 값의 최상위 바이트가 색 지정 방식이다.
+            // 0xC3이면 하위 바이트가 색상 인덱스이다. (R2004 파일로 확인, 그 밖의 방식은 확인하지 않음)
+            int method = (colorData[1] >>> 24) & 0xFF;
+            if (method == 0xC3) {
+                colorIndex = colorData[1] & 0xFF;
+            }
+        }
+        layer.setColor(new CmColor(colorIndex));
     }
 
     @Override

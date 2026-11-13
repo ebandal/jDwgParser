@@ -53,7 +53,7 @@ public class Face3DObjectReader implements ObjectReader {
             points[3] = new Point3D(p4[0], p4[1], p4[2]);
 
             if (!hasNoFlags) {
-                r.readBitShort(); // invis_flags (BS)
+                face.setInvisibleEdges(r.readBitShort()); // invis_flags (BS)
             }
         }
 

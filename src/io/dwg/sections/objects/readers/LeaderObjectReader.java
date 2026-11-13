@@ -24,24 +24,57 @@ public class LeaderObjectReader implements ObjectReader {
         EntityHeaderReader.readCommonEntityData(r, v);
 
         DwgLeader leader = (DwgLeader) target;
+        boolean r13or14 = !v.from(DwgVersion.R2000);
 
-        // 노멀 벡터
-        double[] extrusion = r.readBitExtrusion();
-        leader.setExtrusion(extrusion);
+        r.getInput().readBit();                 // unknown
+        r.readBitShort();                       // annotation type
+        leader.setPathType(r.readBitShort());
 
-        // 스타일 이름
-        String styleName = r.readVariableText();
-        leader.setStyleName(styleName);
-
-        // 화살표 모양
-        int arrow = r.readBitShort();
-        leader.setArrow(arrow);
-
-        // 점의 개수
-        int numPoints = r.readBitShort();
+        int numPoints = r.readBitLong();
+        if (numPoints < 0 || numPoints > 1_000_000) {
+            throw new IllegalStateException("bad LEADER point count " + numPoints);
+        }
         for (int i = 0; i < numPoints; i++) {
             double[] pt = r.read3BitDouble();
             leader.addPoint(new Point3D(pt[0], pt[1], pt[2]));
         }
+
+        r.read3BitDouble();                     // origin
+        leader.setExtrusion(r.read3BitDouble());
+        r.read3BitDouble();                     // x direction
+        r.read3BitDouble();                     // offset to the block insertion point
+        if (v.from(DwgVersion.R14)) {
+            r.read3BitDouble();                 // end point projection
+        }
+        if (r13or14) {
+            r.readBitDouble();                  // dimgap
+        }
+        if (!v.from(DwgVersion.R2010)) {
+            r.readBitDouble();                  // box height
+            r.readBitDouble();                  // box width
+        }
+        r.getInput().readBit();                 // hook line on x direction
+        leader.setArrowheadOn(r.getInput().readBit());
+        leader.setArrow(leader.isArrowheadOn() ? 1 : 0);
+        if (r13or14) {
+            r.readBitShort();                   // arrowhead type
+            r.readBitDouble();                  // dimasz
+            r.getInput().readBit();
+            r.getInput().readBit();
+            r.readBitShort();
+            r.readBitShort();                   // byblock color
+            r.getInput().readBit();
+            r.getInput().readBit();
+        } else {
+            r.readBitShort();                   // unknown
+            r.getInput().readBit();             // unknown
+            r.getInput().readBit();             // unknown
+        }
+    }
+
+    @Override
+    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
+        r.readHandleReference(target.handle()); // associated annotation
+        r.readHandleReference(target.handle()); // dimension style
     }
 }
