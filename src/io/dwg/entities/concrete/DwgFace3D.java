@@ -25,4 +25,9 @@ public class DwgFace3D extends AbstractDwgEntity {
             this.points[index] = point;
         }
     }
+
+    private int invisibleEdges;         // 비트 i : i번째 모서리가 보이지 않음
+
+    public int invisibleEdges() { return invisibleEdges; }
+    public void setInvisibleEdges(int invisibleEdges) { this.invisibleEdges = invisibleEdges; }
 }

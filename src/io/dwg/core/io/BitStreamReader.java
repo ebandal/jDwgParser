@@ -372,7 +372,10 @@ public class BitStreamReader {
         int colorIndex = readBitShort();
         if (version.from(DwgVersion.R2004)) {
             int rgb = readBitLong();
-            int colorType = input.readRawChar();
+            // RC는 비트 스트림 안에서 바이트 경계에 맞추지 않는다
+            int colorType = input.readBits(8) & 0xFF;
+            if ((colorType & 1) != 0) readVariableText();   // color name
+            if ((colorType & 2) != 0) readVariableText();   // book name
             return new int[]{colorIndex, rgb, colorType};
         }
         return new int[]{colorIndex};

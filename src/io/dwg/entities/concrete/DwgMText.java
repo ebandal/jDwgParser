@@ -38,4 +38,9 @@ public class DwgMText extends AbstractDwgEntity {
     public void setStyleName(String styleName) { this.styleName = styleName; }
     public void setAngle(double angle) { this.angle = angle; }
     public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+
+    private Point3D xAxisDirection;     // 문자 진행 방향 (WCS)
+
+    public Point3D xAxisDirection() { return xAxisDirection; }
+    public void setXAxisDirection(Point3D xAxisDirection) { this.xAxisDirection = xAxisDirection; }
 }

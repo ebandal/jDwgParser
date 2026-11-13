@@ -22,22 +22,11 @@ public class VertexPfaceFaceObjectReader implements ObjectReader {
         EntityHeaderReader.readEntityHeader(r, v);
         EntityHeaderReader.readCommonEntityData(r, v);
 
+        // 1부터 시작하는 꼭지점 번호. 음수는 그 꼭지점에서 시작하는 모서리가 보이지 않음을 뜻한다.
         DwgVertexPfaceFace vertex = (DwgVertexPfaceFace) target;
-
-        // 1. vertex1Index (BS)
-        int v1 = r.readBitShort();
-        vertex.setVertex1Index(v1);
-
-        // 2. vertex2Index (BS)
-        int v2 = r.readBitShort();
-        vertex.setVertex2Index(v2);
-
-        // 3. vertex3Index (BS)
-        int v3 = r.readBitShort();
-        vertex.setVertex3Index(v3);
-
-        // 4. vertex4Index (BS)
-        int v4 = r.readBitShort();
-        vertex.setVertex4Index(v4);
+        vertex.setVertex1Index((short) r.readBitShort());
+        vertex.setVertex2Index((short) r.readBitShort());
+        vertex.setVertex3Index((short) r.readBitShort());
+        vertex.setVertex4Index((short) r.readBitShort());
     }
 }

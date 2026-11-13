@@ -32,4 +32,13 @@ public class DwgAttrib extends AbstractDwgEntity {
     public void setStyleName(String styleName) { this.styleName = styleName; }
     public void setAngle(double angle) { this.angle = angle; }
     public void setHeight(double height) { this.height = height; }
+
+    private final DwgText textData = new DwgText();
+    private int flags;                  // 1 = 보이지 않음
+
+    /** 속성값을 문자로 그리는 데 필요한 값 전체 (삽입점, 정렬, 높이, 회전 등) */
+    public DwgText textData() { return textData; }
+    public int flags() { return flags; }
+    public boolean isInvisible() { return (flags & 1) != 0; }
+    public void setFlags(int flags) { this.flags = flags; }
 }

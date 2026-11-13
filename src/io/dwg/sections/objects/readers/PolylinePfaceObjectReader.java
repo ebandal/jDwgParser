@@ -23,17 +23,10 @@ public class PolylinePfaceObjectReader implements ObjectReader {
         EntityHeaderReader.readCommonEntityData(r, v);
 
         DwgPolylinePface polyline = (DwgPolylinePface) target;
-
-        // 1. numVertices (BS)
-        int numVertices = r.readBitShort();
-        polyline.setNumVertices(numVertices);
-
-        // 2. numFaces (BS)
-        int numFaces = r.readBitShort();
-        polyline.setNumFaces(numFaces);
-
-        // 3. extrusion (BE)
-        double[] extrusion = r.readBitExtrusion();
-        polyline.setExtrusion(extrusion);
+        polyline.setNumVertices(r.readBitShort());
+        polyline.setNumFaces(r.readBitShort());
+        if (v.from(DwgVersion.R2004)) {
+            r.readBitLong();                    // owned object count
+        }
     }
 }

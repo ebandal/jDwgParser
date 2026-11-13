@@ -8,6 +8,8 @@ import io.dwg.entities.DwgObjectType;
 import io.dwg.entities.concrete.DwgAttrib;
 import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
+import io.dwg.core.type.DwgHandleRef;
+import io.dwg.entities.concrete.DwgText;
 
 /**
  * ATTRIB 엔티티 리더 (타입 0x03)
@@ -28,62 +30,32 @@ public class AttribObjectReader implements ObjectReader {
 
         DwgAttrib attrib = (DwgAttrib) target;
 
-        if (v.until(DwgVersion.R13)) {
-            double[] pt = r.read2RawDouble();
-            attrib.setLocation(new Point3D(pt[0], pt[1], 0.0));
-            r.readRawDouble(); // height
-            attrib.setText(r.readVariableText());
-            attrib.setTag(r.readVariableText());
-            r.getInput().readBits(8); // flags
-        } else if (v.until(DwgVersion.R14)) {
-            r.readBitDouble(); // elevation
-            double[] pt = r.read2RawDouble();
-            attrib.setLocation(new Point3D(pt[0], pt[1], 0.0));
-            r.read2RawDouble(); // alignment_pt
-            r.read3BitDouble(); // extrusion
-            r.readBitDouble();  // thickness
-            r.readBitDouble();  // oblique_angle
-            r.readBitDouble();  // rotation
-            r.readBitDouble();  // height
-            r.readBitDouble();  // width_factor
-            attrib.setText(r.readVariableText());
-            r.readBitShort();   // generation
-            r.readBitShort();   // horiz_alignment
-            r.readBitShort();   // vert_alignment
-        } else {
-            // R2000+: dataflags-driven (same layout as ATTDEF AcDbText subclass)
-            int dataFlags = r.getInput().readBits(8);
-
-            if ((dataFlags & 0x01) == 0) r.readRawDouble(); // elevation
-            double[] pt = r.read2RawDouble();
-            attrib.setLocation(new Point3D(pt[0], pt[1], 0.0));
-            if ((dataFlags & 0x02) == 0) r.read2DD(pt[0], pt[1]); // alignment_pt
-            r.readBitExtrusion();
-            r.readBitThickness();
-            if ((dataFlags & 0x04) == 0) r.readRawDouble(); // oblique_angle
-            if ((dataFlags & 0x08) == 0) r.readRawDouble(); // rotation
-            r.readRawDouble(); // height (always)
-            if ((dataFlags & 0x10) == 0) r.readRawDouble(); // width_factor
-            attrib.setText(r.readVariableText());
-            if ((dataFlags & 0x20) == 0) r.readBitShort(); // generation
-            if ((dataFlags & 0x40) == 0) r.readBitShort(); // horiz_alignment
-            if ((dataFlags & 0x80) == 0) r.readBitShort(); // vert_alignment
+        // AcDbText subclass : the same layout as TEXT
+        DwgText text = attrib.textData();
+        TextObjectReader.readTextData(text, r, v);
+        if (text.insertionPoint() != null) {
+            attrib.setLocation(new Point3D(text.insertionPoint().x(), text.insertionPoint().y(), text.elevation()));
         }
+        attrib.setText(text.value());
+        attrib.setHeight(text.height());
+        attrib.setAngle(text.rotationAngle());
 
         // AcDbAttribute subclass
-        if (v.from(DwgVersion.R2010)) r.getInput().readBits(8); // is_locked_in_block
+        if (v.from(DwgVersion.R2010)) r.getInput().readBits(8); // class version
         if (v.from(DwgVersion.R2018)) {
             int mtextType = r.getInput().readBits(8); // mtext_type
             if (mtextType > 1) {
                 EntityHeaderReader.skipMTextEmbedded(r, v);
             }
         }
-        if (v.from(DwgVersion.R13)) {
-            attrib.setTag(r.readVariableText());
-            r.readBitShort();   // field_length
-            r.getInput().readBits(8); // flags
-            if (v.from(DwgVersion.R2007)) r.getInput().readBit(); // lock_position_flag
-            if (v.from(DwgVersion.R2010)) r.getInput().readBits(8); // keep_duplicate_records
-        }
+        attrib.setTag(r.readVariableText());
+        r.readBitShort();                               // field_length
+        attrib.setFlags(r.getInput().readBits(8));      // flags
+        if (v.from(DwgVersion.R2007)) r.getInput().readBit(); // lock_position_flag
+    }
+
+    @Override
+    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
+        ((DwgAttrib) target).textData().setStyleHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
     }
 }
