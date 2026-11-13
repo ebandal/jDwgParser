@@ -356,5 +356,9 @@ public class HeaderVariables {
     // short            sUnknown; (type 5/6 only)   // R14+
     // short            sUnknown; (type 5/6 only)   // R14+
     // short            sUnknown; (type 5/6 only)   // R14+
+    public byte cSortents;
+    public byte cObscuredltype;
+    public byte cDimalttz;
+    public byte cDimtad;
 
 }

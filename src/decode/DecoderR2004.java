@@ -182,7 +182,7 @@ public class DecoderR2004 {
         int seed = 0;
         int crc = calculateCRC(buf, seed, hdr);
         if (hdr.crc32!=crc) {
-            throw new DwgCrcMismatchException();
+            throw new DwgCrcMismatchException("CRC mismatch: " + hdr.crc32 + " != " + crc);
         }
 
         offset += decOffset;
@@ -369,10 +369,10 @@ public class DecoderR2004 {
 
             // decompress
             byte[] comBuf = new byte[sectionPage.header.compressDataSize];
-            readLen = raf.read(compBuf, 0, sectionPage.header.compressDataSize);
+            readLen = raf.read(comBuf, 0, sectionPage.header.compressDataSize);
             offset += readLen;
 
-            log.info("Decompressed Page size : " + sectionPage.header.decompressedPageSize + ", buf length : " + compBuf.length);
+            log.info("Decompressed Page size : " + sectionPage.header.decompressedPageSize + ", buf length : " + comBuf.length);
         }
 
         dwg.dataSectionPageList.add(sectionPage);

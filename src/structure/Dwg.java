@@ -52,8 +52,6 @@ public class Dwg {
             e.printStackTrace();
         } catch (DwgParseException e) {
             e.printStackTrace();
-        } catch (DwgCrcMismatchException e) {
-            e.printStackTrace();
         }
     }
 
@@ -146,8 +144,8 @@ public class Dwg {
             buf = new byte[0x480];
             offset = 6;
             readLen = raf.read(buf, offset, 0x480-6);
-            offset += DecoderR2007.readMetaData(buf, offset, fileHeader);
-            offset += DecoderR2007.readFileHeader(buf, offset, fileHeader);
+//            offset += DecoderR2007.readMetaData(buf, offset, fileHeader);
+//            offset += DecoderR2007.readFileHeader(buf, offset, fileHeader);
             break;
         case "AC1024":
             fileHeader.ver = DwgVersion.R2010;
@@ -172,7 +170,7 @@ public class Dwg {
         // VERSION ID
         int readLen = raf.read(buf, offset, 6);
         fileHeader.versionId = new String(buf, offset, readLen, StandardCharsets.US_ASCII);
-        log.finest("VersionId: " + fieHeader.versionId);
+        log.finest("VersionId: " + fileHeader.versionId);
 
         DwgVersion ver;
         switch(fileHeader.versionId) {
@@ -191,7 +189,7 @@ public class Dwg {
         return fileHeader;
     }
 
-    public static HeaderVariables readHeaderVariable(byte[] buf, int off, DwgVersion ver) {
+    public static HeaderVariables readHeaderVariable(byte[] buf, int off, DwgVersion ver) throws DwgParseException {
         AtomicInteger offset = new AtomicInteger(off);
         AtomicInteger bitOffset = new AtomicInteger(0);
         int retBitOffset = 0;
@@ -245,7 +243,7 @@ public class Dwg {
         //  BD : Unknown, default value 1.0
         dUnknown = readBitDouble(buf, offset.get(), bitOffset.get(), "Unknown", cb);
         //  TV : Unknown text string, default ""
-        tUnknown = readVariableText(buf, offset.get(), bitOffset.get(), ver, "Unknown", cb);
+        String tUnknown = readVariableText(buf, offset.get(), bitOffset.get(), ver, "Unknown", cb);
         //  TV : Unknown text string, default ""
         tUnknown = readVariableText(buf, offset.get(), bitOffset.get(), ver, "Unknown", cb);
         //  TV : Unknown text string, default ""
@@ -710,7 +708,7 @@ public class Dwg {
             // BS : DIMALTTD
             hdrVars.sDimalttd = readBitShort(buf, offset.get(), bitOffset.get(), "DIMALTTD", cb);
             // H : DIMTXSTY (hard pointer)
-        	hdrVars.hDimtxsty = readHandle(buf, offset.get(), bitOffset.get(), "DIMTXSTY", cb);
+            hdrVars.hDimtxsty = readHandle(buf, offset.get(), bitOffset.get(), "DIMTXSTY", cb);
         }
 
         // Common
@@ -1163,7 +1161,7 @@ public class Dwg {
     private static LocalDateTime fromJulianDay(int lTdcreateDay) {
         double dayMs = Duration.ofDays(1).toMillis();
         LocalDate date = LocalDate.now().with(JulianFields.JULIAN_DAY, (long)lTdcreateDay);
-        LocalDateTime result = date.atStartOfDay().plusHours(12).plus((long)(lTdcreateDay%1*mayMs), ChronoUnit.MILLIS);
+        LocalDateTime result = date.atStartOfDay().plusHours(12).plus((long)(lTdcreateDay%1*dayMs), ChronoUnit.MILLIS);
         log.info("GREGORIAN DATE: " + date);
         return result;
     }
@@ -1233,91 +1231,87 @@ public class Dwg {
     		}
     	} else if (ver.from(DwgVersion.R18)) {
 
-            try {
-                // section is compressed, contains the standard 32byte section header
-                byte[] decomBuf = DecoderR2004.decompressR18(buf, offset.get());
-                AtomicInteger decomOffset = new AtomicInteger(0);
-                
-                DecodeCallback cb = new DecodeCallback() {
-                    public void onDecoded(String name, Object value, int retBitOffset) {
-                        log.info("[" + name+ "] = (" + value.toString() + ")");
-                        offset.addAndGet((bitOffset.get()+retBitOffset)/8);
-                        bitOffset.set((bitOffset.get()+retBitOffset)%8);
-                    }
-                };
-                
-                // beginning sentinel
-                // 0x8D 0xA1 0xC4 0xB8 0xC4 0xA9 0xF8 0xC5 0xC0 0xDC 0xF4 0x5F 0xE7 0xCF 0xB6 0x8A
-                decomOffset.addAndGet(16);
-                
-                // size of class date area
-                int sizeClasses = readRawLong(buf, decomOffset.get(), bitOffset.get(), "size of classes data area", cb);
+            // section is compressed, contains the standard 32byte section header
+            byte[] decomBuf = DecoderR2004.decompressR18(buf, offset.get());
+            AtomicInteger decomOffset = new AtomicInteger(0);
+            
+            DecodeCallback cb = new DecodeCallback() {
+                public void onDecoded(String name, Object value, int retBitOffset) {
+                    log.info("[" + name+ "] = (" + value.toString() + ")");
+                    offset.addAndGet((bitOffset.get()+retBitOffset)/8);
+                    bitOffset.set((bitOffset.get()+retBitOffset)%8);
+                }
+            };
+            
+            // beginning sentinel
+            // 0x8D 0xA1 0xC4 0xB8 0xC4 0xA9 0xF8 0xC5 0xC0 0xDC 0xF4 0x5F 0xE7 0xCF 0xB6 0x8A
+            decomOffset.addAndGet(16);
+            
+            // size of class date area
+            int sizeClasses = readRawLong(buf, decomOffset.get(), bitOffset.get(), "size of classes data area", cb);
 
-                if (ver.from(DwgVersion.R2010)) {
-                    // only present if the maintenance is greater than 3!
-                    int lUnknown = readRawLong(buf, decomOffset.get(), bitOffset.get(), "size of classes data area", cb);
-                }
+            if (ver.from(DwgVersion.R2010)) {
+                // only present if the maintenance is greater than 3!
+                int lUnknown = readRawLong(buf, decomOffset.get(), bitOffset.get(), "size of classes data area", cb);
+            }
 
-                if (ver.from(DwgVersion.R2004)) {
-                    short maxClassNum = readBitShort(buf, decomOffset.get(), bitOffset.get(), "Maximum class number", cb);
-                    byte cUnknonw = readRawChar(buf, decomOffset.get(), bitOffset.get(), "unknown", cb);
-                    cUnknonw = readRawChar(buf, decomOffset.get(), bitOffset.get(), "unknown", cb);
-                    boolean bUnknown = readBit(buf, decomOffset.get(), bitOffset.get(), "unknown", cb);
-                }
+            if (ver.from(DwgVersion.R2004)) {
+                short maxClassNum = readBitShort(buf, decomOffset.get(), bitOffset.get(), "Maximum class number", cb);
+                byte cUnknonw = readRawChar(buf, decomOffset.get(), bitOffset.get(), "unknown", cb);
+                cUnknonw = readRawChar(buf, decomOffset.get(), bitOffset.get(), "unknown", cb);
+                boolean bUnknown = readBit(buf, decomOffset.get(), bitOffset.get(), "unknown", cb);
+            }
+            
+            // read sets until exhaust the data
+            while(offset.get()-2-16 < sizeClasses) {
+                log.fine("CLASS SECTION read : " + (decomOffset.get()-2-16) + ", Total Size: " + sizeClasses);
                 
-                // read sets until exhaust the data
-                while(offset.get()-2-16 < sizeClasses) {
-                    log.fine("CLASS SECTION read : " + (decomOffset.get()-2-16) + ", Total Size: " + sizeClasses);
-                    
-                    DrawingClass dc = new DrawingClass();
-                    // classnum
-                    dc.classnum = readBitShort(buf, decomOffset.get(), bitOffset.get(), "classnum", cb);
-                    // Proxy falsg 
-                    dc.proxyFlags = readBitShort(buf, decomOffset.get(), bitOffset.get(), "proxyFlags", cb);
-                    // appname
-                    dc.appname = readVariableText(buf, decomOffset.get(), bitOffset.get(), ver, "appname", cb);
-                    // cplusplusclassname
-                    dc.cplusplusclassname = readVariableText(buf, decomOffset.get(), bitOffset.get(), ver, "c++cplusplusclassname", cb);
-                    // classdxfname
-                    dc.classdxfname = readVariableText(buf, decomOffset.get(), bitOffset.get(), ver, "classdxfname", cb);
-                    // wasazombie
-                    dc.waszombie = readBit(buf, decomOffset.get(), bitOffset.get(), "c++wasazomebie", cb);
-                    // itemclassid
-                    dc.itemclassid = readBitShort(buf, decomOffset.get(), bitOffset.get(), "itemclassid", cb);
-                    // Number of objects created of this type in the current DB (DXF 91)
-                    dc.numObjCreatedCurDB = readBitLong(buf, decomOffset.get(), bitOffset.get(), "Number of objects created", cb);
-                    // Dwg version
-                    dc.dwgVersion = readBitShort(buf, decomOffset.get(), bitOffset.get(), "Dwg Version", cb);
-                    // Maintenance release version
-                    dc.mrVer = readBitShort(buf, decomOffset.get(), bitOffset.get(), "Maintenance release version", cb);
-                    //Unknown (normally 0L)
-                    int lUnknown = readBitLong(buf, decomOffset.get(), bitOffset.get(), "Unknown", cb);
-                    // Unknown (normally 0L)
-                    lUnknown = readBitLong(buf, decomOffset.get(), bitOffset.get(), "Unknown", cb);
-                    drwingClassMap.put((int)dc.classnum, dc);
-                }
-			
-                // RS: CRC
-                int crc = readBitShort(buf, decomOffset.get(), bitOffset.get(), "CRC", cb);
-                // 16 byte sentinel apprears after the CRC
-                // 0x72,0x5E,0x3B,0x47,0x3B,0x56,0x07,0x3A,0x3F,0x23,0x0B,0xA0,0x180x30,0x49,0x75
-                
-                // PADDING random bits to the next byte boundary
-                if (bitOffset.get()>0) {
-                    bitOffset.set(0);;
-                    decomOffset.addAndGet(1);
-                }
-                
-                byte[] compareBytes = new byte[16];
-                System.arraycopy(buf,  decomOffset.get(), compareBytes,  0,  16);
-                decomOffset.addAndGet(16);
-                byte[] endingSentinel = { (byte)0x72, (byte)0x5E,(byte)0x3B,(byte)0x47,(byte)0x3B,(byte)0x56,(byte)0x07,(byte)0x3A,
-                                            (byte)0x3F,(byte)0x23,(byte)0x0B,(byte)0xA0,(byte)0x18,(byte)0x30,(byte)0x49,(byte)0x75 };
-                if (Arrays.equals(compareBytes, endingSentinel)==false) {
-                    log.severe("Ending Sentinel mismatched!!!");
-                }
-            } catch (DwgParseException e) {
-                e.printStackTrace();
+                DrawingClass dc = new DrawingClass();
+                // classnum
+                dc.classnum = readBitShort(buf, decomOffset.get(), bitOffset.get(), "classnum", cb);
+                // Proxy falsg 
+                dc.proxyFlags = readBitShort(buf, decomOffset.get(), bitOffset.get(), "proxyFlags", cb);
+                // appname
+                dc.appname = readVariableText(buf, decomOffset.get(), bitOffset.get(), ver, "appname", cb);
+                // cplusplusclassname
+                dc.cplusplusclassname = readVariableText(buf, decomOffset.get(), bitOffset.get(), ver, "c++cplusplusclassname", cb);
+                // classdxfname
+                dc.classdxfname = readVariableText(buf, decomOffset.get(), bitOffset.get(), ver, "classdxfname", cb);
+                // wasazombie
+                dc.waszombie = readBit(buf, decomOffset.get(), bitOffset.get(), "c++wasazomebie", cb);
+                // itemclassid
+                dc.itemclassid = readBitShort(buf, decomOffset.get(), bitOffset.get(), "itemclassid", cb);
+                // Number of objects created of this type in the current DB (DXF 91)
+                dc.numObjCreatedCurDB = readBitLong(buf, decomOffset.get(), bitOffset.get(), "Number of objects created", cb);
+                // Dwg version
+                dc.dwgVersion = readBitShort(buf, decomOffset.get(), bitOffset.get(), "Dwg Version", cb);
+                // Maintenance release version
+                dc.mrVer = readBitShort(buf, decomOffset.get(), bitOffset.get(), "Maintenance release version", cb);
+                //Unknown (normally 0L)
+                int lUnknown = readBitLong(buf, decomOffset.get(), bitOffset.get(), "Unknown", cb);
+                // Unknown (normally 0L)
+                lUnknown = readBitLong(buf, decomOffset.get(), bitOffset.get(), "Unknown", cb);
+                drwingClassMap.put((int)dc.classnum, dc);
+            }
+
+            // RS: CRC
+            int crc = readBitShort(buf, decomOffset.get(), bitOffset.get(), "CRC", cb);
+            // 16 byte sentinel apprears after the CRC
+            // 0x72,0x5E,0x3B,0x47,0x3B,0x56,0x07,0x3A,0x3F,0x23,0x0B,0xA0,0x180x30,0x49,0x75
+            
+            // PADDING random bits to the next byte boundary
+            if (bitOffset.get()>0) {
+                bitOffset.set(0);;
+                decomOffset.addAndGet(1);
+            }
+            
+            byte[] compareBytes = new byte[16];
+            System.arraycopy(buf,  decomOffset.get(), compareBytes,  0,  16);
+            decomOffset.addAndGet(16);
+            byte[] endingSentinel = { (byte)0x72, (byte)0x5E,(byte)0x3B,(byte)0x47,(byte)0x3B,(byte)0x56,(byte)0x07,(byte)0x3A,
+                                        (byte)0x3F,(byte)0x23,(byte)0x0B,(byte)0xA0,(byte)0x18,(byte)0x30,(byte)0x49,(byte)0x75 };
+            if (Arrays.equals(compareBytes, endingSentinel)==false) {
+                log.severe("Ending Sentinel mismatched!!!");
             }
     	}
     	
@@ -1365,41 +1359,31 @@ public class Dwg {
             // End of section
             // End top repeat
             // Not that each section is cut off at a maximum length of 2032.
-        } else if (ver.DwgVersion.R18)) {
-            /* This section is compressed and contains the standard 32 byte section header.
-             * The decompressed data in this section is identical to the "Object Map" section data found in R15 and earlier files,
-             * excepts that offsets are not absolute file addresses,
-             * but are instead offsets into the AcDb:Objects logical section
-             * (starting with offset 0 at the beginning of this logical section).
-             */
-            try {
-                byte[] decomBuf = DecoderR2004.decompressR18(buf, offset.get(), 0);
-                AtomicInteger decomOffset = new AtomicInteger(0);
+        } else if (ver == DwgVersion.R18) {
+            byte[] decomBuf = DecoderR2004.decompressR18(buf, offset.get());
+            AtomicInteger decomOffset = new AtomicInteger(0);
 
-                // 32byte section header
-                decomOffset.addAndGet(32);
+            // 32byte section header
+            decomOffset.addAndGet(32);
 
-                DecodeCallback cb = new DecodeCallback() {
-                    public void onDecoded(String name, Object value, int retBitOffset) {
-                        log.info("["+name+"] = (" + value.toString() + ")");
-                        offset.addAndGet((bitOffset.get()+retBitOffset)/8);
-                        bitOffset.set((bitOffset.get()+retBitOffset)%8);
-                    }
-                };
-    
-                short sectionSize = ByteBuffer.wrap(buf, offset.get(), 2).order(ByteOrder.BIG_ENDIAN).getShort();
-                decomOffset.addAndGet(2);
-                while(decomOffset.get() < sectionSize) {
-                    long handleOffset = readModularChar(buf, offset.get(), "Handle Offset", cb);
-                    long locationOffset = readModularChar(buf, offset.get(), "Location Offset", cb);
-    
-                    dwg.data_AcDb_Handles.put(handleOffset, locationOffset);
+            DecodeCallback cb = new DecodeCallback() {
+                public void onDecoded(String name, Object value, int retBitOffset) {
+                    log.info("["+name+"] = (" + value.toString() + ")");
+                    offset.addAndGet((bitOffset.get()+retBitOffset)/8);
+                    bitOffset.set((bitOffset.get()+retBitOffset)%8);
                 }
-                short CRC = ByteBuffer.wrap(buf, decomOffset.get(), 2).order(ByteOrder.BIG_ENDIAN).getShort();
-                decomOffset.addAndGet(2);
-            } catch (DwgParseException e) {
-                e.printStackTrace();
+            };
+   
+            short sectionSize = ByteBuffer.wrap(buf, offset.get(), 2).order(ByteOrder.BIG_ENDIAN).getShort();
+            decomOffset.addAndGet(2);
+            while(decomOffset.get() < sectionSize) {
+                long handleOffset = readModularChar(buf, offset.get(), "Handle Offset", cb);
+                long locationOffset = readModularChar(buf, offset.get(), "Location Offset", cb);
+   
+                dwg.data_AcDb_Handles.put(handleOffset, locationOffset);
             }
+            short CRC = ByteBuffer.wrap(buf, decomOffset.get(), 2).order(ByteOrder.BIG_ENDIAN).getShort();
+            decomOffset.addAndGet(2);
         }
 
         return offset.get()-off;
@@ -1440,7 +1424,7 @@ public class Dwg {
 
         long sum = 0;
         for (int i=0; i<idx; i++) {
-            sum += ((step2Bytes[i]&0x00FF)) * (long)Math.pow(256, (idx-1-i)));
+            sum += ((step2Bytes[i]&0x00FF)) * (long)Math.pow(256, (idx-1-i));
         }
         cb.onDecoded(name, sum, (idx+1)*8);
 

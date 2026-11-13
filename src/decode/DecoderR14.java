@@ -8,6 +8,7 @@ import java.util.logging.Logger;
 import java.util.ArrayList;
 
 import structure.Dwg;
+import structure.DwgVersion;
 import structure.SectionLocator;
 import structure.header.FileHeader;
 
@@ -71,7 +72,7 @@ public class DecoderR14 {
             log.finest("Record Number : " + sl.number);
             fileHeader.sectionLocatorList.add(sl);
             
-            calCRC = calculateCRC(calCRC, recordsNum);
+//            calCRC = calculateCRC(calCRC, recordsNum);
         }
         
         short crc = ByteBuffer.wrap(buf, offset, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
@@ -110,7 +111,7 @@ public class DecoderR14 {
                 buf = new byte[sl.size];
                 raf.seek(sl.seeker);
                 raf.read(buf, 0, sl.size);
-                dwg.drawingClassMap = Dwg.readClassSection(buf, offset, dwg);
+                dwg.drawingClassMap = Dwg.readClassSection(buf, offset, dwg, dwg.header.ver);
                 maxSeeker = Math.max(maxSeeker, sl.seeker+sl.size);
                 offset += sl.size;
                 break;
