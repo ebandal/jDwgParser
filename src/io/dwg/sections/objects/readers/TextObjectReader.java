@@ -78,7 +78,10 @@ public class TextObjectReader implements ObjectReader {
             if ((dataFlags & 0x40) == 0) text.setHorizontalAlignment(r.readBitShort());
             if ((dataFlags & 0x80) == 0) text.setVerticalAlignment(r.readBitShort());
         }
+    }
 
-        text.setStyleHandle(new DwgHandleRef(r.readHandle()));
+    @Override
+    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
+        ((DwgText) target).setStyleHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
     }
 }

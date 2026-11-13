@@ -17,6 +17,7 @@ import io.dwg.sections.handles.HandleRegistry;
 
 import java.util.HashMap;
 import java.util.Map;
+import io.dwg.core.type.CmColor;
 
 /**
  * 스펙 §20 AcDb:AcDbObjects 섹션 파서.
@@ -113,8 +114,9 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
                 // R2010+: UMC (handlestream_size in bits) comes between MS and type code.
                 // obj->address = dat->byte after UMC; next object at (obj->address + obj->size).
+                long handleStreamBits = -1;
                 if (version.from(DwgVersion.R2010)) {
-                    r.readUMC();
+                    handleStreamBits = r.readUMC();
                 }
 
                 // Bit position of obj->address (start of object data, after MS+UMC)
@@ -143,7 +145,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
                 ((AbstractDwgObject) obj).setHandle(nextHandle);
                 ((AbstractDwgObject) obj).setRawTypeCode(typeCode);
-                readObjectData(obj, type, r, version);
+                readObjectData(obj, type, r, version, objDataStartBit, objSizeBytes, handleStreamBits);
 
                 result.put(nextHandle, obj);
                 nextHandle++;
@@ -176,9 +178,11 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         int objSize = r.readModularShort();
         if (objSize <= 0) return null;
 
+        long handleStreamBits = -1;
         if (version.from(DwgVersion.R2010)) {
-            r.readUMC();
+            handleStreamBits = r.readUMC();
         }
+        long dataStartBit = r.position();
 
         int typeCode = version.from(DwgVersion.R2010) ? r.readBOT() : r.readBitShort();
 
@@ -188,7 +192,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
         ((AbstractDwgObject) obj).setHandle(handle);
         ((AbstractDwgObject) obj).setRawTypeCode(typeCode);
-        readObjectData(obj, type, r, version);
+        readObjectData(obj, type, r, version, dataStartBit, objSize, handleStreamBits);
 
         return obj;
     }
@@ -209,19 +213,139 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
     }
 
     /**
-     * 타입 코드 다음 위치에서 객체의 내용을 읽는다. 읽다가 실패한 객체는 그때까지 채워진 상태로 남는다.
+     * 타입 코드 다음 위치에서 객체의 내용을 읽고, 이어서 핸들 스트림을 읽는다.
+     * 내용을 읽다가 실패해도 핸들 스트림은 위치가 따로 정해져 있으므로 읽는다.
+     *
+     * @param dataStartBit     객체 데이터의 시작 비트 위치 (MS 크기와 R2010+의 UMC 다음)
+     * @param objSizeBytes     객체 데이터의 바이트 수
+     * @param handleStreamBits 핸들 스트림의 비트 수 (R2010+), 그 밖의 버전은 -1
      */
-    private void readObjectData(DwgObject obj, DwgObjectType type, BitStreamReader r, DwgVersion version) {
-        resolver.resolve(type.typeCode()).ifPresent(reader -> {
-            try {
+    private void readObjectData(DwgObject obj, DwgObjectType type, BitStreamReader r, DwgVersion version,
+                                long dataStartBit, int objSizeBytes, long handleStreamBits) {
+        ObjectReader reader = resolver.resolve(type.typeCode()).orElse(null);
+        try {
+            if (reader == null) {
+                // 리더가 없는 비엔티티 객체도 공통 헤더는 읽어 소유자를 알 수 있게 한다
+                if (!isEntityClass(obj.rawTypeCode())) {
+                    EntityHeaderReader.readObjectHeader(r, version);
+                }
+            } else {
                 if (!reader.readsOwnHeader()) {
                     EntityHeaderReader.readObjectHeader(r, version);
                 }
                 reader.read(obj, r, version);
-            } catch (Exception e) {
-                // Type-specific parsing failed silently
             }
-        });
+        } catch (Exception e) {
+            // Type-specific parsing failed silently
+        }
+        try {
+            readHandleStream(obj, reader, r, version, dataStartBit, objSizeBytes, handleStreamBits);
+        } catch (Exception e) {
+            // Handle stream parsing failed silently
+        }
+    }
+
+    private boolean isEntityClass(int typeCode) {
+        return typeCode >= DwgObjectType.FIRST_CLASS_NUMBER && classRegistry != null
+                && classRegistry.find(typeCode).map(def -> def.isEntity()).orElse(false);
+    }
+
+    /**
+     * 핸들 스트림 : 공통 핸들을 읽고 타입 고유의 핸들은 리더에 맡긴다.
+     * 구성은 공통 헤더의 값({@link ObjectHeaderData})에 따라 달라진다.
+     * R2000 파일로 검증했다. 그 밖의 버전은 스펙을 따랐지만 검증하지 않았다.
+     */
+    private void readHandleStream(DwgObject obj, ObjectReader reader, BitStreamReader r, DwgVersion version,
+                                  long dataStartBit, int objSizeBytes, long handleStreamBits) throws Exception {
+        ObjectHeaderData header = ObjectHeaderData.of(r);
+        long endBit = dataStartBit + (long) objSizeBytes * 8L;
+        long startBit;
+        if (handleStreamBits >= 0) {
+            startBit = endBit - handleStreamBits;
+        } else if (header.bitSize >= 0) {
+            startBit = dataStartBit + header.bitSize;
+        } else {
+            return;
+        }
+        if (startBit < dataStartBit || startBit > endBit || header.numReactors < 0 || header.numReactors > 100000) {
+            return;
+        }
+
+        AbstractDwgObject ao = (AbstractDwgObject) obj;
+        long self = obj.handle();
+        r.seek(startBit);
+
+        if (header.entity && obj instanceof AbstractDwgEntity) {
+            AbstractDwgEntity ae = (AbstractDwgEntity) obj;
+            ae.setEntityMode(header.entMode);
+            ae.setColor(new CmColor(header.colorIndex));
+            ae.setLineTypeScale(header.linetypeScale);
+            ae.setInvisibility(header.invisible);
+            ae.setLineWeight(header.lineWeight);
+            ae.setPlotStyleFlags(header.plotStyleFlags);
+
+            // entmode 0 : 소유자(블록 헤더 또는 상위 엔티티)가 핸들로 기록된다
+            if (header.entMode == 0) {
+                ao.setOwnerHandle(new DwgHandleRef(r.readHandleReference(self)));
+            }
+            for (int i = 0; i < header.numReactors; i++) {
+                ao.addReactorHandle(new DwgHandleRef(r.readHandleReference(self)));
+            }
+            if (!version.from(DwgVersion.R2004) || !header.xdicMissing) {
+                ao.setXDicHandle(new DwgHandleRef(r.readHandleReference(self)));
+            }
+            if (!version.from(DwgVersion.R2000)) {
+                // R13/R14
+                ae.setLayerHandle(new DwgHandleRef(r.readHandleReference(self)));
+                if (!header.isByLayerLinetype) {
+                    ae.setLineTypeHandle(new DwgHandleRef(r.readHandleReference(self)));
+                }
+            }
+            if (!version.from(DwgVersion.R2004) && !header.noLinks) {
+                r.readHandleReference(self);        // previous entity
+                r.readHandleReference(self);        // next entity
+            }
+            if (version.from(DwgVersion.R2010) && (header.colorFlags & 0x40) != 0) {
+                r.readHandleReference(self);        // color
+            }
+            if (version.from(DwgVersion.R2000)) {
+                ae.setLayerHandle(new DwgHandleRef(r.readHandleReference(self)));
+                if (header.linetypeFlags == 3) {
+                    ae.setLineTypeHandle(new DwgHandleRef(r.readHandleReference(self)));
+                }
+                if (version.from(DwgVersion.R2007)) {
+                    if (header.materialFlags == 3) {
+                        r.readHandleReference(self);
+                    }
+                    if (header.shadowFlags == 3) {
+                        r.readHandleReference(self);
+                    }
+                }
+                if (header.plotStyleFlags == 3) {
+                    r.readHandleReference(self);
+                }
+            }
+            if (version.from(DwgVersion.R2010)) {
+                if (header.hasFullVisualStyle) r.readHandleReference(self);
+                if (header.hasFaceVisualStyle) r.readHandleReference(self);
+                if (header.hasEdgeVisualStyle) r.readHandleReference(self);
+            }
+        } else if (!header.entity) {
+            // 비엔티티 : 소유자(테이블 레코드는 제어 객체), 리액터, 확장 사전
+            ao.setOwnerHandle(new DwgHandleRef(r.readHandleReference(self)));
+            for (int i = 0; i < header.numReactors; i++) {
+                ao.addReactorHandle(new DwgHandleRef(r.readHandleReference(self)));
+            }
+            if (!version.from(DwgVersion.R2004) || !header.xdicMissing) {
+                ao.setXDicHandle(new DwgHandleRef(r.readHandleReference(self)));
+            }
+        } else {
+            return;
+        }
+
+        if (reader != null) {
+            reader.readHandles(obj, r, version);
+        }
     }
 
     private DwgObject createObject(DwgObjectType type) {

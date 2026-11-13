@@ -3,12 +3,16 @@ package io.dwg.entities.concrete;
 import io.dwg.core.type.Point3D;
 import io.dwg.entities.AbstractDwgEntity;
 import io.dwg.entities.DwgObjectType;
+import io.dwg.core.type.DwgHandleRef;
+import io.dwg.entities.DwgDimension;
 
 /**
  * DIMENSION_LINEAR 엔티티 (타입 0x15)
  * 선형 크기 지정 (수평/수직 치수)
  */
-public class DwgDimensionLinear extends AbstractDwgEntity {
+public class DwgDimensionLinear extends AbstractDwgEntity implements DwgDimension {
+    private DwgHandleRef dimStyleHandle;
+    private DwgHandleRef blockHandle;      // 치수 그림이 들어 있는 익명 블록
     private Point3D definitionPoint;   // 정의점
     private Point3D midpointOfText;    // 텍스트 중점
     private String text;               // 텍스트 내용
@@ -35,4 +39,9 @@ public class DwgDimensionLinear extends AbstractDwgEntity {
     public void setHorizontalDirection(double horizontalDirection) { this.horizontalDirection = horizontalDirection; }
     public void setInsertionScale(double insertionScale) { this.insertionScale = insertionScale; }
     public void setDimensionStyleName(String dimensionStyleName) { this.dimensionStyleName = dimensionStyleName; }
+
+    @Override public DwgHandleRef dimStyleHandle() { return dimStyleHandle; }
+    @Override public DwgHandleRef blockHandle() { return blockHandle; }
+    @Override public void setDimStyleHandle(DwgHandleRef dimStyleHandle) { this.dimStyleHandle = dimStyleHandle; }
+    @Override public void setBlockHandle(DwgHandleRef blockHandle) { this.blockHandle = blockHandle; }
 }

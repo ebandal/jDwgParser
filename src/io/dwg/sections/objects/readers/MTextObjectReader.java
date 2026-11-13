@@ -58,9 +58,6 @@ public class MTextObjectReader implements ObjectReader {
         String text = r.readVariableText();
         mtext.setText(text);
 
-        // style handle
-        r.readHandle();
-
         // R2000+: linespace_style (BS), linespace_factor (BD), unknown_b0 (B)
         if (v.from(DwgVersion.R2000)) {
             r.readBitShort();

@@ -57,21 +57,54 @@ import io.dwg.render.r2000.TableDecoderR2000;
  * header says, so its values are taken as correct.
  *
  * For each type it prints : objects in the files, objects DwgReader returned under the same handle as the
- * right class, and objects whose values are equal.
+ * right class, and objects whose values are equal. For entities "values" include the entity mode, color,
+ * visibility and the handles of the layer, the owner and (INSERT, DIMENSION) the block.
  *
  * Usage: ReaderCheck [file or directory]...   (default: samples/2000)
  */
 public class ReaderCheck {
     private static final double TOLERANCE = 1e-9;
 
-    /** per type : { in the files, found as the right class, values equal } */
-    private static final Map<String, int[]> totals = new TreeMap<>();
-    private static final List<String> examples = new ArrayList<>();
+    /** Outcome of {@link #check(List)}. */
+    public static final class Result {
+        public int files;
+        /** objects in the files, and those DwgReader returned under the same handle */
+        public int objects;
+        public int objectsFound;
+        /** per type : { in the files, found as the right class, values equal } */
+        public final Map<String, int[]> types = new TreeMap<>();
+        /** the first difference of each type */
+        public final List<String> differences = new ArrayList<>();
+        /** files that were not compared, with the reason */
+        public final List<String> skipped = new ArrayList<>();
+
+        /** true if every object was returned and every compared object is equal */
+        public boolean agrees() {
+            return skipped.isEmpty() && objects == objectsFound
+                    && types.values().stream().allMatch(t -> t[0] == t[1] && t[1] == t[2]);
+        }
+    }
 
     public static void main(String[] args) throws Exception {
         Logger.getLogger("").setLevel(Level.OFF);
+        Result result = check(collect(args.length > 0 ? args : new String[] { "samples/2000" }));
+
+        result.skipped.forEach(System.out::println);
+        System.out.printf("files=%d, objects=%d, returned by DwgReader under the same handle=%d%n%n",
+                result.files, result.objects, result.objectsFound);
+        System.out.printf("%-20s %9s %12s %13s%n", "type", "in files", "right class", "values equal");
+        result.types.forEach((name, t) -> System.out.printf("%-20s %9d %12d %13d%n", name, t[0], t[1], t[2]));
+        if (!result.differences.isEmpty()) {
+            System.out.println();
+            System.out.println("first difference of each type:");
+            result.differences.forEach(e -> System.out.println("  " + e));
+        }
+    }
+
+    /** The .dwg files named by the arguments; a directory stands for the files directly in it. */
+    public static List<File> collect(String... paths) {
         List<File> files = new ArrayList<>();
-        for (String a : args.length > 0 ? args : new String[] { "samples/2000" }) {
+        for (String a : paths) {
             File target = new File(a);
             File[] list = target.isDirectory()
                     ? target.listFiles((d, n) -> n.toLowerCase().endsWith(".dwg")) : new File[] { target };
@@ -80,27 +113,31 @@ public class ReaderCheck {
                 files.addAll(Arrays.asList(list));
             }
         }
+        return files;
+    }
 
-        int handles = 0;
-        int handlesFound = 0;
+    /** Compares what DwgReader returns for the files with the reference reader. */
+    public static Result check(List<File> files) {
+        Result result = new Result();
+        result.files = files.size();
         for (File f : files) {
             ObjectScannerR2000 scanner = new ObjectScannerR2000();
             try {
                 scanner.scan(f);
             } catch (Exception e) {
-                System.out.println(f.getName() + " : skipped, not readable as R2000 (" + e + ")");
+                result.skipped.add(f.getName() + " : skipped, not readable as R2000 (" + e + ")");
                 continue;
             }
             Map<Long, io.dwg.entities.DwgObject> actual = read(f);
             if (actual == null) {
-                System.out.println(f.getName() + " : DwgReader failed");
+                result.skipped.add(f.getName() + " : DwgReader failed");
                 actual = new TreeMap<>();
             }
             for (DwgObject o : scanner.objects) {
-                handles++;
+                result.objects++;
                 io.dwg.entities.DwgObject a = actual.get(o.handle);
                 if (a != null) {
-                    handlesFound++;
+                    result.objectsFound++;
                 }
                 Object expected;
                 try {
@@ -117,31 +154,26 @@ public class ReaderCheck {
                 if (expected == null) {
                     continue;
                 }
-                int[] t = totals.computeIfAbsent(o.typeName, k -> new int[3]);
+                int[] t = result.types.computeIfAbsent(o.typeName, k -> new int[3]);
                 t[0]++;
                 String difference = compare(expected, a);
+                if (difference == null && expected instanceof Entity) {
+                    difference = compareCommon((Entity) expected, a);
+                }
                 if (difference == null) {
                     t[1]++;
                     t[2]++;
                 } else if (!difference.startsWith("class")) {
                     t[1]++;
                 }
-                if (difference != null && examples.stream().noneMatch(x -> x.startsWith(o.typeName + " "))) {
+                if (difference != null && result.differences.stream().noneMatch(x -> x.startsWith(o.typeName + " "))) {
                     String shown = difference.replaceAll("\\p{Cntrl}", "?");
-                    examples.add(String.format("%s %s handle %X : %s", o.typeName, f.getName(), o.handle,
+                    result.differences.add(String.format("%s %s handle %X : %s", o.typeName, f.getName(), o.handle,
                             shown.length() > 160 ? shown.substring(0, 160) + "..." : shown));
                 }
             }
         }
-
-        System.out.printf("files=%d, objects=%d, returned by DwgReader under the same handle=%d%n%n",
-                files.size(), handles, handlesFound);
-        System.out.printf("%-20s %9s %12s %13s%n", "type", "in files", "right class", "values equal");
-        totals.forEach((name, t) -> System.out.printf("%-20s %9d %12d %13d%n", name, t[0], t[1], t[2]));
-        if (!examples.isEmpty()) {
-            System.out.println("\nfirst difference of each type:");
-            examples.forEach(e -> System.out.println("  " + e));
-        }
+        return result;
     }
 
     // DwgReader prints diagnostics while it reads; they are not wanted here
@@ -297,6 +329,44 @@ public class ReaderCheck {
         } catch (RuntimeException ex) {
             return "exception while comparing : " + ex;
         }
+    }
+
+    /** Common entity values and the handles that link an entity to its layer, its owner and its block. */
+    private static String compareCommon(Entity e, io.dwg.entities.DwgObject actual) {
+        if (!(actual instanceof io.dwg.entities.AbstractDwgEntity)) {
+            return null;
+        }
+        io.dwg.entities.AbstractDwgEntity a = (io.dwg.entities.AbstractDwgEntity) actual;
+        if (a.entityMode() != e.entMode) {
+            return "entity mode " + e.entMode + " != " + a.entityMode();
+        }
+        int color = a.color() == null ? Integer.MIN_VALUE : a.color().getColorIndex();
+        if (color != e.color) {
+            return "color " + e.color + " != " + color;
+        }
+        if (((a.invisibility() & 1) != 0) != e.invisible) {
+            return "invisible " + e.invisible + " != " + a.invisibility();
+        }
+        String d = handleDiff("layer handle", e.layerHandle, a.layerHandle());
+        if (d == null && e.entMode == Entity.MODE_OWNED) {
+            d = handleDiff("owner handle", e.ownerHandle, a.ownerHandle());
+        }
+        if (d == null && e instanceof Insert && actual instanceof DwgInsert) {
+            d = handleDiff("block handle", ((Insert) e).blockHandle, ((DwgInsert) actual).blockHeaderHandle());
+        }
+        if (d == null && e instanceof io.dwg.render.model.entity.Dimension && actual instanceof io.dwg.entities.DwgDimension) {
+            d = handleDiff("block handle", ((io.dwg.render.model.entity.Dimension) e).blockHandle,
+                    ((io.dwg.entities.DwgDimension) actual).blockHandle());
+        }
+        return d;
+    }
+
+    private static String handleDiff(String name, long expected, io.dwg.core.type.DwgHandleRef actual) {
+        if (actual == null) {
+            return name + " missing";
+        }
+        return actual.rawHandle() == expected ? null
+                : String.format("%s %X != %X", name, expected, actual.rawHandle());
     }
 
     private static String wrongClass(io.dwg.entities.DwgObject actual) {

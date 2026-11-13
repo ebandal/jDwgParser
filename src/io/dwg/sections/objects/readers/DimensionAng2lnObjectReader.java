@@ -8,6 +8,8 @@ import io.dwg.entities.DwgObjectType;
 import io.dwg.entities.concrete.DwgDimensionAng2ln;
 import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
+import io.dwg.core.type.DwgHandleRef;
+import io.dwg.entities.DwgDimension;
 
 public class DimensionAng2lnObjectReader implements ObjectReader {
     @Override
@@ -31,5 +33,12 @@ public class DimensionAng2lnObjectReader implements ObjectReader {
         dim.setInsertionScale(insertionScale);
         String dimensionStyleName = r.readVariableText();
         dim.setDimensionStyleName(dimensionStyleName);
+    }
+
+    @Override
+    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
+        DwgDimension dim = (DwgDimension) target;
+        dim.setDimStyleHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
+        dim.setBlockHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
     }
 }

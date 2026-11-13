@@ -21,15 +21,17 @@ public class EntityHeaderReader {
     /**
      * Read bitsize + object handle + EED loop.
      * Must be called immediately after typeCode is consumed by the parser.
+     * The values needed later for the handle stream are kept in {@link ObjectHeaderData}.
      */
     public static void readEntityHeader(BitStreamReader r, DwgVersion v) throws Exception {
         BitInput input = r.getInput();
+        ObjectHeaderData header = ObjectHeaderData.of(r);
 
         // bitsize (RL = 4 raw bytes, no alignment) — R2000 to R2007
         // R13/R14: bitsize appears inside common_entity_data after preview_exists
         // R2010+:  bitsize handled separately before this call
         if (v.from(DwgVersion.R2000) && !v.from(DwgVersion.R2010)) {
-            readRawLong(input);
+            header.bitSize = readRawLong(input) & 0xFFFFFFFFL;
         }
 
         // object handle (H): first byte = code[7:4] + count[3:0], then count bytes
@@ -60,17 +62,18 @@ public class EntityHeaderReader {
     public static void readObjectHeader(BitStreamReader r, DwgVersion v) throws Exception {
         readEntityHeader(r, v);
         BitInput input = r.getInput();
+        ObjectHeaderData header = ObjectHeaderData.of(r);
 
         // R13/R14 only: bitsize (RL) comes after the EED
         if (v.from(DwgVersion.R13) && !v.from(DwgVersion.R2000)) {
-            readRawLong(input);
+            header.bitSize = readRawLong(input) & 0xFFFFFFFFL;
         }
-        r.readBitLong();                // num_reactors (BL)
+        header.numReactors = r.readBitLong();           // num_reactors (BL)
         if (v.from(DwgVersion.R2004)) {
-            input.readBit();            // is_xdic_missing (B)
+            header.xdicMissing = input.readBit();       // is_xdic_missing (B)
         }
         if (v.from(DwgVersion.R2013)) {
-            input.readBit();            // has_ds_data (B)
+            input.readBit();                            // has_ds_data (B)
         }
     }
 
@@ -78,9 +81,12 @@ public class EntityHeaderReader {
      * Read CommonEntityData fields.
      * Must be called immediately after readEntityHeader().
      * Per libredwg common_entity_data.spec, field order and version guards verified.
+     * The values are kept in {@link ObjectHeaderData}.
      */
     public static void readCommonEntityData(BitStreamReader r, DwgVersion v) throws Exception {
         BitInput input = r.getInput();
+        ObjectHeaderData header = ObjectHeaderData.of(r);
+        header.entity = true;
 
         // 1. preview_exists (B)
         boolean previewExists = input.readBit();
@@ -98,28 +104,28 @@ public class EntityHeaderReader {
 
         // 2. R13/R14 only: bitsize (RL) appears here, after preview_exists
         if (v.from(DwgVersion.R13) && !v.from(DwgVersion.R2000)) {
-            readRawLong(input);
+            header.bitSize = readRawLong(input) & 0xFFFFFFFFL;
         }
 
         // 3. entmode (BB)
-        input.readBits(2);
+        header.entMode = input.readBits(2);
 
         // 4. num_reactors (BL)
-        r.readBitLong();
+        header.numReactors = r.readBitLong();
 
         // 5. isbylayerlt (B) — R13/R14 only (ODA bug note in spec)
         if (v.from(DwgVersion.R13) && !v.from(DwgVersion.R2000)) {
-            input.readBit();
+            header.isByLayerLinetype = input.readBit();
         }
 
         // 6. is_xdic_missing (B) — R2004+
         if (v.from(DwgVersion.R2004)) {
-            input.readBit();
+            header.xdicMissing = input.readBit();
         }
 
         // 7. nolinks (B) — R13 to R2002 inclusive (R2000 included)
         if (v.from(DwgVersion.R13) && !v.from(DwgVersion.R2004)) {
-            input.readBit();
+            header.noLinks = input.readBit();
         }
 
         // 8. has_ds_data (B) — R2013+
@@ -133,6 +139,8 @@ public class EntityHeaderReader {
             // 0x20=alpha_raw (BL from dat), 0x40=handle (hdl_dat/dat), 0x80=rgb (BL, only if !0x40)
             int colorRaw = r.readBitShort();
             int flags = (colorRaw >> 8) & 0xFF;
+            header.colorIndex = colorRaw & 0x1FF;
+            header.colorFlags = flags;
             if ((flags & 0x20) != 0) r.readBitLong();      // color.alpha_raw (BL) — first
             if ((flags & 0x40) != 0) {
                 if (!v.from(DwgVersion.R2010)) {
@@ -144,42 +152,42 @@ public class EntityHeaderReader {
             }
         } else if (v.from(DwgVersion.R13)) {
             // CMC for R13-R2003: just a BS color index
-            r.readBitShort();
+            header.colorIndex = r.readBitShort();
         }
 
         // 10. ltype_scale (BD) — R13+
         if (v.from(DwgVersion.R13)) {
-            r.readBitDouble();
+            header.linetypeScale = r.readBitDouble();
         }
 
         // 11. ltype_flags (BB) + plotstyle_flags (BB) — R2000+
         if (v.from(DwgVersion.R2000)) {
-            input.readBits(2);
-            input.readBits(2);
+            header.linetypeFlags = input.readBits(2);
+            header.plotStyleFlags = input.readBits(2);
         }
 
         // 12. material_flags (BB) + shadow_flags (RC) — R2007+
         if (v.from(DwgVersion.R2007)) {
-            input.readBits(2);      // material_flags
-            input.readBits(8);      // shadow_flags: RC = readBits(8), no alignment
+            header.materialFlags = input.readBits(2);
+            header.shadowFlags = input.readBits(8);     // RC = readBits(8), no alignment
         }
 
         // 13. has_full/face/edge_visualstyle (B x3) — R2010+
         if (v.from(DwgVersion.R2010)) {
-            input.readBit();
-            input.readBit();
-            input.readBit();
+            header.hasFullVisualStyle = input.readBit();
+            header.hasFaceVisualStyle = input.readBit();
+            header.hasEdgeVisualStyle = input.readBit();
         }
 
         // 14. invisible (BS) — R13+
         if (v.from(DwgVersion.R13)) {
-            r.readBitShort();
+            header.invisible = r.readBitShort();
         }
 
         // 15. linewt (RC) — R2000+
         // RC = readBits(8), no byte alignment per libredwg bit_read_RC()
         if (v.from(DwgVersion.R2000)) {
-            input.readBits(8);
+            header.lineWeight = input.readBits(8);
         }
     }
 

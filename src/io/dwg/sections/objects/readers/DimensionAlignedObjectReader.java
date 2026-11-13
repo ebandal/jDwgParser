@@ -8,6 +8,8 @@ import io.dwg.entities.DwgObjectType;
 import io.dwg.entities.concrete.DwgDimensionAligned;
 import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
+import io.dwg.core.type.DwgHandleRef;
+import io.dwg.entities.DwgDimension;
 
 /**
  * DIMENSION_ALIGNED 엔티티 리더 (타입 0x16)
@@ -42,5 +44,12 @@ public class DimensionAlignedObjectReader implements ObjectReader {
 
         String dimensionStyleName = r.readVariableText();
         dim.setDimensionStyleName(dimensionStyleName);
+    }
+
+    @Override
+    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
+        DwgDimension dim = (DwgDimension) target;
+        dim.setDimStyleHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
+        dim.setBlockHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
     }
 }
