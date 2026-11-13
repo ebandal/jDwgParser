@@ -1,16 +1,16 @@
 package structure;
 
 public class DrawingClass {
-	
-	short classnum;
-	short version;
-	String appname;
-	String cplusplusclassname;
-	String classdxfname;
-	boolean waszombie;
-	short itemclassid;
-	short proxyFlags;
-	int numObjCreatedCurDB;
-	short dwgVersion;
-	short mrVer;
+
+	public short classnum;
+	public short version;
+	public String appname;
+	public String cplusplusclassname;
+	public String classdxfname;
+	public boolean waszombie;
+	public short itemclassid;
+	public short proxyFlags;
+	public int numObjCreatedCurDB;
+	public short dwgVersion;
+	public short mrVer;
 }
