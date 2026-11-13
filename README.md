@@ -149,6 +149,18 @@ java -cp target/classes:target/dependency/* \
 
 자세한 테스트 가이드는 [TESTING.md](TESTING.md) 참조.
 
+### 렌더링으로 눈으로 확인 (R2000)
+
+R2000(AC1015) 도면의 모델 스페이스를 PNG로 그려 결과를 직접 확인할 수 있습니다.
+
+```bash
+mvn compile
+java -cp target/classes io.dwg.render.tool.RenderTest              # samples/2000 전체 → target/render
+java -cp target/classes io.dwg.render.tool.RenderTest path/to/file.dwg out
+```
+
+출력 읽는 법과 지원 범위는 [RENDERING.md](RENDERING.md) 참조.
+
 ## Phase 9 Tier 3 핵심 발견사항
 
 ### 아키텍처 버그 (R2010+ 파일 라우팅)
