@@ -13,6 +13,9 @@ public class PersSubentManagerObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.ACAD_PERSSUBENTMANAGER.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgPersSubentManager manager = (DwgPersSubentManager) target;
 

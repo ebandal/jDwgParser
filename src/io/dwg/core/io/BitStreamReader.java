@@ -1,5 +1,6 @@
 package io.dwg.core.io;
 
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import io.dwg.core.version.DwgVersion;
 
@@ -9,10 +10,20 @@ import io.dwg.core.version.DwgVersion;
 public class BitStreamReader {
     private BitInput input;
     private DwgVersion version;
+    private Charset textCharset = StandardCharsets.US_ASCII;
 
     public BitStreamReader(BitInput input, DwgVersion version) {
         this.input = input;
         this.version = version;
+    }
+
+    /**
+     * T 문자열(R2004 이하)을 디코딩할 문자 집합. 도면의 코드페이지에 맞춰 지정한다.
+     */
+    public void setTextCharset(Charset textCharset) {
+        if (textCharset != null) {
+            this.textCharset = textCharset;
+        }
     }
 
     /**
@@ -375,7 +386,11 @@ public class BitStreamReader {
         for (int i = 0; i < length; i++) {
             bytes[i] = (byte)(input.readBits(8) & 0xFF);
         }
-        return new String(bytes, StandardCharsets.US_ASCII);
+        // 문자열 끝의 NUL은 값에 포함하지 않는다
+        while (length > 0 && bytes[length - 1] == 0) {
+            length--;
+        }
+        return new String(bytes, 0, length, textCharset);
     }
 
     /**

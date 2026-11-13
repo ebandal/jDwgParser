@@ -52,6 +52,29 @@ public class EntityHeaderReader {
     }
 
     /**
+     * Read the common header of a non-entity object : bitsize + object handle + EED loop,
+     * then the reactor count and the flags that precede the object data.
+     * Must be called immediately after typeCode is consumed by the parser.
+     * Verified on R2000 files; the later fields follow the specification.
+     */
+    public static void readObjectHeader(BitStreamReader r, DwgVersion v) throws Exception {
+        readEntityHeader(r, v);
+        BitInput input = r.getInput();
+
+        // R13/R14 only: bitsize (RL) comes after the EED
+        if (v.from(DwgVersion.R13) && !v.from(DwgVersion.R2000)) {
+            readRawLong(input);
+        }
+        r.readBitLong();                // num_reactors (BL)
+        if (v.from(DwgVersion.R2004)) {
+            input.readBit();            // is_xdic_missing (B)
+        }
+        if (v.from(DwgVersion.R2013)) {
+            input.readBit();            // has_ds_data (B)
+        }
+    }
+
+    /**
      * Read CommonEntityData fields.
      * Must be called immediately after readEntityHeader().
      * Per libredwg common_entity_data.spec, field order and version guards verified.

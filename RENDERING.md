@@ -98,6 +98,26 @@ java -cp target/classes io.dwg.render.tool.EntityStats [file or folder] [number 
 - `ObjectStats` counts every object in a file by type. `E` marks an entity, `O` a non-graphical object. `handle mismatches` and `failures` must be 0.
 - `EntityStats` decodes the supported entities and prints how many succeeded and failed per type, and the extents of the model space. Give a number as the second argument to print the coordinates and properties of that many entities, which you can compare with a DXF of the same drawing.
 
+## Checking DwgReader against this reader
+
+`ReaderCheck` reads R2000 files with both `DwgReader` and the reader of `io.dwg.render.r2000`, and compares the two object by object, under the same handle.
+
+```
+java -cp target/classes io.dwg.render.tool.ReaderCheck [file or folder]...
+```
+
+Without arguments it reads `samples/2000`. For each type it prints three numbers:
+
+| Column | Meaning |
+|---|---|
+| `in files` | Objects of that type in the files |
+| `right class` | Objects `DwgReader` returned under the same handle as the matching class |
+| `values equal` | Objects whose compared values are equal |
+
+Below the table it lists the first difference of each type. All three numbers of a row should be the same.
+
+What is compared depends on the type: coordinates and sizes for LINE, CIRCLE, ARC, ELLIPSE, POINT, INSERT, SOLID, TRACE, 3DFACE, LWPOLYLINE (vertices) and SPLINE (control points); text, position and height for TEXT and MTEXT; name, color and frozen flag for LAYER; name and base point for BLOCK_HEADER. For ATTRIB, HATCH, DIMENSION, LEADER and polyface meshes only the class is checked.
+
 ## Using it from code
 
 ```java

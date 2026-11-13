@@ -27,12 +27,13 @@ public class LineObjectReader implements ObjectReader {
             line.setEnd(new Point3D(end[0], end[1], end[2]));
         } else {
             boolean zAreZero = r.getInput().readBit();
+            // 끝점은 시작점을 기본값으로 하는 DD로 저장된다
             double sx = r.readRawDouble();
-            double ex = r.readRawDouble();
+            double ex = r.readDD(sx);
             double sy = r.readRawDouble();
-            double ey = r.readRawDouble();
+            double ey = r.readDD(sy);
             double sz = zAreZero ? 0.0 : r.readRawDouble();
-            double ez = zAreZero ? 0.0 : r.readRawDouble();
+            double ez = zAreZero ? 0.0 : r.readDD(sz);
             line.setStart(new Point3D(sx, sy, sz));
             line.setEnd(new Point3D(ex, ey, ez));
         }

@@ -59,11 +59,11 @@ public class AttdefObjectReader implements ObjectReader {
 
             attdef.setTag(r.readVariableText());
             r.readBitShort();   // field_length
-            attdef.setFlags(r.getInput().readRawChar());
+            attdef.setFlags(r.getInput().readBits(8));
             attdef.setPrompt(r.readVariableText());
         } else {
             // R2000+: dataflags-driven (same as TEXT R2000+ body) then ATTDEF subclass
-            int dataFlags = r.getInput().readRawChar();
+            int dataFlags = r.getInput().readBits(8);
 
             if ((dataFlags & 0x01) == 0) r.readRawDouble(); // elevation
             double[] pt = r.read2RawDouble();
@@ -81,18 +81,18 @@ public class AttdefObjectReader implements ObjectReader {
             if ((dataFlags & 0x80) == 0) r.readBitShort(); // vert_alignment
 
             // AcDbAttributeDefinition subclass
-            if (v.from(DwgVersion.R2010)) r.getInput().readRawChar(); // is_locked_in_block
+            if (v.from(DwgVersion.R2010)) r.getInput().readBits(8); // is_locked_in_block
             if (v.from(DwgVersion.R2018)) {
-                int mtextType = r.getInput().readRawChar(); // mtext_type
+                int mtextType = r.getInput().readBits(8); // mtext_type
                 if (mtextType > 1) {
                     EntityHeaderReader.skipMTextEmbedded(r, v);
                 }
             }
             attdef.setTag(r.readVariableText());
             r.readBitShort();   // field_length
-            attdef.setFlags(r.getInput().readRawChar());
+            attdef.setFlags(r.getInput().readBits(8));
             if (v.from(DwgVersion.R2007)) r.getInput().readBit(); // lock_position_flag
-            if (v.from(DwgVersion.R2010)) r.getInput().readRawChar(); // keep_duplicate_records
+            if (v.from(DwgVersion.R2010)) r.getInput().readBits(8); // keep_duplicate_records
             attdef.setPrompt(r.readVariableText());
         }
 

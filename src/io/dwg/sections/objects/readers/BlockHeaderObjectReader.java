@@ -10,8 +10,9 @@ import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
 
 /**
- * BLOCK_HEADER 엔티티 리더 (타입 0x30)
- * 블록 정의의 시작
+ * BLOCK_HEADER 테이블 레코드 리더 (타입 0x31)
+ *
+ * R2000 파일로 검증했다. R2004 이후의 필드는 스펙을 따랐지만 검증하지 않았다.
  */
 public class BlockHeaderObjectReader implements ObjectReader {
     @Override
@@ -19,25 +20,31 @@ public class BlockHeaderObjectReader implements ObjectReader {
 
     @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
-        EntityHeaderReader.readEntityHeader(r, v);
-        EntityHeaderReader.readCommonEntityData(r, v);
+        EntityHeaderReader.readObjectHeader(r, v);
 
         DwgBlockHeader block = (DwgBlockHeader) target;
 
-        // 1. blockName (TU)
-        String blockName = r.readVariableText();
-        block.setBlockName(blockName);
+        // 테이블 레코드 공통 : 이름, 64-flag, xref index + 1, xdep
+        block.setBlockName(r.readVariableText());
+        r.getInput().readBit();
+        r.readBitShort();
+        r.getInput().readBit();
 
-        // 2. flags (BS)
-        int flags = r.readBitShort();
+        int flags = 0;
+        if (r.getInput().readBit()) flags |= 0x01;     // anonymous
+        if (r.getInput().readBit()) flags |= 0x02;     // has attributes
+        if (r.getInput().readBit()) flags |= 0x04;     // is xref
+        if (r.getInput().readBit()) flags |= 0x08;     // xref overlaid
         block.setFlags(flags);
+        if (v.from(DwgVersion.R2000)) {
+            r.getInput().readBit();                     // loaded
+        }
+        if (v.from(DwgVersion.R2004)) {
+            r.readBitLong();                            // owned object count
+        }
 
-        // 3. basePoint (3RD)
-        double[] pt = r.read3RawDouble();
+        double[] pt = r.read3BitDouble();
         block.setBasePoint(new Point3D(pt[0], pt[1], pt[2]));
-
-        // 4. xrefPath (TU)
-        String xrefPath = r.readVariableText();
-        block.setXrefPath(xrefPath);
+        block.setXrefPath(r.readVariableText());
     }
 }

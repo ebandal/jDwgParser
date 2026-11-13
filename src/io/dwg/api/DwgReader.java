@@ -115,6 +115,8 @@ public class DwgReader {
             ObjectsSectionParser objParser = new ObjectsSectionParser();
             objParser.setHandleRegistry(handleRegistry);
             objParser.setClassRegistry(classRegistry);
+            objParser.setTextCharset(
+                io.dwg.core.util.DwgStringDecoder.charsetForDwgCodePage(headerFields.codePage()));
             Map<Long, DwgObject> objectMap = objParser.parse(objectsStream, version);
             doc.setObjectMap(objectMap);
         }

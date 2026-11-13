@@ -13,6 +13,9 @@ public class PlotStyleObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.ACAD_PLOTSTYLE.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgPlotStyle style = (DwgPlotStyle) target;
 

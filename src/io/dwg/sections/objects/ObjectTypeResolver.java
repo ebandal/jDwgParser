@@ -31,6 +31,7 @@ public class ObjectTypeResolver {
         resolver.register(new AttdefObjectReader());
         resolver.register(new AttribObjectReader());
         resolver.register(new SeqEndObjectReader());
+        resolver.register(new BlockObjectReader());
         resolver.register(new EndblkObjectReader());
         resolver.register(new InsertObjectReader());
         resolver.register(new MinsertObjectReader());
@@ -73,7 +74,6 @@ public class ObjectTypeResolver {
         resolver.register(new LwPolylineObjectReader());
         resolver.register(new HatchObjectReader());
         resolver.register(new BlockHeaderObjectReader());
-        resolver.register(new BlockEndObjectReader());
         resolver.register(new LayerObjectReader());
         resolver.register(new LtypeObjectReader());
         resolver.register(new StyleObjectReader());

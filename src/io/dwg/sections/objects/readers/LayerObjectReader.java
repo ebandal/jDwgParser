@@ -15,16 +15,23 @@ public class LayerObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.LAYER.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgLayer layer = (DwgLayer) target;
         layer.setName(r.readVariableText());
+        // 테이블 레코드 공통 : 64-flag, xref index + 1, xdep
+        r.getInput().readBit();
+        r.readBitShort();
+        r.getInput().readBit();
 
         int flags = r.readBitShort();
         layer.setFlags(flags);
         layer.setFrozen((flags & 0x01) != 0);
         layer.setOn((flags & 0x02) == 0);
         layer.setFrozenInNewViewports((flags & 0x04) != 0);
-        layer.setLocked((flags & 0x10) != 0);
+        layer.setLocked((flags & 0x08) != 0);
 
         int[] colorData = r.readCmColor();
         layer.setColor(new CmColor(colorData[0]));

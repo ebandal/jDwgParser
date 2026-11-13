@@ -64,8 +64,6 @@ public class HandlesParsingUtil {
      * R2000+ Handles 섹션 파싱 (페이지 기반, LZ77 해제 후)
      */
     public static void parseHandlesPagesR2000(BitStreamReader reader, HandleRegistry registry) {
-        long lastHandle = 0;
-
         while (!reader.isEof()) {
             int pageSize = reader.readBigEndianShort();
 
@@ -77,8 +75,10 @@ public class HandlesParsingUtil {
                 break;
             }
 
-            // Per libredwg: last_offset is a local variable reset to 0 for each page.
-            // Each page's first MC value is the absolute byte offset of the first object.
+            // Both the handle and the offset accumulate from 0 within each page (spec: "Set the last
+            // handle to all 0 and the last loc to 0L" at the start of every section of the object map).
+            // The first pair of a page therefore holds an absolute handle and an absolute offset.
+            long lastHandle = 0;
             long lastOffset = 0;
 
             int bytesRead = 0;

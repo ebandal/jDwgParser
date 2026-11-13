@@ -13,6 +13,9 @@ public class MaterialObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.ACAD_MATERIAL.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgMaterial material = (DwgMaterial) target;
 

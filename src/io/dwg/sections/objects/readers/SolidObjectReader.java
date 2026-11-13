@@ -25,30 +25,14 @@ public class SolidObjectReader implements ObjectReader {
 
         DwgSolid solid = (DwgSolid) target;
 
-        // 4개의 점 읽기 (R2004 이상에서는 압축됨)
         Point3D[] points = new Point3D[4];
 
-        if (v.until(DwgVersion.R14)) {
-            // R13/R14: 각 점을 개별적으로 읽음
-            for (int i = 0; i < 4; i++) {
-                double[] p = r.read2RawDouble();
-                points[i] = new Point3D(p[0], p[1], 0.0);
-            }
-        } else {
-            // R2000+: 압축된 형식
-            double[] firstX = r.read2RawDouble();
-            double firstXVal = firstX[0];
-            double firstYVal = firstX[1];
-
-            // 나머지 3개의 점을 상대 좌표로 읽음
-            double[] p1 = r.read2RawDouble();
-            double[] p2 = r.read2RawDouble();
-            double[] p3 = r.read2RawDouble();
-
-            points[0] = new Point3D(firstXVal, firstYVal, 0.0);
-            points[1] = new Point3D(firstXVal + p1[0], firstYVal + p1[1], 0.0);
-            points[2] = new Point3D(firstXVal + p2[0], firstYVal + p2[1], 0.0);
-            points[3] = new Point3D(firstXVal + p3[0], firstYVal + p3[1], 0.0);
+        // thickness (BT), elevation (BD), 4 corners (2RD each, absolute, at the elevation)
+        r.readBitThickness();
+        double elevation = r.readBitDouble();
+        for (int i = 0; i < 4; i++) {
+            double[] p = r.read2RawDouble();
+            points[i] = new Point3D(p[0], p[1], elevation);
         }
 
         solid.setPoints(points);

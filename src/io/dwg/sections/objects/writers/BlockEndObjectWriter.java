@@ -8,7 +8,7 @@ import io.dwg.sections.objects.ObjectWriter;
 
 public class BlockEndObjectWriter implements ObjectWriter {
     @Override
-    public int objectType() { return DwgObjectType.BLOCK_END.typeCode(); }
+    public int objectType() { return DwgObjectType.ENDBLK.typeCode(); }
 
     @Override
     public void write(DwgObject source, BitStreamWriter w, DwgVersion v) throws Exception {

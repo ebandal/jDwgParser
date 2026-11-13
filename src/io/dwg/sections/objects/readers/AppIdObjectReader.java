@@ -17,6 +17,9 @@ public class AppIdObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.APPID.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgAppId appId = (DwgAppId) target;
 

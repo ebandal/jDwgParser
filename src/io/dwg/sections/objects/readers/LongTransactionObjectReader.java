@@ -17,6 +17,9 @@ public class LongTransactionObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.LONG_TRANSACTION.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgLongTransaction txn = (DwgLongTransaction) target;
 

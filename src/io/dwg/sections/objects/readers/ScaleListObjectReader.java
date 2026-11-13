@@ -13,6 +13,9 @@ public class ScaleListObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.ACAD_SCALE_LIST.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgScaleList list = (DwgScaleList) target;
 

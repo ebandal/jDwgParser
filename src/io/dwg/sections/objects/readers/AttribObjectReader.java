@@ -34,7 +34,7 @@ public class AttribObjectReader implements ObjectReader {
             r.readRawDouble(); // height
             attrib.setText(r.readVariableText());
             attrib.setTag(r.readVariableText());
-            r.getInput().readRawChar(); // flags
+            r.getInput().readBits(8); // flags
         } else if (v.until(DwgVersion.R14)) {
             r.readBitDouble(); // elevation
             double[] pt = r.read2RawDouble();
@@ -52,7 +52,7 @@ public class AttribObjectReader implements ObjectReader {
             r.readBitShort();   // vert_alignment
         } else {
             // R2000+: dataflags-driven (same layout as ATTDEF AcDbText subclass)
-            int dataFlags = r.getInput().readRawChar();
+            int dataFlags = r.getInput().readBits(8);
 
             if ((dataFlags & 0x01) == 0) r.readRawDouble(); // elevation
             double[] pt = r.read2RawDouble();
@@ -71,9 +71,9 @@ public class AttribObjectReader implements ObjectReader {
         }
 
         // AcDbAttribute subclass
-        if (v.from(DwgVersion.R2010)) r.getInput().readRawChar(); // is_locked_in_block
+        if (v.from(DwgVersion.R2010)) r.getInput().readBits(8); // is_locked_in_block
         if (v.from(DwgVersion.R2018)) {
-            int mtextType = r.getInput().readRawChar(); // mtext_type
+            int mtextType = r.getInput().readBits(8); // mtext_type
             if (mtextType > 1) {
                 EntityHeaderReader.skipMTextEmbedded(r, v);
             }
@@ -81,9 +81,9 @@ public class AttribObjectReader implements ObjectReader {
         if (v.from(DwgVersion.R13)) {
             attrib.setTag(r.readVariableText());
             r.readBitShort();   // field_length
-            r.getInput().readRawChar(); // flags
+            r.getInput().readBits(8); // flags
             if (v.from(DwgVersion.R2007)) r.getInput().readBit(); // lock_position_flag
-            if (v.from(DwgVersion.R2010)) r.getInput().readRawChar(); // keep_duplicate_records
+            if (v.from(DwgVersion.R2010)) r.getInput().readBits(8); // keep_duplicate_records
         }
 
         r.readHandle(); // style handle

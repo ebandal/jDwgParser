@@ -18,6 +18,9 @@ public class LayoutObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.LAYOUT.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgLayout layout = (DwgLayout) target;
 

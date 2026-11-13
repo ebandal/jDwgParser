@@ -17,6 +17,9 @@ public class DimStyleObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.DIMSTYLE.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgDimStyle dimStyle = (DwgDimStyle) target;
 

@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * LWPOLYLINE 엔티티 (타입 0x4B, enum 상에선 LWPLINE)
+ * LWPOLYLINE 엔티티 (타입 0x4D, enum 상에선 LWPLINE)
  * 경량화된 폴리라인 (2D)
  */
 public class DwgLwPolyline extends AbstractDwgEntity {

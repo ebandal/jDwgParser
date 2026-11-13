@@ -13,6 +13,9 @@ public class FieldObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.ACAD_FIELD.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgField field = (DwgField) target;
 
