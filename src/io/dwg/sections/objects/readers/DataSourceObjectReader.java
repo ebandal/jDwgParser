@@ -13,6 +13,9 @@ public class DataSourceObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.ACAD_DATASOURCE.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgDataSource source = (DwgDataSource) target;
 

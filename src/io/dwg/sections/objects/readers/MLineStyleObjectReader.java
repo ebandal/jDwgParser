@@ -17,6 +17,9 @@ public class MLineStyleObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.MLINESTYLE.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgMLineStyle mlStyle = (DwgMLineStyle) target;
 

@@ -13,6 +13,9 @@ public class ScaleObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.SCALE.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgScale scale = (DwgScale) target;
 

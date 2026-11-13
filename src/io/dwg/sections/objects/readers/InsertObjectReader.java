@@ -32,18 +32,23 @@ public class InsertObjectReader implements ObjectReader {
             int scaleFlags = r.getInput().readBits(2);
             if (scaleFlags == 3) {
                 ins.setXScale(1.0); ins.setYScale(1.0); ins.setZScale(1.0);
-            } else if (scaleFlags == 1) {
+            } else if (scaleFlags == 2) {
                 double s = r.readRawDouble();
                 ins.setXScale(s); ins.setYScale(s); ins.setZScale(s);
+            } else if (scaleFlags == 1) {
+                ins.setXScale(1.0);
+                ins.setYScale(r.readDD(1.0));
+                ins.setZScale(r.readDD(1.0));
             } else {
-                ins.setXScale(r.readBitDouble());
-                ins.setYScale(r.readBitDouble());
-                ins.setZScale(r.readBitDouble());
+                double x = r.readRawDouble();
+                ins.setXScale(x);
+                ins.setYScale(r.readDD(x));
+                ins.setZScale(r.readDD(x));
             }
         }
 
         ins.setRotation(r.readBitDouble());
-        ins.setExtrusion(r.readBitExtrusion());
+        ins.setExtrusion(r.read3BitDouble());
         ins.setHasAttribs(r.getInput().readBit());
 
         // handle refs

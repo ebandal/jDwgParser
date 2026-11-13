@@ -16,6 +16,9 @@ public class XrecordObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.XRECORD.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgXrecord xrecord = (DwgXrecord) target;
 

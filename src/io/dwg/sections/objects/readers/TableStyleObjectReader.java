@@ -13,6 +13,9 @@ public class TableStyleObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.ACAD_TABLESTYLE.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgTableStyle style = (DwgTableStyle) target;
 

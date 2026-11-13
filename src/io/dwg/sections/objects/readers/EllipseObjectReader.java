@@ -35,8 +35,8 @@ public class EllipseObjectReader implements ObjectReader {
         Point3D majorAxisVec = new Point3D(majorData[0], majorData[1], majorData[2]);
         ellipse.setMajorAxisVec(majorAxisVec);
 
-        // 3. extrusion (BE - bit extrusion)
-        double[] extrusion = r.readBitExtrusion();
+        // 3. extrusion (3BD)
+        double[] extrusion = r.read3BitDouble();
         ellipse.setExtrusion(extrusion);
 
         // 4. axisRatio (BD)

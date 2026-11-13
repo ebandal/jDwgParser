@@ -13,6 +13,9 @@ public class VisualStyleObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.VISUALSTYLE.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgVisualStyle style = (DwgVisualStyle) target;
 

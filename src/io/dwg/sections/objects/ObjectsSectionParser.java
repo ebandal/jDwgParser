@@ -26,12 +26,15 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
     private HandleRegistry handles;
     private DwgClassRegistry classRegistry;
     private ObjectTypeResolver resolver;
+    private java.nio.charset.Charset textCharset;
 
     public ObjectsSectionParser() {
         this.resolver = ObjectTypeResolver.defaultResolver(new DwgClassRegistry());
     }
 
     public void setHandleRegistry(HandleRegistry handles) { this.handles = handles; }
+    /** R2004 이하 파일의 문자열을 디코딩할 문자 집합 (도면의 코드페이지) */
+    public void setTextCharset(java.nio.charset.Charset textCharset) { this.textCharset = textCharset; }
     public void setClassRegistry(DwgClassRegistry classRegistry) {
         this.classRegistry = classRegistry;
         this.resolver = ObjectTypeResolver.defaultResolver(this.classRegistry);
@@ -103,6 +106,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             try {
                 bbuf.seek(bitOffset);
                 BitStreamReader r = new BitStreamReader(bbuf, version);
+                r.setTextCharset(textCharset);
 
                 // MS returns object size in BYTES (libredwg: obj->size = bit_read_MS(dat); dat->size = obj->size)
                 int objSizeBytes = r.readModularShort();
@@ -129,7 +133,8 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                     continue;
                 }
 
-                DwgObject obj = createObject(typeCode);
+                DwgObjectType type = resolveType(typeCode);
+                DwgObject obj = createObject(type);
                 if (obj == null) {
                     // Next object starts at obj->address + obj->size (both in bytes → bits)
                     bitOffset = objDataStartBit + (long)objSizeBytes * 8L;
@@ -138,22 +143,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
                 ((AbstractDwgObject) obj).setHandle(nextHandle);
                 ((AbstractDwgObject) obj).setRawTypeCode(typeCode);
-
-                boolean skipHeaderStreaming = isSkipHeaderType(typeCode);
-                if (!skipHeaderStreaming) {
-                    try {
-                        parseCommonHeader(r, obj, version);
-                    } catch (Exception e) {
-                        // Common header parsing failed, object still stored
-                    }
-                }
-                resolver.resolve(typeCode).ifPresent(reader -> {
-                    try {
-                        reader.read(obj, r, version);
-                    } catch (Exception e) {
-                        // Type-specific parsing failed silently
-                    }
-                });
+                readObjectData(obj, type, r, version);
 
                 result.put(nextHandle, obj);
                 nextHandle++;
@@ -181,6 +171,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         ByteBufferBitInput buf = new ByteBufferBitInput(raw);
         buf.seek((long) byteOffset * 8L);
         BitStreamReader r = new BitStreamReader(buf, version);
+        r.setTextCharset(textCharset);
 
         int objSize = r.readModularShort();
         if (objSize <= 0) return null;
@@ -191,79 +182,56 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
         int typeCode = version.from(DwgVersion.R2010) ? r.readBOT() : r.readBitShort();
 
-        DwgObject obj = createObject(typeCode);
+        DwgObjectType type = resolveType(typeCode);
+        DwgObject obj = createObject(type);
         if (obj == null) return null;
 
         ((AbstractDwgObject) obj).setHandle(handle);
         ((AbstractDwgObject) obj).setRawTypeCode(typeCode);
+        readObjectData(obj, type, r, version);
 
-        boolean skipHeader = isSkipHeaderType(typeCode);
-        if (!skipHeader) {
-            try {
-                parseCommonHeader(r, obj, version);
-            } catch (IllegalStateException e) {
-                if (e.getMessage() == null || !e.getMessage().contains("Invalid BL opcode")) throw e;
+        return obj;
+    }
+
+    /**
+     * 타입 코드를 타입으로 바꾼다. 500 이상은 Classes 섹션의 클래스 번호이므로 그 클래스의 DXF 이름으로 찾는다.
+     */
+    private DwgObjectType resolveType(int typeCode) {
+        if (typeCode >= DwgObjectType.FIRST_CLASS_NUMBER) {
+            if (classRegistry == null) {
+                return DwgObjectType.UNKNOWN;
             }
+            return classRegistry.find(typeCode)
+                    .map(def -> DwgObjectType.fromDxfName(def.dxfRecordName()))
+                    .orElse(DwgObjectType.UNKNOWN);
         }
+        return DwgObjectType.fromCode(typeCode);
+    }
 
-        resolver.resolve(typeCode).ifPresent(reader -> {
+    /**
+     * 타입 코드 다음 위치에서 객체의 내용을 읽는다. 읽다가 실패한 객체는 그때까지 채워진 상태로 남는다.
+     */
+    private void readObjectData(DwgObject obj, DwgObjectType type, BitStreamReader r, DwgVersion version) {
+        resolver.resolve(type.typeCode()).ifPresent(reader -> {
             try {
+                if (!reader.readsOwnHeader()) {
+                    EntityHeaderReader.readObjectHeader(r, version);
+                }
                 reader.read(obj, r, version);
             } catch (Exception e) {
                 // Type-specific parsing failed silently
             }
         });
-
-        return obj;
     }
 
-    private void parseCommonHeader(BitStreamReader r, DwgObject obj, DwgVersion version)
-            throws Exception {
-        AbstractDwgObject ao = (AbstractDwgObject) obj;
-
-        int numReactors = r.readBitLong();
-
-        if (numReactors > 100000) {
-            numReactors = 0;
-        }
-
-        boolean hasXDic = false;
-        if (version.from(DwgVersion.R2004)) {
-            hasXDic = r.getInput().readBit();
-        }
-
-        if (obj.isEntity() && obj instanceof AbstractDwgEntity) {
-            AbstractDwgEntity ae = (AbstractDwgEntity) obj;
-            int entityMode = r.getInput().readBits(2);
-            ae.setEntityMode(entityMode);
-
-            if (version.from(DwgVersion.R2000)) {
-                int ltFlags = r.getInput().readBits(2);
-                if (ltFlags == 3) {
-                    // plotStyleFlags
-                }
-            }
-        }
-
-        ao.setOwnerHandle(new DwgHandleRef(r.readHandle()));
-
-        for (int i = 0; i < numReactors; i++) {
-            ao.addReactorHandle(new DwgHandleRef(r.readHandle()));
-        }
-
-        if (hasXDic) {
-            ao.setXDicHandle(new DwgHandleRef(r.readHandle()));
-        }
-    }
-
-    private DwgObject createObject(int typeCode) {
-        DwgObjectType type = DwgObjectType.fromCode(typeCode);
+    private DwgObject createObject(DwgObjectType type) {
         return switch (type) {
             case TEXT                -> new DwgText();
             case ATTDEF              -> new DwgAttdef();
             case ATTRIB              -> new DwgAttrib();
+            case BLOCK               -> new DwgBlock();
+            case ENDBLK              -> new DwgBlockEnd();
             case SEQEND              -> new DwgSeqEnd();
-            case ENDBLK              -> new DwgXrecord();
             case INSERT              -> new DwgInsert();
             case MINSERT             -> new DwgMinsert();
             case VERTEX_2D           -> new DwgVertex2D();
@@ -304,7 +272,6 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             case TOLERANCE           -> new DwgTolerance();
             case MLINE               -> new DwgMLine();
             case BLOCK_HEADER        -> new DwgBlockHeader();
-            case BLOCK_END           -> new DwgBlockEnd();
             case LAYER               -> new DwgLayer();
             case GROUP               -> new DwgGroup();
             case OLE2FRAME           -> new DwgOle2frame();
@@ -323,16 +290,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             case LAYOUT              -> new DwgLayout();
             case PLACEHOLDER         -> new DwgPlaceholder();
             case VBA_PROJECT         -> new DwgVbaProject();
-            case LAYOUT_ALTERNATE    -> new DwgLayout();
             case UNUSED              -> null;
-            case VP_ENT_HDR          -> null;
-            case STYLE_ALTERNATE     -> new DwgStyle();
-            case APPID_CONTROL       -> new DwgXrecord();
-            case APPID_ALTERNATE     -> new DwgAppId();
-            case DIMSTYLE_CONTROL    -> new DwgXrecord();
-            case DIMSTYLE_ALTERNATE  -> new DwgDimStyle();
-            case VX_CONTROL          -> new DwgXrecord();
-            case MLINESTYLE_ALTERNATE -> new DwgMLineStyle();
             case IMAGE               -> new DwgImage();
             case WIPEOUT             -> new DwgWipeout();
             case XREF                -> new DwgXref();
@@ -352,34 +310,11 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             case ACAD_MATERIAL       -> new DwgMaterial();
             case ACAD_DATASOURCE     -> new DwgDataSource();
             case ACAD_PERSSUBENTMANAGER -> new DwgPersSubentManager();
-            case UNKNOWN -> {
-                // For unknown types, create DwgXrecord to allow parsing as generic object
-                // This handles custom R2000 types (0xF401-0xFC01) and other extensions
-                yield new DwgXrecord();
-            }
+            // 전용 클래스가 없는 타입 : 테이블 제어 객체, 프록시 객체, 알 수 없는 클래스
+            case OLEFRAME, BLOCK_CONTROL, LAYER_CONTROL, STYLE_CONTROL, LTYPE_CONTROL, VIEW_CONTROL,
+                 UCS_CONTROL, VPORT_CONTROL, APPID_CONTROL, DIMSTYLE_CONTROL, VP_ENT_HDR_CONTROL,
+                 VP_ENT_HDR, DUMMY, ACAD_PROXY_OBJECT, UNKNOWN -> new DwgGenericObject(type);
         };
-    }
-
-    private boolean isSkipHeaderType(int typeCode) {
-        if (typeCode == 0x2A) {  // DICTIONARY
-            return true;
-        }
-        if (typeCode == 0x35 || typeCode == 0x43 || typeCode == 0x45 ||
-            typeCode == 0x49 || typeCode == 0x62 ||
-            typeCode == 0x4F ||
-            typeCode == 0x42 || typeCode == 0x44 || typeCode == 0x46) {
-            return true;
-        }
-        if (typeCode >= 0x01 && typeCode <= 0x31) {
-            return true;
-        }
-        if (typeCode == 0x3E || typeCode == 0x4B || typeCode == 0x4C ||
-            typeCode == 0x51 || typeCode == 0x52 ||
-            typeCode == 0x54 || typeCode == 0x55 || typeCode == 0x56 ||
-            typeCode == 0x5A) {
-            return true;
-        }
-        return false;
     }
 
     @Override

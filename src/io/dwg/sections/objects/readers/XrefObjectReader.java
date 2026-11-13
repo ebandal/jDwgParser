@@ -14,6 +14,9 @@ public class XrefObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.XREF.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgXref xref = (DwgXref) target;
 

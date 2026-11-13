@@ -247,7 +247,7 @@ public class R2000ObjectStreamParser extends AbstractSectionParser<Map<Long, Dwg
             case TOLERANCE           -> new DwgTolerance();
             case MLINE               -> new DwgMLine();
             case BLOCK_HEADER        -> new DwgBlockHeader();
-            case BLOCK_END           -> new DwgBlockEnd();
+            case ENDBLK              -> new DwgBlockEnd();
             case LAYER               -> new DwgLayer();
             case GROUP               -> new DwgGroup();
             case OLE2FRAME           -> new DwgOle2frame();

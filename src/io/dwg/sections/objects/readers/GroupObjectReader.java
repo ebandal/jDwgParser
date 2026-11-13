@@ -16,6 +16,9 @@ public class GroupObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.GROUP.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgGroup group = (DwgGroup) target;
 

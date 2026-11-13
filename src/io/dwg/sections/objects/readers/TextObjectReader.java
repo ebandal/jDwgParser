@@ -53,7 +53,7 @@ public class TextObjectReader implements ObjectReader {
             text.setVerticalAlignment(r.readBitShort());
         } else {
             // R2000+: dataflags-driven fields using RD (not BD) for most doubles
-            int dataFlags = r.getInput().readRawChar();
+            int dataFlags = r.getInput().readBits(8);
             text.setDataFlags(dataFlags);
 
             if ((dataFlags & 0x01) == 0) text.setElevation(r.readRawDouble());

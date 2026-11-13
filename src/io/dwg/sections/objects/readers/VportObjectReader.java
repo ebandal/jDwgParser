@@ -18,6 +18,9 @@ public class VportObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.VPORT.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgVport vport = (DwgVport) target;
 

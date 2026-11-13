@@ -16,6 +16,9 @@ public class DictionaryObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.DICTIONARY.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgDictionary dict = (DwgDictionary) target;
         io.dwg.entities.AbstractDwgObject ao = (io.dwg.entities.AbstractDwgObject) target;

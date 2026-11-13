@@ -13,6 +13,9 @@ public class CellStyleObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.ACAD_CELLSTYLE.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgCellStyle style = (DwgCellStyle) target;
 

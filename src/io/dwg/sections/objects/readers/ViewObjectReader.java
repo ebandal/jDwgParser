@@ -18,6 +18,9 @@ public class ViewObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.VIEW.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgView view = (DwgView) target;
 

@@ -16,6 +16,9 @@ public class VbaProjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.VBA_PROJECT.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgVbaProject project = (DwgVbaProject) target;
         

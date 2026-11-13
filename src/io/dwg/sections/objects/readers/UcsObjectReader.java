@@ -18,6 +18,9 @@ public class UcsObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.UCS.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgUcs ucs = (DwgUcs) target;
 

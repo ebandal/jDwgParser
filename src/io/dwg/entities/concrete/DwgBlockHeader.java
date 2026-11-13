@@ -5,8 +5,8 @@ import io.dwg.entities.AbstractDwgObject;
 import io.dwg.entities.DwgObjectType;
 
 /**
- * BLOCK_HEADER 오브젝트 (타입 0x30)
- * 블록 정의의 시작 마커
+ * BLOCK_HEADER 오브젝트 (타입 0x31)
+ * 블록 테이블 레코드
  */
 public class DwgBlockHeader extends AbstractDwgObject {
     private String blockName;       // 블록 이름

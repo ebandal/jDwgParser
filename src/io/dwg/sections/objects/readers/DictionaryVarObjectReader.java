@@ -13,6 +13,9 @@ public class DictionaryVarObjectReader implements ObjectReader {
     public int objectType() { return DwgObjectType.ACAD_DICTIONARYVAR.typeCode(); }
 
     @Override
+    public boolean readsOwnHeader() { return false; }
+
+    @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgDictionaryVar var = (DwgDictionaryVar) target;
 
