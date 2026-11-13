@@ -11,10 +11,44 @@ public class BitStreamReader {
     private BitInput input;
     private DwgVersion version;
     private Charset textCharset = StandardCharsets.US_ASCII;
+    private Object context;
 
     public BitStreamReader(BitInput input, DwgVersion version) {
         this.input = input;
         this.version = version;
+    }
+
+    /**
+     * 이 리더로 읽는 대상에 딸린 상태. 상위 계층이 객체 하나를 읽는 동안의 값을 보관하는 데 쓴다.
+     */
+    public Object context() {
+        return context;
+    }
+
+    public void setContext(Object context) {
+        this.context = context;
+    }
+
+    /**
+     * 핸들 참조(H)를 읽어 절대 핸들로 바꾼다.
+     * 코드 6, 8, 0xA, 0xC는 참조를 담고 있는 객체의 핸들에 대한 상대값이고, 나머지는 절대값이다.
+     *
+     * @param containingHandle 이 참조를 담고 있는 객체의 핸들
+     */
+    public long readHandleReference(long containingHandle) {
+        int code = input.readBits(4);
+        int counter = input.readBits(4);
+        long value = 0;
+        for (int i = 0; i < counter; i++) {
+            value = (value << 8) | (input.readBits(8) & 0xFF);
+        }
+        switch (code) {
+            case 0x6: return containingHandle + 1;
+            case 0x8: return containingHandle - 1;
+            case 0xA: return containingHandle + value;
+            case 0xC: return containingHandle - value;
+            default:  return value;
+        }
     }
 
     /**

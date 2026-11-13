@@ -95,8 +95,5 @@ public class AttdefObjectReader implements ObjectReader {
             if (v.from(DwgVersion.R2010)) r.getInput().readBits(8); // keep_duplicate_records
             attdef.setPrompt(r.readVariableText());
         }
-
-        // style handle
-        r.readHandle();
     }
 }

@@ -70,7 +70,7 @@
     <build>
         <!-- Source directory configuration -->
         <sourceDirectory>src</sourceDirectory>
-        <testSourceDirectory>src</testSourceDirectory>
+        <testSourceDirectory>test</testSourceDirectory>
 
         <plugins>
             <!-- Maven Compiler Plugin -->

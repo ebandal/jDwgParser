@@ -116,7 +116,17 @@ Without arguments it reads `samples/2000`. For each type it prints three numbers
 
 Below the table it lists the first difference of each type. All three numbers of a row should be the same.
 
-What is compared depends on the type: coordinates and sizes for LINE, CIRCLE, ARC, ELLIPSE, POINT, INSERT, SOLID, TRACE, 3DFACE, LWPOLYLINE (vertices) and SPLINE (control points); text, position and height for TEXT and MTEXT; name, color and frozen flag for LAYER; name and base point for BLOCK_HEADER. For ATTRIB, HATCH, DIMENSION, LEADER and polyface meshes only the class is checked.
+What is compared depends on the type: coordinates and sizes for LINE, CIRCLE, ARC, ELLIPSE, POINT, INSERT, SOLID, TRACE, 3DFACE, LWPOLYLINE (vertices) and SPLINE (control points); text, position and height for TEXT and MTEXT; name, color and frozen flag for LAYER; name and base point for BLOCK_HEADER. For ATTRIB, HATCH, DIMENSION, LEADER and polyface meshes no type-specific value is compared.
+
+Every entity is also compared on its common values: entity mode, color, visibility, and the handles of its layer and (inside a block) its owner. INSERT and DIMENSION are compared on the handle of their block too.
+
+The same comparison runs as a test on the R2000 samples of the repository:
+
+```bash
+mvn test
+```
+
+`test/io/dwg/ReaderAgreementTest.java` fails if any object is missing, is of the wrong class or differs.
 
 ## Using it from code
 

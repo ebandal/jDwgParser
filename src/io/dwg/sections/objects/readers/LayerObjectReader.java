@@ -35,11 +35,19 @@ public class LayerObjectReader implements ObjectReader {
 
         int[] colorData = r.readCmColor();
         layer.setColor(new CmColor(colorData[0]));
+    }
 
-        // handle refs
-        layer.setLineTypeHandle(new DwgHandleRef(r.readHandle()));
+    @Override
+    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
+        DwgLayer layer = (DwgLayer) target;
+        long self = target.handle();
+        r.readHandleReference(self);                // xref block (null)
         if (v.from(DwgVersion.R2000)) {
-            layer.setPlotStyleHandle(new DwgHandleRef(r.readHandle()));
+            layer.setPlotStyleHandle(new DwgHandleRef(r.readHandleReference(self)));
         }
+        if (v.from(DwgVersion.R2007)) {
+            r.readHandleReference(self);            // material
+        }
+        layer.setLineTypeHandle(new DwgHandleRef(r.readHandleReference(self)));
     }
 }

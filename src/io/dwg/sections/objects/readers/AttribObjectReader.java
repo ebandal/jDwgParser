@@ -85,7 +85,5 @@ public class AttribObjectReader implements ObjectReader {
             if (v.from(DwgVersion.R2007)) r.getInput().readBit(); // lock_position_flag
             if (v.from(DwgVersion.R2010)) r.getInput().readBits(8); // keep_duplicate_records
         }
-
-        r.readHandle(); // style handle
     }
 }

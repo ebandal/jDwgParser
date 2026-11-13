@@ -50,13 +50,18 @@ public class InsertObjectReader implements ObjectReader {
         ins.setRotation(r.readBitDouble());
         ins.setExtrusion(r.read3BitDouble());
         ins.setHasAttribs(r.getInput().readBit());
+    }
 
-        // handle refs
-        ins.setBlockHeaderHandle(new DwgHandleRef(r.readHandle()));
-        if (ins.hasAttribs()) {
-            ins.setFirstAttribHandle(new DwgHandleRef(r.readHandle()));
-            ins.setLastAttribHandle(new DwgHandleRef(r.readHandle()));
-            ins.setSeqendHandle(new DwgHandleRef(r.readHandle()));
+    @Override
+    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
+        DwgInsert ins = (DwgInsert) target;
+        long self = target.handle();
+        ins.setBlockHeaderHandle(new DwgHandleRef(r.readHandleReference(self)));
+        // R2004+ lists every attribute instead of the first and the last; that list is not read here
+        if (ins.hasAttribs() && !v.from(DwgVersion.R2004)) {
+            ins.setFirstAttribHandle(new DwgHandleRef(r.readHandleReference(self)));
+            ins.setLastAttribHandle(new DwgHandleRef(r.readHandleReference(self)));
+            ins.setSeqendHandle(new DwgHandleRef(r.readHandleReference(self)));
         }
     }
 }
