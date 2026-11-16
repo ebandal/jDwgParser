@@ -25,13 +25,8 @@ public class Vertex3DObjectReader implements ObjectReader {
         EntityHeaderReader.readCommonEntityData(r, v);
 
         DwgVertex3D vertex = (DwgVertex3D) target;
-
-        // 1. location (3RD - 3 raw doubles)
-        double[] loc = r.read3RawDouble();
+        vertex.setFlags(r.getInput().readBits(8));          // flags (EC)
+        double[] loc = r.read3BitDouble();                  // point (3BD), WCS
         vertex.setLocation(new Point3D(loc[0], loc[1], loc[2]));
-
-        // 2. flags (BS - bit short)
-        int flags = r.readBitShort();
-        vertex.setFlags(flags);
     }
 }

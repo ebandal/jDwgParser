@@ -74,7 +74,8 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
             long cumulativeOffset = 0, sectionMapFileOffset = -1;
             for (R2007PageMapParser.PageMapEntry entry : pageMap) {
                 if (entry.pageId == r2007Header.sectionsMapId()) {
-                    sectionMapFileOffset = 0x480L + r2007Header.pageMapOffset() + cumulativeOffset;
+                    // the page map lists the pages in file order, starting right after the 0x480 byte header
+                    sectionMapFileOffset = 0x480L + cumulativeOffset;
                     break;
                 }
                 cumulativeOffset += entry.size;
@@ -124,7 +125,7 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
             long filePageOffset = -1, pageSize = -1, cumul = 0;
             for (R2007PageMapParser.PageMapEntry pm : pageMap) {
                 if (pm.pageId == page.id) {
-                    filePageOffset = 0x480L + pageMapOffset + cumul;
+                    filePageOffset = 0x480L + cumul;
                     pageSize = pm.size;
                     break;
                 }

@@ -32,6 +32,7 @@ public class Face3DObjectReader implements ObjectReader {
                 double[] p = r.read3BitDouble();
                 points[i] = new Point3D(p[0], p[1], p[2]);
             }
+            face.setInvisibleEdges(r.readBitShort());
         } else {
             // R2000+: has_no_flags(B), z_is_zero(B), corner1(RD,RD,[RD]),
             //         corner2/3/4 as 3DD relative to previous

@@ -29,4 +29,9 @@ public class DwgPolyline3D extends AbstractDwgEntity {
     public boolean isClosed() { return (flags & 0x01) != 0; }
     public boolean isMesh() { return (flags & 0x10) != 0; }
     public boolean isPolyfaceMesh() { return (flags & 0x20) != 0; }
+
+    private int curveType;
+
+    public int curveType() { return curveType; }
+    public void setCurveType(int curveType) { this.curveType = curveType; }
 }

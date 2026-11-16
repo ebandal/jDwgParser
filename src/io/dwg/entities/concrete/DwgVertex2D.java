@@ -29,4 +29,9 @@ public class DwgVertex2D extends AbstractDwgEntity {
     public void setEndWidth(double endWidth) { this.endWidth = endWidth; }
     public void setBulge(double bulge) { this.bulge = bulge; }
     public void setFlags(int flags) { this.flags = flags; }
+
+    private double tangentDirection;
+
+    public double tangentDirection() { return tangentDirection; }
+    public void setTangentDirection(double tangentDirection) { this.tangentDirection = tangentDirection; }
 }

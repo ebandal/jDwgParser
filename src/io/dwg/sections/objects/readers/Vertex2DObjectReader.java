@@ -25,25 +25,22 @@ public class Vertex2DObjectReader implements ObjectReader {
         EntityHeaderReader.readCommonEntityData(r, v);
 
         DwgVertex2D vertex = (DwgVertex2D) target;
-
-        // 1. location (3RD - 3 raw doubles)
-        double[] loc = r.read3RawDouble();
+        vertex.setFlags(r.getInput().readBits(8));          // flags (EC)
+        double[] loc = r.read3BitDouble();                  // point (3BD), OCS
         vertex.setLocation(new Point3D(loc[0], loc[1], loc[2]));
-
-        // 2. startWidth (BD - bit double)
+        // a negative start width stands for both widths, and no end width follows
         double startWidth = r.readBitDouble();
-        vertex.setStartWidth(startWidth);
-
-        // 3. endWidth (BD)
-        double endWidth = r.readBitDouble();
-        vertex.setEndWidth(endWidth);
-
-        // 4. bulge (BD)
-        double bulge = r.readBitDouble();
-        vertex.setBulge(bulge);
-
-        // 5. flags (BS - bit short)
-        int flags = r.readBitShort();
-        vertex.setFlags(flags);
+        if (startWidth < 0) {
+            vertex.setStartWidth(-startWidth);
+            vertex.setEndWidth(-startWidth);
+        } else {
+            vertex.setStartWidth(startWidth);
+            vertex.setEndWidth(r.readBitDouble());
+        }
+        vertex.setBulge(r.readBitDouble());
+        if (v.from(DwgVersion.R2010)) {
+            r.readBitLong();                                // vertex id
+        }
+        vertex.setTangentDirection(r.readBitDouble());
     }
 }

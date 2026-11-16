@@ -302,6 +302,31 @@ public class ReaderCheck {
                     if (d != null) return d;
                 }
                 return null;
+            } else if (expected instanceof io.dwg.render.model.entity.PolylineVertex) {
+                io.dwg.render.model.entity.PolylineVertex e = (io.dwg.render.model.entity.PolylineVertex) expected;
+                if (actual instanceof io.dwg.entities.concrete.DwgVertex2D) {
+                    io.dwg.entities.concrete.DwgVertex2D a = (io.dwg.entities.concrete.DwgVertex2D) actual;
+                    if (a.flags() != e.flags) return "flags " + e.flags + " != " + a.flags();
+                    return diff("point", e.point, xyz(a.location()), "bulge", new double[] { e.bulge }, new double[] { a.bulge() });
+                }
+                if (actual instanceof io.dwg.entities.concrete.DwgVertex3D) {
+                    io.dwg.entities.concrete.DwgVertex3D a = (io.dwg.entities.concrete.DwgVertex3D) actual;
+                    if (a.flags() != e.flags) return "flags " + e.flags + " != " + a.flags();
+                    return diff("point", e.point, xyz(a.location()));
+                }
+                return wrongClass(actual);
+            } else if (expected instanceof io.dwg.render.model.entity.Polyline) {
+                io.dwg.render.model.entity.Polyline e = (io.dwg.render.model.entity.Polyline) expected;
+                if (actual instanceof io.dwg.entities.concrete.DwgPolyline2D) {
+                    io.dwg.entities.concrete.DwgPolyline2D a = (io.dwg.entities.concrete.DwgPolyline2D) actual;
+                    if (e.threeD || a.isClosed() != e.closed) return "closed " + e.closed + " != " + a.isClosed();
+                    return diff("elevation", new double[] { e.elevation }, new double[] { a.elevation() }, "extrusion", e.extrusion, a.extrusion());
+                }
+                if (actual instanceof io.dwg.entities.concrete.DwgPolyline3D) {
+                    io.dwg.entities.concrete.DwgPolyline3D a = (io.dwg.entities.concrete.DwgPolyline3D) actual;
+                    return !e.threeD || a.isClosed() != e.closed ? "closed " + e.closed + " != " + a.isClosed() : null;
+                }
+                return wrongClass(actual);
             } else if (expected instanceof Hatch) {
                 return actual instanceof DwgHatch ? null : wrongClass(actual);
             } else if (expected instanceof Layer) {

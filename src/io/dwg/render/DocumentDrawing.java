@@ -25,7 +25,11 @@ import io.dwg.entities.concrete.DwgLine;
 import io.dwg.entities.concrete.DwgLwPolyline;
 import io.dwg.entities.concrete.DwgMText;
 import io.dwg.entities.concrete.DwgPoint;
+import io.dwg.entities.concrete.DwgPolyline2D;
+import io.dwg.entities.concrete.DwgPolyline3D;
 import io.dwg.entities.concrete.DwgPolylinePface;
+import io.dwg.entities.concrete.DwgVertex2D;
+import io.dwg.entities.concrete.DwgVertex3D;
 import io.dwg.entities.concrete.DwgSolid;
 import io.dwg.entities.concrete.DwgSpline;
 import io.dwg.entities.concrete.DwgText;
@@ -51,6 +55,8 @@ import io.dwg.render.model.entity.MText;
 import io.dwg.render.model.entity.Point;
 import io.dwg.render.model.entity.PolyfaceMesh;
 import io.dwg.render.model.entity.PolyfaceVertex;
+import io.dwg.render.model.entity.Polyline;
+import io.dwg.render.model.entity.PolylineVertex;
 import io.dwg.render.model.entity.Solid;
 import io.dwg.render.model.entity.Spline;
 import io.dwg.render.model.entity.Text;
@@ -113,24 +119,31 @@ public final class DocumentDrawing {
         Entity parent = null;
         for (Entity e : entities) {
             boolean attrib = e instanceof Text && ((Text) e).attribute;
-            if (attrib || e instanceof PolyfaceVertex) {
+            if (attrib || e instanceof PolyfaceVertex || e instanceof PolylineVertex) {
                 Entity owner = e.entMode == Entity.MODE_OWNED ? byHandle.get(e.ownerHandle) : null;
-                if (!(owner instanceof Insert) && !(owner instanceof PolyfaceMesh)) {
+                if (!(owner instanceof Insert) && !(owner instanceof PolyfaceMesh) && !(owner instanceof Polyline)) {
                     owner = parent;
                 }
                 if (attrib && owner instanceof Insert) {
                     ((Insert) owner).attribs.add((Text) e);
-                } else if (!attrib && owner instanceof PolyfaceMesh) {
+                } else if (e instanceof PolyfaceVertex && owner instanceof PolyfaceMesh) {
                     PolyfaceVertex v = (PolyfaceVertex) e;
                     if (v.point != null) {
                         ((PolyfaceMesh) owner).vertices.add(v.point);
                     } else {
                         ((PolyfaceMesh) owner).faces.add(v.indexes);
                     }
+                } else if (e instanceof PolylineVertex && owner instanceof Polyline) {
+                    PolylineVertex v = (PolylineVertex) e;
+                    // spline frame control points are not on the drawn curve
+                    if ((v.flags & PolylineVertex.FLAG_SPLINE_FRAME) == 0) {
+                        ((Polyline) owner).points.add(v.point);
+                        ((Polyline) owner).bulges.add(v.bulge);
+                    }
                 }
                 continue;
             }
-            if (e instanceof Insert || e instanceof PolyfaceMesh) {
+            if (e instanceof Insert || e instanceof PolyfaceMesh || e instanceof Polyline) {
                 parent = e;
             }
             if (e.entMode == Entity.MODE_MODEL_SPACE) {
@@ -342,6 +355,36 @@ public final class DocumentDrawing {
             e.point = xyz(((DwgVertexPface) o).location());
             return e;
         }
+        if (o instanceof DwgPolyline2D) {
+            DwgPolyline2D s = (DwgPolyline2D) o;
+            Polyline e = new Polyline();
+            e.closed = s.isClosed();
+            e.elevation = s.elevation();
+            e.extrusion = required(s.extrusion());
+            return e;
+        }
+        if (o instanceof DwgPolyline3D) {
+            DwgPolyline3D s = (DwgPolyline3D) o;
+            Polyline e = new Polyline();
+            e.threeD = true;
+            e.closed = s.isClosed();
+            return e;
+        }
+        if (o instanceof DwgVertex2D) {
+            DwgVertex2D s = (DwgVertex2D) o;
+            PolylineVertex e = new PolylineVertex();
+            e.point = xyz(s.location());
+            e.bulge = s.bulge();
+            e.flags = s.flags();
+            return e;
+        }
+        if (o instanceof DwgVertex3D) {
+            DwgVertex3D s = (DwgVertex3D) o;
+            PolylineVertex e = new PolylineVertex();
+            e.point = xyz(s.location());
+            e.flags = s.flags();
+            return e;
+        }
         if (o instanceof DwgVertexPfaceFace) {
             DwgVertexPfaceFace s = (DwgVertexPfaceFace) o;
             PolyfaceVertex e = new PolyfaceVertex();
@@ -358,8 +401,10 @@ public final class DocumentDrawing {
         Text e = new Text();
         e.elevation = s.elevation();
         e.insertion = xy(s.insertionPoint());
-        // the alignment point is stored only when it differs from the insertion point
-        e.alignment = s.alignmentPoint() == null ? e.insertion.clone() : xy(s.alignmentPoint());
+        // The alignment point is used only with a horizontal or vertical alignment. Without one, newer
+        // versions do not store it and older versions store zeros, so the insertion point stands in for it.
+        boolean aligned = s.horizontalAlignment() != 0 || s.verticalAlignment() != 0;
+        e.alignment = !aligned || s.alignmentPoint() == null ? e.insertion.clone() : xy(s.alignmentPoint());
         e.extrusion = s.extrusion();
         e.thickness = s.thickness();
         e.oblique = s.obliquAngle();

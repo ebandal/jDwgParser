@@ -11,6 +11,8 @@ public class ByteBufferBitInput implements BitInput {
     private long bitOffset;
     private int currentByte;
     private int bitsRemainingInByte;
+    /** bit position that may not be read past; Long.MAX_VALUE = the end of the buffer */
+    private long limitBit = Long.MAX_VALUE;
 
     public ByteBufferBitInput(ByteBuffer buf) {
         this.buffer = buf.duplicate().order(ByteOrder.LITTLE_ENDIAN);
@@ -24,8 +26,23 @@ public class ByteBufferBitInput implements BitInput {
         this(ByteBuffer.wrap(bytes));
     }
 
+    /**
+     * Reading at or past this bit position throws {@link IllegalStateException}.
+     * Used to keep the reading of one object inside the object.
+     */
+    public void setLimitBit(long limitBit) {
+        this.limitBit = limitBit;
+    }
+
+    public long limitBit() {
+        return limitBit;
+    }
+
     @Override
     public boolean readBit() {
+        if (bitOffset >= limitBit) {
+            throw new IllegalStateException("read past the end of the object at bit " + bitOffset);
+        }
         if (bitsRemainingInByte == 0) {
             loadNextByte();
         }

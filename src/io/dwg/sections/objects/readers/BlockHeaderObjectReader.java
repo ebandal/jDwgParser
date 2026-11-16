@@ -26,9 +26,7 @@ public class BlockHeaderObjectReader implements ObjectReader {
 
         // 테이블 레코드 공통 : 이름, 64-flag, xref index + 1, xdep
         block.setBlockName(r.readVariableText());
-        r.getInput().readBit();
-        r.readBitShort();
-        r.getInput().readBit();
+        EntityHeaderReader.readTableRecordFlags(r, v);
 
         int flags = 0;
         if (r.getInput().readBit()) flags |= 0x01;     // anonymous

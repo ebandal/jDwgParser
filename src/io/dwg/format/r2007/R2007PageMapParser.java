@@ -41,25 +41,17 @@ public class R2007PageMapParser {
             return pages;
         }
 
-        // First, extract all non-zero LE32 values
-        java.util.List<Long> values = new java.util.ArrayList<>();
-        for (int offset = 0; offset + 4 <= pageMapData.length; offset += 4) {
-            long val = readLE32(pageMapData, offset) & 0xFFFFFFFFL;
-            if (val != 0) {
-                values.add(val);
-            }
-        }
-
-        // Pair them up: odd indices are sizes, even indices are pageIds
-        // So values[0] = size, values[1] = pageId, values[2] = size, values[3] = pageId, ...
-        for (int i = 0; i + 1 < values.size(); i += 2) {
-            long size = values.get(i);
-            long pageId = values.get(i + 1);
-
+        // The page map is a list of { size (8 bytes), page id (8 bytes) }, in the order of the pages in the
+        // file. A negative id marks an unused page; it still takes up its size in the file, so it is kept
+        // for the pages after it to get the right address.
+        for (int offset = 0; offset + 16 <= pageMapData.length; offset += 16) {
+            long size = (readLE32(pageMapData, offset) & 0xFFFFFFFFL)
+                    | ((long) readLE32(pageMapData, offset + 4) << 32);
+            long pageId = (readLE32(pageMapData, offset + 8) & 0xFFFFFFFFL)
+                    | ((long) readLE32(pageMapData, offset + 12) << 32);
             if (size == 0 && pageId == 0) {
                 break; // End marker
             }
-
             pages.add(new PageMapEntry((int) pageId, (int) size));
         }
 

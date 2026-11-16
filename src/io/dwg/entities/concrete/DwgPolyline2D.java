@@ -40,4 +40,12 @@ public class DwgPolyline2D extends AbstractDwgEntity {
     // 플래그 헬퍼 메서드
     public boolean isClosed() { return (flags & 0x01) != 0; }
     public boolean isCurved() { return (flags & 0x04) != 0; }
+
+    private int curveType;              // 0 없음, 5 2차 B-스플라인, 6 3차 B-스플라인, 8 베지어
+    private double thickness;
+
+    public int curveType() { return curveType; }
+    public double thickness() { return thickness; }
+    public void setCurveType(int curveType) { this.curveType = curveType; }
+    public void setThickness(double thickness) { this.thickness = thickness; }
 }

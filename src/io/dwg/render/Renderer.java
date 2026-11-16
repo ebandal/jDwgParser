@@ -31,6 +31,7 @@ import io.dwg.render.model.entity.LwPolyline;
 import io.dwg.render.model.entity.MText;
 import io.dwg.render.model.entity.Point;
 import io.dwg.render.model.entity.PolyfaceMesh;
+import io.dwg.render.model.entity.Polyline;
 import io.dwg.render.model.entity.Solid;
 import io.dwg.render.model.entity.Spline;
 import io.dwg.render.model.entity.Text;
@@ -250,6 +251,8 @@ public class Renderer {
             path = facePath((Face3d) e);
         } else if (e instanceof PolyfaceMesh) {
             path = polyfacePath((PolyfaceMesh) e);
+        } else if (e instanceof Polyline) {
+            path = oldPolylinePath((Polyline) e);
         } else if (e instanceof Solid) {
             Solid s = (Solid) e;
             List<double[]> points = new ArrayList<>();
@@ -383,6 +386,32 @@ public class Renderer {
     }
 
     // edges of the faces of a polyface mesh; a negative vertex index hides the edge that starts there
+    // old-style POLYLINE : a 2D one is in OCS at its elevation and may have bulges, a 3D one is in WCS
+    private Path2D.Double oldPolylinePath(Polyline p) {
+        int n = p.points.size();
+        if (n == 0) {
+            return null;
+        }
+        Path2D.Double path = new Path2D.Double();
+        double[] first = p.points.get(0);
+        path.moveTo(first[0], first[1]);
+        int segments = p.closed ? n : n - 1;
+        for (int i = 0; i < segments; i++) {
+            double[] a = p.points.get(i);
+            double[] b = p.points.get((i + 1) % n);
+            double bulge = p.threeD ? 0.0 : p.bulges.get(i);
+            if (bulge == 0.0 || (a[0] == b[0] && a[1] == b[1])) {
+                path.lineTo(b[0], b[1]);
+            } else {
+                append(path, Curves.bulge(a[0], a[1], b[0], b[1], bulge), false);
+            }
+        }
+        if (!p.threeD) {
+            path.transform(new Ocs(p.extrusion).toAffine(p.elevation));
+        }
+        return path;
+    }
+
     private Path2D.Double polyfacePath(PolyfaceMesh m) {
         Path2D.Double path = new Path2D.Double();
         for (int[] face : m.faces) {
