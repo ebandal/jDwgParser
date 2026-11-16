@@ -18,6 +18,8 @@ import io.dwg.render.model.entity.MText;
 import io.dwg.render.model.entity.Point;
 import io.dwg.render.model.entity.PolyfaceMesh;
 import io.dwg.render.model.entity.PolyfaceVertex;
+import io.dwg.render.model.entity.Polyline;
+import io.dwg.render.model.entity.PolylineVertex;
 import io.dwg.render.model.entity.Solid;
 import io.dwg.render.model.entity.Spline;
 import io.dwg.render.model.entity.Text;
@@ -31,6 +33,10 @@ public class EntityDecoderR2000 {
     public static final int TYPE_ATTRIB = 0x02;
     public static final int TYPE_SEQEND = 0x06;
     public static final int TYPE_INSERT = 0x07;
+    public static final int TYPE_VERTEX_2D = 0x0A;
+    public static final int TYPE_VERTEX_3D = 0x0B;
+    public static final int TYPE_POLYLINE_2D = 0x0F;
+    public static final int TYPE_POLYLINE_3D = 0x10;
     public static final int TYPE_VERTEX_PFACE = 0x0D;
     public static final int TYPE_VERTEX_PFACE_FACE = 0x0E;
     public static final int TYPE_ARC = 0x11;
@@ -55,6 +61,7 @@ public class EntityDecoderR2000 {
     public static boolean supports(int type) {
         switch (type) {
         case TYPE_TEXT: case TYPE_ATTRIB: case TYPE_INSERT:
+        case TYPE_VERTEX_2D: case TYPE_VERTEX_3D: case TYPE_POLYLINE_2D: case TYPE_POLYLINE_3D:
         case TYPE_VERTEX_PFACE: case TYPE_VERTEX_PFACE_FACE: case TYPE_POLYLINE_PFACE:
         case TYPE_ARC: case TYPE_CIRCLE: case TYPE_LINE: case TYPE_POINT: case TYPE_3DFACE:
         case TYPE_SOLID: case TYPE_TRACE: case TYPE_ELLIPSE: case TYPE_SPLINE:
@@ -127,6 +134,10 @@ public class EntityDecoderR2000 {
         switch (type) {
         case TYPE_TEXT: case TYPE_ATTRIB:   return new Text();
         case TYPE_INSERT:                   return new Insert();
+        case TYPE_VERTEX_2D:
+        case TYPE_VERTEX_3D:                return new PolylineVertex();
+        case TYPE_POLYLINE_2D:
+        case TYPE_POLYLINE_3D:              return new Polyline();
         case TYPE_VERTEX_PFACE:
         case TYPE_VERTEX_PFACE_FACE:        return new PolyfaceVertex();
         case TYPE_POLYLINE_PFACE:           return new PolyfaceMesh();
@@ -152,6 +163,10 @@ public class EntityDecoderR2000 {
         case TYPE_TEXT:                 readText(r, (Text) e);                          return 1;   // style
         case TYPE_ATTRIB:               readAttrib(r, (Text) e);                        return 1;   // style
         case TYPE_INSERT:               readInsert(r, (Insert) e);                      return 0;   // read by the caller
+        case TYPE_VERTEX_2D:            readVertex2d(r, (PolylineVertex) e);            return 0;
+        case TYPE_VERTEX_3D:            readVertex3d(r, (PolylineVertex) e);            return 0;
+        case TYPE_POLYLINE_2D:          readPolyline2d(r, (Polyline) e);                return 3;   // first, last vertex, seqend
+        case TYPE_POLYLINE_3D:          readPolyline3d(r, (Polyline) e);                return 3;   // first, last vertex, seqend
         case TYPE_VERTEX_PFACE:         readPolyfacePoint(r, (PolyfaceVertex) e);       return 0;
         case TYPE_VERTEX_PFACE_FACE:    readPolyfaceFace(r, (PolyfaceVertex) e);        return 0;
         case TYPE_POLYLINE_PFACE:       readPolyfaceMesh(r, (PolyfaceMesh) e);          return 3;   // first, last vertex, seqend
@@ -487,6 +502,39 @@ public class EntityDecoderR2000 {
         r.readBS();                             // unknown
         r.readBit();                            // unknown
         r.readBit();                            // unknown
+    }
+
+    private static void readPolyline2d(BitReader r, Polyline p) {
+        int flags = r.readBS();
+        p.closed = (flags & 1) != 0;
+        r.readBS();                             // curve type
+        r.readBD();                             // default start width
+        r.readBD();                             // default end width
+        r.readBT();                             // thickness
+        p.elevation = r.readBD();
+        p.extrusion = r.readBE();
+    }
+
+    private static void readPolyline3d(BitReader r, Polyline p) {
+        p.threeD = true;
+        r.readRC();                             // spline flags
+        p.closed = (r.readRC() & 1) != 0;       // closed flags
+    }
+
+    private static void readVertex2d(BitReader r, PolylineVertex v) {
+        v.flags = r.readRC();
+        v.point = r.read3BD();
+        double startWidth = r.readBD();
+        if (startWidth >= 0) {
+            r.readBD();                         // end width; a negative start width stands for both
+        }
+        v.bulge = r.readBD();
+        r.readBD();                             // tangent direction
+    }
+
+    private static void readVertex3d(BitReader r, PolylineVertex v) {
+        v.flags = r.readRC();
+        v.point = r.read3BD();
     }
 
     private static void readPolyfaceMesh(BitReader r, PolyfaceMesh m) {

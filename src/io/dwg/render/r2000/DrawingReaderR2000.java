@@ -15,6 +15,8 @@ import io.dwg.render.model.entity.Entity;
 import io.dwg.render.model.entity.Insert;
 import io.dwg.render.model.entity.PolyfaceMesh;
 import io.dwg.render.model.entity.PolyfaceVertex;
+import io.dwg.render.model.entity.Polyline;
+import io.dwg.render.model.entity.PolylineVertex;
 import io.dwg.render.model.entity.Text;
 
 /** Reads an R2000 (AC1015) file into a {@link Drawing} : layers, blocks and the supported entities. */
@@ -56,14 +58,20 @@ public class DrawingReaderR2000 {
         Entity parent = null;
         for (Entity e : entities) {
             boolean attrib = e instanceof Text && ((Text) e).attribute;
-            if (attrib || e instanceof PolyfaceVertex) {
+            if (attrib || e instanceof PolyfaceVertex || e instanceof PolylineVertex) {
                 Entity owner = e.entMode == Entity.MODE_OWNED ? byHandle.get(e.ownerHandle) : null;
-                if (!(owner instanceof Insert) && !(owner instanceof PolyfaceMesh)) {
+                if (!(owner instanceof Insert) && !(owner instanceof PolyfaceMesh) && !(owner instanceof Polyline)) {
                     owner = parent;
                 }
                 if (attrib && owner instanceof Insert) {
                     ((Insert) owner).attribs.add((Text) e);
-                } else if (!attrib && owner instanceof PolyfaceMesh) {
+                } else if (e instanceof PolylineVertex && owner instanceof Polyline) {
+                    PolylineVertex v = (PolylineVertex) e;
+                    if ((v.flags & PolylineVertex.FLAG_SPLINE_FRAME) == 0) {
+                        ((Polyline) owner).points.add(v.point);
+                        ((Polyline) owner).bulges.add(v.bulge);
+                    }
+                } else if (e instanceof PolyfaceVertex && owner instanceof PolyfaceMesh) {
                     PolyfaceVertex v = (PolyfaceVertex) e;
                     if (v.point != null) {
                         ((PolyfaceMesh) owner).vertices.add(v.point);
@@ -73,7 +81,7 @@ public class DrawingReaderR2000 {
                 }
                 continue;
             }
-            if (e instanceof Insert || e instanceof PolyfaceMesh) {
+            if (e instanceof Insert || e instanceof PolyfaceMesh || e instanceof Polyline) {
                 parent = e;
             }
             if (e.entMode == Entity.MODE_MODEL_SPACE) {

@@ -7,6 +7,7 @@ import io.dwg.core.version.DwgVersion;
 import io.dwg.entities.DwgObject;
 import io.dwg.entities.DwgObjectType;
 import io.dwg.entities.concrete.DwgLayer;
+import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
 
 public class LayerObjectReader implements ObjectReader {
@@ -21,17 +22,24 @@ public class LayerObjectReader implements ObjectReader {
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgLayer layer = (DwgLayer) target;
         layer.setName(r.readVariableText());
-        // 테이블 레코드 공통 : 64-flag, xref index + 1, xdep
-        r.getInput().readBit();
-        r.readBitShort();
-        r.getInput().readBit();
+        // 테이블 레코드 공통 플래그
+        EntityHeaderReader.readTableRecordFlags(r, v);
 
-        int flags = r.readBitShort();
-        layer.setFlags(flags);
-        layer.setFrozen((flags & 0x01) != 0);
-        layer.setOn((flags & 0x02) == 0);
-        layer.setFrozenInNewViewports((flags & 0x04) != 0);
-        layer.setLocked((flags & 0x08) != 0);
+        if (v.from(DwgVersion.R2000)) {
+            int flags = r.readBitShort();
+            layer.setFlags(flags);
+            layer.setFrozen((flags & 0x01) != 0);
+            layer.setOn((flags & 0x02) == 0);
+            layer.setFrozenInNewViewports((flags & 0x04) != 0);
+            layer.setLocked((flags & 0x08) != 0);
+        } else {
+            // R13/R14 : frozen, off, frozen in new viewports, locked (B each).
+            // The second bit is set when the layer is switched off (checked against the R2000 files).
+            layer.setFrozen(r.getInput().readBit());
+            layer.setOn(!r.getInput().readBit());
+            layer.setFrozenInNewViewports(r.getInput().readBit());
+            layer.setLocked(r.getInput().readBit());
+        }
 
         int[] colorData = r.readCmColor();
         int colorIndex = colorData[0];

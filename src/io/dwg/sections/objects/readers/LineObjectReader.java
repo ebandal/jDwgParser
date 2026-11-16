@@ -21,8 +21,8 @@ public class LineObjectReader implements ObjectReader {
 
         DwgLine line = (DwgLine) target;
         if (v.until(DwgVersion.R14)) {
-            double[] start = r.read3RawDouble();
-            double[] end   = r.read3RawDouble();
+            double[] start = r.read3BitDouble();
+            double[] end   = r.read3BitDouble();
             line.setStart(new Point3D(start[0], start[1], start[2]));
             line.setEnd(new Point3D(end[0], end[1], end[2]));
         } else {

@@ -12,10 +12,23 @@ public class BitStreamReader {
     private DwgVersion version;
     private Charset textCharset = StandardCharsets.US_ASCII;
     private Object context;
+    private boolean stringStreamMode;
+    private BitStreamReader stringStream;
 
     public BitStreamReader(BitInput input, DwgVersion version) {
         this.input = input;
         this.version = version;
+    }
+
+    /**
+     * R2007+ 객체의 문자열 스트림을 지정한다. 지정한 뒤에는 {@link #readVariableText()}가
+     * 본 스트림이 아니라 문자열 스트림에서 읽는다.
+     *
+     * @param stringInput 문자열 스트림의 시작에 놓인 입력. 객체에 문자열이 없으면 null
+     */
+    public void setStringStream(BitInput stringInput) {
+        this.stringStreamMode = true;
+        this.stringStream = stringInput == null ? null : new BitStreamReader(stringInput, version);
     }
 
     /**
@@ -442,6 +455,10 @@ public class BitStreamReader {
             int high = input.readBits(8) & 0xFF;
             sb.append((char)((high << 8) | low));
         }
+        // 문자열 끝의 NUL은 값에 포함하지 않는다
+        while (sb.length() > 0 && sb.charAt(sb.length() - 1) == 0) {
+            sb.setLength(sb.length() - 1);
+        }
         return sb.toString();
     }
 
@@ -451,6 +468,10 @@ public class BitStreamReader {
      */
     public String readVariableText() {
         if (version.usesUnicode()) {
+            if (stringStreamMode) {
+                // 객체의 문자열은 문자열 스트림에 순서대로 들어 있다. 스트림이 없으면 문자열도 없다.
+                return stringStream == null ? "" : stringStream.readUnicodeText();
+            }
             return readUnicodeText();
         } else {
             return readText();

@@ -31,12 +31,7 @@ public class TextObjectReader implements ObjectReader {
      * TEXT의 본문. ATTRIB도 같은 구성으로 시작하므로 함께 쓴다.
      */
     public static void readTextData(DwgText text, BitStreamReader r, DwgVersion v) throws Exception {
-        if (v.until(DwgVersion.R13)) {
-            // R13 이전: elevation(BD) + ins_pt(2RD)
-            text.setElevation(r.readBitDouble());
-            double[] pt = r.read2RawDouble();
-            text.setInsertionPoint(new Point2D(pt[0], pt[1]));
-        } else if (v.until(DwgVersion.R14)) {
+        if (v.until(DwgVersion.R14)) {
             // R13/R14: elevation(BD), ins_pt(2RD), alignment_pt(2RD),
             //          extrusion(3BD), thickness(BD), oblique(BD), rotation(BD),
             //          height(BD), widthFactor(BD), value(T), generation(BS),

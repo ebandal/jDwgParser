@@ -24,6 +24,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
     // readHeader → readSections 로 전달되는 값들
     private long sectionMapOffset;
     private int sectionPageAmount;
+    private int sectionMapId;
 
     @Override
     public DwgVersion version() {
@@ -143,6 +144,8 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
 
         // 5. Extract section map offset from encrypted header (0x54-0x5B)
         sectionMapOffset = ByteUtils.readLE64(decryptedHeader, 0x54) & 0xFFFFFFFFFFFFFFFFL;
+        // 0x5C : id of the page that holds the section map
+        sectionMapId = (int) ByteUtils.readLE32(decryptedHeader, 0x5C);
 
         // 6. 복호화된 헤더 CRC 검증
         verifyCrc32(decryptedHeader);
@@ -204,6 +207,175 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
     // -------------------------------------------------------------------------
     @Override
     public Map<String, SectionInputStream> readSections(BitInput input, FileHeaderFields header)
+            throws Exception {
+        // The section map of the file says which pages make up which section. If it cannot be read,
+        // fall back to scanning the pages in file order.
+        try {
+            Map<String, SectionInputStream> sections = readSectionsFromMap(input);
+            if (sections.containsKey("AcDb:Handles")
+                    && (sections.containsKey("AcDb:AcDbObjects") || sections.containsKey("AcDb:Objects"))) {
+                return sections;
+            }
+        } catch (Exception e) {
+            // fall through
+        }
+        return readSectionsByScanning(input, header);
+    }
+
+    private static final int PAGE_MAP_TYPE = 0x41630e3b;
+    private static final int SECTION_MAP_TYPE = 0x4163003b;
+    private static final int DATA_PAGE_TYPE = 0x4163043b;
+
+    /**
+     * Sections as the file describes them (specification, "R2004 file format") :
+     * the section page map gives the file address of every page, the section map gives for every
+     * section its name, its size and its pages, and each data page is decompressed to its start offset
+     * within the section.
+     */
+    private Map<String, SectionInputStream> readSectionsFromMap(BitInput input) throws Exception {
+        Map<String, SectionInputStream> sections = new HashMap<>();
+        byte[] file = readAll(input);
+
+        // section page map : { page number, size }; the pages follow each other from 0x100
+        byte[] pageMap = readSystemPage(file, sectionMapOffset + 0x100, PAGE_MAP_TYPE);
+        Map<Integer, Long> pageAddress = new HashMap<>();
+        long address = 0x100;
+        for (int p = 0; p + 8 <= pageMap.length; ) {
+            int number = le32(pageMap, p);
+            int size = le32(pageMap, p + 4);
+            p += 8;
+            if (number < 0) {
+                p += 16;                        // a gap : parent, left, right, 0
+            } else {
+                pageAddress.put(number, address);
+            }
+            if (size <= 0) {
+                break;
+            }
+            address += size;
+        }
+
+        Long mapAddress = pageAddress.get(sectionMapId);
+        if (mapAddress == null) {
+            throw new IllegalStateException("section map page not found");
+        }
+        byte[] map = readSystemPage(file, mapAddress, SECTION_MAP_TYPE);
+
+        // section map : 20 bytes of header, then the descriptions
+        int numDescriptions = le32(map, 0);
+        int p = 20;
+        for (int i = 0; i < numDescriptions && p + 0x60 <= map.length; i++) {
+            long sectionSize = le64(map, p);
+            int pageCount = le32(map, p + 0x08);
+            int maxDecompressed = le32(map, p + 0x0C);
+            int compressed = le32(map, p + 0x14);       // 1 = stored, 2 = compressed
+            int nameEnd = p + 0x20;
+            while (nameEnd < p + 0x60 && map[nameEnd] != 0) {
+                nameEnd++;
+            }
+            String name = new String(map, p + 0x20, nameEnd - (p + 0x20), StandardCharsets.US_ASCII);
+            p += 0x60;
+            if (pageCount < 0 || pageCount > 1_000_000 || p + 16L * pageCount > map.length) {
+                throw new IllegalStateException("bad page count in the section map");
+            }
+
+            // the section is as long as it says, or as far as its last page reaches
+            long size = sectionSize;
+            long[][] pages = new long[pageCount][];
+            for (int k = 0; k < pageCount; k++) {
+                pages[k] = new long[] { le32(map, p), le32(map, p + 4), le64(map, p + 8) };
+                size = Math.max(size, pages[k][2] + maxDecompressed);
+                p += 16;
+            }
+            if (name.isEmpty() || pageCount == 0 || size <= 0 || size > Integer.MAX_VALUE - 16) {
+                continue;
+            }
+
+            byte[] out = new byte[(int) size];
+            for (long[] page : pages) {
+                Long pageAt = pageAddress.get((int) page[0]);
+                if (pageAt == null || pageAt + 32 > file.length) {
+                    continue;
+                }
+                // the 32 byte header of a data page is XORed with a mask that depends on its address
+                int at = (int) (long) pageAt;
+                int mask = 0x4164536b ^ at;
+                int[] h = new int[8];
+                for (int k = 0; k < 8; k++) {
+                    h[k] = le32(file, at + 4 * k) ^ mask;
+                }
+                if (h[0] != DATA_PAGE_TYPE) {
+                    continue;
+                }
+                int dataSize = h[2];
+                long startOffset = (h[4] & 0xFFFFFFFFL) | ((long) h[5] << 32);
+                if (dataSize <= 0 || at + 32L + dataSize > file.length || startOffset < 0 || startOffset >= out.length) {
+                    continue;
+                }
+                byte[] data = new byte[dataSize];
+                System.arraycopy(file, at + 32, data, 0, dataSize);
+                byte[] plain = data;
+                if (compressed == 2) {
+                    plain = new io.dwg.core.util.R2004Lz77Decompressor().decompress(data, maxDecompressed);
+                }
+                int n = (int) Math.min(Math.min(plain.length, maxDecompressed), out.length - startOffset);
+                System.arraycopy(plain, 0, out, (int) startOffset, n);
+            }
+            sections.put(name, new SectionInputStream(out, name));
+        }
+        return sections;
+    }
+
+    // a system page : type, decompressed size, compressed size, compression type, checksum (RL each), then data
+    private static byte[] readSystemPage(byte[] file, long address, int expectedType) throws Exception {
+        if (address < 0 || address + 20 > file.length) {
+            throw new IllegalStateException("system page outside the file");
+        }
+        int at = (int) address;
+        if (le32(file, at) != expectedType) {
+            throw new IllegalStateException("unexpected system page type");
+        }
+        int decompressedSize = le32(file, at + 4);
+        int compressedSize = le32(file, at + 8);
+        int compressionType = le32(file, at + 12);
+        if (decompressedSize < 0 || compressedSize < 0 || at + 20L + compressedSize > file.length) {
+            throw new IllegalStateException("bad system page size");
+        }
+        byte[] data = new byte[compressedSize];
+        System.arraycopy(file, at + 20, data, 0, compressedSize);
+        if (compressionType != 2) {
+            return data;
+        }
+        byte[] plain = new io.dwg.core.util.R2004Lz77Decompressor().decompress(data, decompressedSize);
+        return plain.length == decompressedSize ? plain : java.util.Arrays.copyOf(plain, decompressedSize);
+    }
+
+    private static byte[] readAll(BitInput input) {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        input.seek(0);
+        try {
+            while (!input.isEof()) {
+                bytes.write(input.readRawChar() & 0xFF);
+            }
+        } catch (RuntimeException e) {
+            // end of the input
+        }
+        return bytes.toByteArray();
+    }
+
+    private static int le32(byte[] b, int off) {
+        return ByteBuffer.wrap(b, off, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+    }
+
+    private static long le64(byte[] b, int off) {
+        return ByteBuffer.wrap(b, off, 8).order(ByteOrder.LITTLE_ENDIAN).getLong();
+    }
+
+    /**
+     * Sections found by reading the pages in file order from 0x100 and assuming the usual section numbers.
+     * Used only when the section map cannot be read.
+     */
+    private Map<String, SectionInputStream> readSectionsByScanning(BitInput input, FileHeaderFields header)
             throws Exception {
         Map<String, SectionInputStream> sections = new HashMap<>();
 

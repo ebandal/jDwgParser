@@ -24,25 +24,15 @@ public class Polyline2DObjectReader implements ObjectReader {
         EntityHeaderReader.readCommonEntityData(r, v);
 
         DwgPolyline2D polyline = (DwgPolyline2D) target;
-
-        // 1. flags (BS - bit short)
-        int flags = r.readBitShort();
-        polyline.setFlags(flags);
-
-        // 2. defaultStartWidth (BD - bit double)
-        double defaultStartWidth = r.readBitDouble();
-        polyline.setDefaultStartWidth(defaultStartWidth);
-
-        // 3. defaultEndWidth (BD)
-        double defaultEndWidth = r.readBitDouble();
-        polyline.setDefaultEndWidth(defaultEndWidth);
-
-        // 4. elevation (BD)
-        double elevation = r.readBitDouble();
-        polyline.setElevation(elevation);
-
-        // 5. extrusion (BE - bit extrusion)
-        double[] extrusion = r.readBitExtrusion();
-        polyline.setExtrusion(extrusion);
+        polyline.setFlags(r.readBitShort());
+        polyline.setCurveType(r.readBitShort());
+        polyline.setDefaultStartWidth(r.readBitDouble());
+        polyline.setDefaultEndWidth(r.readBitDouble());
+        polyline.setThickness(r.readBitThickness());
+        polyline.setElevation(r.readBitDouble());
+        polyline.setExtrusion(r.readBitExtrusion());
+        if (v.from(DwgVersion.R2004)) {
+            r.readBitLong();                    // owned object count
+        }
     }
 }

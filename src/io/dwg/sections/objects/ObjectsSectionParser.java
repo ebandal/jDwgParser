@@ -145,7 +145,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
                 ((AbstractDwgObject) obj).setHandle(nextHandle);
                 ((AbstractDwgObject) obj).setRawTypeCode(typeCode);
-                readObjectData(obj, type, r, version, objDataStartBit, objSizeBytes, handleStreamBits);
+                readObjectData(obj, type, r, version, raw, objDataStartBit, objSizeBytes, handleStreamBits);
 
                 result.put(nextHandle, obj);
                 nextHandle++;
@@ -192,7 +192,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
         ((AbstractDwgObject) obj).setHandle(handle);
         ((AbstractDwgObject) obj).setRawTypeCode(typeCode);
-        readObjectData(obj, type, r, version, dataStartBit, objSize, handleStreamBits);
+        readObjectData(obj, type, r, version, raw, dataStartBit, objSize, handleStreamBits);
 
         return obj;
     }
@@ -221,8 +221,33 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
      * @param handleStreamBits 핸들 스트림의 비트 수 (R2010+), 그 밖의 버전은 -1
      */
     private void readObjectData(DwgObject obj, DwgObjectType type, BitStreamReader r, DwgVersion version,
-                                long dataStartBit, int objSizeBytes, long handleStreamBits) {
+                                byte[] raw, long dataStartBit, int objSizeBytes, long handleStreamBits) {
         ObjectReader reader = resolver.resolve(type.typeCode()).orElse(null);
+        // a corrupt count must not make a reader run past the object
+        long previousLimit = Long.MAX_VALUE;
+        ByteBufferBitInput bounded = r.getInput() instanceof ByteBufferBitInput ? (ByteBufferBitInput) r.getInput() : null;
+        if (bounded != null) {
+            previousLimit = bounded.limitBit();
+            bounded.setLimitBit(dataStartBit + (long) objSizeBytes * 8L);
+        }
+        try {
+            readObjectContent(obj, reader, r, version, raw, dataStartBit, objSizeBytes, handleStreamBits);
+        } finally {
+            if (bounded != null) {
+                bounded.setLimitBit(previousLimit);
+            }
+        }
+    }
+
+    private void readObjectContent(DwgObject obj, ObjectReader reader, BitStreamReader r, DwgVersion version,
+                                   byte[] raw, long dataStartBit, int objSizeBytes, long handleStreamBits) {
+        if (version.from(DwgVersion.R2007)) {
+            try {
+                attachStringStream(r, version, raw, dataStartBit, objSizeBytes, handleStreamBits);
+            } catch (Exception e) {
+                r.setStringStream(null);
+            }
+        }
         try {
             if (reader == null) {
                 // 리더가 없는 비엔티티 객체도 공통 헤더는 읽어 소유자를 알 수 있게 한다
@@ -243,6 +268,56 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         } catch (Exception e) {
             // Handle stream parsing failed silently
         }
+    }
+
+    /**
+     * R2007+ : 객체의 문자열은 데이터 끝, 핸들 스트림 바로 앞의 문자열 스트림에 모여 있다.
+     * 핸들 스트림 시작 바로 앞 비트가 문자열 유무이고, 그 앞 16비트(크면 32비트)가 스트림의 비트 수이다.
+     */
+    private void attachStringStream(BitStreamReader r, DwgVersion version, byte[] raw,
+                                    long dataStartBit, int objSizeBytes, long handleStreamBits) {
+        long endBit = dataStartBit + (long) objSizeBytes * 8L;
+        long handleStart;
+        if (handleStreamBits >= 0) {
+            handleStart = endBit - handleStreamBits;
+        } else {
+            // R2007 : the size in bits (RL) follows the type code; look at it without consuming it
+            long position = r.position();
+            long bitSize = 0;
+            for (int i = 0; i < 4; i++) {
+                bitSize |= (long) (r.getInput().readBits(8) & 0xFF) << (8 * i);
+            }
+            r.seek(position);
+            handleStart = dataStartBit + bitSize;
+        }
+        if (handleStart <= dataStartBit + 17 || handleStart > endBit) {
+            r.setStringStream(null);
+            return;
+        }
+
+        ByteBufferBitInput s = new ByteBufferBitInput(raw);
+        long pos = handleStart - 1;
+        s.seek(pos);
+        if (!s.readBit()) {
+            r.setStringStream(null);
+            return;
+        }
+        pos -= 16;
+        s.seek(pos);
+        long size = (s.readBits(8) & 0xFF) | ((s.readBits(8) & 0xFF) << 8);
+        if ((size & 0x8000) != 0) {
+            pos -= 16;
+            s.seek(pos);
+            long high = (s.readBits(8) & 0xFF) | ((s.readBits(8) & 0xFF) << 8);
+            size = (size & 0x7FFF) | (high << 15);
+        }
+        long start = pos - size;
+        if (start < dataStartBit) {
+            r.setStringStream(null);
+            return;
+        }
+        s.seek(start);
+        r.setStringStream(s);
     }
 
     private boolean isEntityClass(int typeCode) {

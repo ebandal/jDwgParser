@@ -24,9 +24,10 @@ public class Polyline3DObjectReader implements ObjectReader {
         EntityHeaderReader.readCommonEntityData(r, v);
 
         DwgPolyline3D polyline = (DwgPolyline3D) target;
-
-        // 1. flags (BS - bit short)
-        int flags = r.readBitShort();
-        polyline.setFlags(flags);
+        polyline.setCurveType(r.getInput().readBits(8));    // spline flags (RC)
+        polyline.setFlags(r.getInput().readBits(8));        // closed flags (RC) : 1 = closed
+        if (v.from(DwgVersion.R2004)) {
+            r.readBitLong();                                // owned object count
+        }
     }
 }

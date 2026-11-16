@@ -78,6 +78,20 @@ public class EntityHeaderReader {
     }
 
     /**
+     * Read the flags that follow the name of a table record (LAYER, BLOCK_HEADER, ...).
+     * Up to R2004 : 64-flag (B), xref index + 1 (BS), xdep (B). R2007+ : only the BS, where 256 means xdep.
+     */
+    public static void readTableRecordFlags(BitStreamReader r, DwgVersion v) throws Exception {
+        if (v.from(DwgVersion.R2007)) {
+            r.readBitShort();
+        } else {
+            r.getInput().readBit();
+            r.readBitShort();
+            r.getInput().readBit();
+        }
+    }
+
+    /**
      * Read CommonEntityData fields.
      * Must be called immediately after readEntityHeader().
      * Per libredwg common_entity_data.spec, field order and version guards verified.
