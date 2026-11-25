@@ -10,8 +10,14 @@ import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
 
 /**
- * MTEXT 엔티티 리더 (타입 0x2C)
- * 스펙 §20.4.46 MTEXT
+ * MTEXT (type 44), spec §20.4.46. Reads the fields up to the R2000 line spacing; the background
+ * and column fields that follow are not needed by the library.
+ * <pre>
+ *   insertion point 3BD, extrusion 3BD, x-axis direction 3BD, rectangle width BD,
+ *   R2007+ rectangle height BD, text height BD, attachment BS, drawing direction BS,
+ *   extents height BD, extents width BD, text TV,
+ *   R2000+ line spacing style BS, line spacing factor BD, unknown B
+ * </pre>
  */
 public class MTextObjectReader implements ObjectReader {
 
@@ -22,49 +28,33 @@ public class MTextObjectReader implements ObjectReader {
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         EntityHeaderReader.readEntityHeader(r, v);
         EntityHeaderReader.readCommonEntityData(r, v);
-
         DwgMText mtext = (DwgMText) target;
 
-        // ins_pt (3BD)
-        double[] loc = r.read3BitDouble();
-        mtext.setLocation(new Point3D(loc[0], loc[1], loc[2]));
+        mtext.setLocation(point(r.read3BitDouble()));
+        mtext.setExtrusion(r.read3BitDouble());
+        double[] xAxis = r.read3BitDouble();
+        mtext.setXAxisDirection(point(xAxis));
+        mtext.setAngle(Math.atan2(xAxis[1], xAxis[0]));
 
-        // extrusion (3BD — not BE)
-        double[] ext = r.read3BitDouble();
-        mtext.setExtrusion(ext);
-
-        // x_axis_dir (3BD)
-        double[] dir = r.read3BitDouble();
-        mtext.setXAxisDirection(new Point3D(dir[0], dir[1], dir[2]));
-        mtext.setAngle(Math.atan2(dir[1], dir[0]));
-
-        // rect_width (BD), [R2007+: rect_height (BD)], text_height (BD)
-        double rectWidth = r.readBitDouble();
-        mtext.setWidth(rectWidth);
+        mtext.setWidth(r.readBitDouble());
         if (v.from(DwgVersion.R2007)) {
-            r.readBitDouble(); // rect_height
+            r.readBitDouble();                           // rectangle height
         }
-        double textHeight = r.readBitDouble();
-        mtext.setHeight(textHeight);
+        mtext.setHeight(r.readBitDouble());
+        mtext.setAttachmentPoint(r.readBitShort());
+        r.readBitShort();                                // drawing direction
+        r.readBitDouble();                               // extents height
+        r.readBitDouble();                               // extents width
+        mtext.setText(r.readVariableText());
 
-        // attachment (BS), flow_dir (BS)
-        int attachment = r.readBitShort();
-        mtext.setAttachmentPoint(attachment);
-        r.readBitShort(); // flow_dir
-
-        // extents_height (BD), extents_width (BD)
-        r.readBitDouble();
-        r.readBitDouble();
-
-        // text (T)
-        String text = r.readVariableText();
-        mtext.setText(text);
-
-        // R2000+: linespace_style (BS), linespace_factor (BD), unknown_b0 (B)
         if (v.from(DwgVersion.R2000)) {
-            r.readBitShort();
-            r.readBitDouble();
-            r.getInput().readBit();
+            r.readBitShort();                            // line spacing style
+            r.readBitDouble();                           // line spacing factor
+            r.getInput().readBit();                      // unknown bit
         }
+    }
+
+    private static Point3D point(double[] p) {
+        return new Point3D(p[0], p[1], p[2]);
     }
 }

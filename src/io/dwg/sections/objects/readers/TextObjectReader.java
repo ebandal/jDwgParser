@@ -11,8 +11,7 @@ import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
 
 /**
- * TEXT 엔티티 리더 (타입 0x01)
- * 스펙 §20.4.3 TEXT
+ * TEXT (type 1), spec §20.4.3. ATTRIB and ATTDEF start with the same fields.
  */
 public class TextObjectReader implements ObjectReader {
 
@@ -23,61 +22,70 @@ public class TextObjectReader implements ObjectReader {
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         EntityHeaderReader.readEntityHeader(r, v);
         EntityHeaderReader.readCommonEntityData(r, v);
-
         readTextData((DwgText) target, r, v);
     }
 
-    /**
-     * TEXT의 본문. ATTRIB도 같은 구성으로 시작하므로 함께 쓴다.
-     */
+    /** Reads the TEXT fields that follow the common entity data. */
     public static void readTextData(DwgText text, BitStreamReader r, DwgVersion v) throws Exception {
-        if (v.until(DwgVersion.R14)) {
-            // R13/R14: elevation(BD), ins_pt(2RD), alignment_pt(2RD),
-            //          extrusion(3BD), thickness(BD), oblique(BD), rotation(BD),
-            //          height(BD), widthFactor(BD), value(T), generation(BS),
-            //          horiz(BS), vert(BS)
-            text.setElevation(r.readBitDouble());
-            double[] pt = r.read2RawDouble();
-            text.setInsertionPoint(new Point2D(pt[0], pt[1]));
-            double[] apt = r.read2RawDouble();
-            text.setAlignmentPoint(new Point2D(apt[0], apt[1]));
-            r.read3BitDouble(); // extrusion (3BD)
-            text.setThickness(r.readBitDouble());
-            text.setObliquAngle(r.readBitDouble());
-            text.setRotationAngle(r.readBitDouble());
-            text.setHeight(r.readBitDouble());
-            text.setWidthFactor(r.readBitDouble());
-            text.setValue(r.readVariableText());
-            text.setGeneration(r.readBitShort());
-            text.setHorizontalAlignment(r.readBitShort());
-            text.setVerticalAlignment(r.readBitShort());
+        if (v.from(DwgVersion.R2000)) {
+            readR2000(text, r);
         } else {
-            // R2000+: dataflags-driven fields using RD (not BD) for most doubles
-            int dataFlags = r.getInput().readBits(8);
-            text.setDataFlags(dataFlags);
-
-            if ((dataFlags & 0x01) == 0) text.setElevation(r.readRawDouble());
-            double[] pt = r.read2RawDouble();
-            text.setInsertionPoint(new Point2D(pt[0], pt[1]));
-            if ((dataFlags & 0x02) == 0) {
-                double[] dd = r.read2DD(pt[0], pt[1]);
-                text.setAlignmentPoint(new Point2D(dd[0], dd[1]));
-            }
-            text.setExtrusion(r.readBitExtrusion());
-            text.setThickness(r.readBitThickness());
-            if ((dataFlags & 0x04) == 0) text.setObliquAngle(r.readRawDouble());
-            if ((dataFlags & 0x08) == 0) text.setRotationAngle(r.readRawDouble());
-            text.setHeight(r.readRawDouble());
-            if ((dataFlags & 0x10) == 0) {
-                text.setWidthFactor(r.readRawDouble());
-            } else {
-                text.setWidthFactor(1.0);
-            }
-            text.setValue(r.readVariableText());
-            if ((dataFlags & 0x20) == 0) text.setGeneration(r.readBitShort());
-            if ((dataFlags & 0x40) == 0) text.setHorizontalAlignment(r.readBitShort());
-            if ((dataFlags & 0x80) == 0) text.setVerticalAlignment(r.readBitShort());
+            readR13(text, r);
         }
+    }
+
+    /**
+     * R13–R14: elevation BD, insertion 2RD, alignment 2RD, extrusion 3BD, thickness BD,
+     * oblique BD, rotation BD, height BD, width factor BD, value TV, generation BS,
+     * horizontal and vertical alignment BS.
+     */
+    private static void readR13(DwgText text, BitStreamReader r) {
+        text.setElevation(r.readBitDouble());
+        text.setInsertionPoint(point(r.read2RawDouble()));
+        text.setAlignmentPoint(point(r.read2RawDouble()));
+        r.read3BitDouble();                              // extrusion, not kept for R13–R14
+        text.setThickness(r.readBitDouble());
+        text.setObliquAngle(r.readBitDouble());
+        text.setRotationAngle(r.readBitDouble());
+        text.setHeight(r.readBitDouble());
+        text.setWidthFactor(r.readBitDouble());
+        text.setValue(r.readVariableText());
+        text.setGeneration(r.readBitShort());
+        text.setHorizontalAlignment(r.readBitShort());
+        text.setVerticalAlignment(r.readBitShort());
+    }
+
+    /**
+     * R2000+: a data flags byte (RC) tells which fields are left out; a field is present when
+     * its bit is 0. Most doubles are raw doubles; the alignment point is a 2DD with the insertion
+     * point as default.
+     */
+    private static void readR2000(DwgText text, BitStreamReader r) {
+        int flags = r.getInput().readBits(8);
+        text.setDataFlags(flags);
+
+        if (present(flags, 0x01)) text.setElevation(r.readRawDouble());
+        double[] insertion = r.read2RawDouble();
+        text.setInsertionPoint(point(insertion));
+        if (present(flags, 0x02)) text.setAlignmentPoint(point(r.read2DD(insertion[0], insertion[1])));
+        text.setExtrusion(r.readBitExtrusion());
+        text.setThickness(r.readBitThickness());
+        if (present(flags, 0x04)) text.setObliquAngle(r.readRawDouble());
+        if (present(flags, 0x08)) text.setRotationAngle(r.readRawDouble());
+        text.setHeight(r.readRawDouble());
+        text.setWidthFactor(present(flags, 0x10) ? r.readRawDouble() : 1.0);
+        text.setValue(r.readVariableText());
+        if (present(flags, 0x20)) text.setGeneration(r.readBitShort());
+        if (present(flags, 0x40)) text.setHorizontalAlignment(r.readBitShort());
+        if (present(flags, 0x80)) text.setVerticalAlignment(r.readBitShort());
+    }
+
+    private static boolean present(int dataFlags, int bit) {
+        return (dataFlags & bit) == 0;
+    }
+
+    private static Point2D point(double[] xy) {
+        return new Point2D(xy[0], xy[1]);
     }
 
     @Override

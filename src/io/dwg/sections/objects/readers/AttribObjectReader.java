@@ -1,24 +1,26 @@
 package io.dwg.sections.objects.readers;
 
 import io.dwg.core.io.BitStreamReader;
+import io.dwg.core.type.DwgHandleRef;
 import io.dwg.core.type.Point3D;
 import io.dwg.core.version.DwgVersion;
 import io.dwg.entities.DwgObject;
 import io.dwg.entities.DwgObjectType;
 import io.dwg.entities.concrete.DwgAttrib;
+import io.dwg.entities.concrete.DwgText;
 import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
-import io.dwg.core.type.DwgHandleRef;
-import io.dwg.entities.concrete.DwgText;
 
 /**
- * ATTRIB 엔티티 리더 (타입 0x03)
- * 스펙 §20.4.4 ATTRIB
- *
- * AcDbText 서브클래스 본문은 ATTDEF와 동일 (default_value 대신 text_value).
- * 그 뒤에 AcDbAttribute 서브클래스(tag 등)가 온다. prompt 없음.
+ * ATTRIB (type 2), spec §20.4.4: the TEXT fields of §20.4.3, then the attribute fields.
  */
 public class AttribObjectReader implements ObjectReader {
+
+    /** The attribute fields shared by ATTRIB and ATTDEF. */
+    static final class AttributeFields {
+        String tag;
+        int flags;
+    }
 
     @Override
     public int objectType() { return DwgObjectType.ATTRIB.typeCode(); }
@@ -29,8 +31,6 @@ public class AttribObjectReader implements ObjectReader {
         EntityHeaderReader.readCommonEntityData(r, v);
 
         DwgAttrib attrib = (DwgAttrib) target;
-
-        // AcDbText subclass : the same layout as TEXT
         DwgText text = attrib.textData();
         TextObjectReader.readTextData(text, r, v);
         if (text.insertionPoint() != null) {
@@ -40,18 +40,39 @@ public class AttribObjectReader implements ObjectReader {
         attrib.setHeight(text.height());
         attrib.setAngle(text.rotationAngle());
 
-        // AcDbAttribute subclass
-        if (v.from(DwgVersion.R2010)) r.getInput().readBits(8); // version (RC)
+        AttributeFields fields = readAttributeFields(r, v);
+        attrib.setTag(fields.tag);
+        attrib.setFlags(fields.flags);
+    }
+
+    /**
+     * The attribute fields of §20.4.4 that follow the TEXT fields:
+     * <pre>
+     *   R2010+  version (RC)
+     *   R2018+  attribute type (RC): 1 single line, 2 multi-line ATTRIB, 4 multi-line ATTDEF;
+     *           for multi-line ones the embedded MTEXT and the annotative data follow
+     *           tag (TV), field length (BS), flags (RC)
+     *   R2007+  lock position (B)
+     * </pre>
+     */
+    static AttributeFields readAttributeFields(BitStreamReader r, DwgVersion v) throws Exception {
+        if (v.from(DwgVersion.R2010)) {
+            r.getInput().readBits(8);                    // version
+        }
         if (v.from(DwgVersion.R2018)) {
-            int mtextType = r.getInput().readBits(8); // attribute type: 1 single line, 2/4 multi line
-            if (mtextType > 1) {
+            int type = r.getInput().readBits(8);
+            if (type > 1) {
                 EntityHeaderReader.skipMTextEmbedded(r, v);
             }
         }
-        attrib.setTag(r.readVariableText());
-        r.readBitShort();                               // field_length
-        attrib.setFlags(r.getInput().readBits(8));      // flags
-        if (v.from(DwgVersion.R2007)) r.getInput().readBit(); // lock_position_flag
+        AttributeFields fields = new AttributeFields();
+        fields.tag = r.readVariableText();
+        r.readBitShort();                                // field length
+        fields.flags = r.getInput().readBits(8);
+        if (v.from(DwgVersion.R2007)) {
+            r.getInput().readBit();                      // lock position
+        }
+        return fields;
     }
 
     @Override
