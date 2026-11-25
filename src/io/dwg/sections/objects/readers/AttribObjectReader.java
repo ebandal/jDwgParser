@@ -13,7 +13,7 @@ import io.dwg.entities.concrete.DwgText;
 
 /**
  * ATTRIB 엔티티 리더 (타입 0x03)
- * libredwg dwg.spec DWG_ENTITY(ATTRIB)
+ * 스펙 §20.4.4 ATTRIB
  *
  * AcDbText 서브클래스 본문은 ATTDEF와 동일 (default_value 대신 text_value).
  * 그 뒤에 AcDbAttribute 서브클래스(tag 등)가 온다. prompt 없음.
@@ -41,9 +41,9 @@ public class AttribObjectReader implements ObjectReader {
         attrib.setAngle(text.rotationAngle());
 
         // AcDbAttribute subclass
-        if (v.from(DwgVersion.R2010)) r.getInput().readBits(8); // class version
+        if (v.from(DwgVersion.R2010)) r.getInput().readBits(8); // version (RC)
         if (v.from(DwgVersion.R2018)) {
-            int mtextType = r.getInput().readBits(8); // mtext_type
+            int mtextType = r.getInput().readBits(8); // attribute type: 1 single line, 2/4 multi line
             if (mtextType > 1) {
                 EntityHeaderReader.skipMTextEmbedded(r, v);
             }

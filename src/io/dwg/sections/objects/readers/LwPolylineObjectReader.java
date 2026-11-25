@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * LWPOLYLINE 엔티티 리더 (타입 0x4B)
- * libredwg dwg.spec DWG_ENTITY(LWPOLYLINE)
+ * 스펙 §20.4.85 LWPLINE
  *
  * flag bits:
  *   1=extrusion, 2=thickness, 4=const_width, 8=elevation,
@@ -48,8 +48,9 @@ public class LwPolylineObjectReader implements ObjectReader {
         int numBulges = 0;
         if ((flags & 16) != 0) numBulges = r.readBitLong();
 
+        int numVertexIds = 0;
         if (v.from(DwgVersion.R2010) && (flags & 1024) != 0) {
-            r.readBitLong(); // num_vertexids — skip
+            numVertexIds = r.readBitLong();
         }
 
         int numWidths = 0;
@@ -77,7 +78,8 @@ public class LwPolylineObjectReader implements ObjectReader {
         for (int i = 0; i < numBulges; i++) bulges.add(r.readBitDouble());
         lwp.setBulges(bulges);
 
-        // vertexids (R2010+): already counted, skip individual reads done above
+        // vertex identifiers (R2010+, BL each)
+        for (int i = 0; i < numVertexIds; i++) r.readBitLong();
 
         // widths
         List<double[]> widths = new ArrayList<>();

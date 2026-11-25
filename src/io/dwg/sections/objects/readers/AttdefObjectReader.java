@@ -11,7 +11,7 @@ import io.dwg.sections.objects.ObjectReader;
 
 /**
  * ATTDEF 엔티티 리더 (타입 0x02)
- * libredwg dwg.spec DWG_ENTITY(ATTDEF)
+ * 스펙 §20.4.5 ATTDEF (§20.4.4 ATTRIB 데이터 + R2010+ version + prompt)
  *
  * AcDbText 서브클래스 본문은 TEXT와 동일.
  * 그 뒤에 AcDbAttributeDefinition 서브클래스(tag, prompt 등)가 온다.
@@ -81,9 +81,9 @@ public class AttdefObjectReader implements ObjectReader {
             if ((dataFlags & 0x80) == 0) r.readBitShort(); // vert_alignment
 
             // AcDbAttributeDefinition subclass
-            if (v.from(DwgVersion.R2010)) r.getInput().readBits(8); // is_locked_in_block
+            if (v.from(DwgVersion.R2010)) r.getInput().readBits(8); // ATTRIB version (RC)
             if (v.from(DwgVersion.R2018)) {
-                int mtextType = r.getInput().readBits(8); // mtext_type
+                int mtextType = r.getInput().readBits(8); // attribute type: 1 single line, 2/4 multi line
                 if (mtextType > 1) {
                     EntityHeaderReader.skipMTextEmbedded(r, v);
                 }
@@ -92,7 +92,7 @@ public class AttdefObjectReader implements ObjectReader {
             r.readBitShort();   // field_length
             attdef.setFlags(r.getInput().readBits(8));
             if (v.from(DwgVersion.R2007)) r.getInput().readBit(); // lock_position_flag
-            if (v.from(DwgVersion.R2010)) r.getInput().readBits(8); // keep_duplicate_records
+            if (v.from(DwgVersion.R2010)) r.getInput().readBits(8); // ATTDEF version (RC)
             attdef.setPrompt(r.readVariableText());
         }
     }

@@ -11,7 +11,7 @@ import io.dwg.sections.objects.ObjectReader;
 
 /**
  * 3DFACE 엔티티 리더 (타입 0x1C)
- * 스펙 §20 / libredwg dwg.spec DWG_ENTITY(_3DFACE)
+ * 스펙 §20.4.32 3DFACE
  */
 public class Face3DObjectReader implements ObjectReader {
 

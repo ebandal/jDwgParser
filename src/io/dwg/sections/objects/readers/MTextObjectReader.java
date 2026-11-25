@@ -11,7 +11,7 @@ import io.dwg.sections.objects.ObjectReader;
 
 /**
  * MTEXT 엔티티 리더 (타입 0x2C)
- * libredwg dwg.spec DWG_ENTITY(MTEXT)
+ * 스펙 §20.4.46 MTEXT
  */
 public class MTextObjectReader implements ObjectReader {
 

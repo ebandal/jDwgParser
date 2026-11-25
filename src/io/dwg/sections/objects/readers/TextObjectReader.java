@@ -12,7 +12,7 @@ import io.dwg.sections.objects.ObjectReader;
 
 /**
  * TEXT 엔티티 리더 (타입 0x01)
- * libredwg dwg.spec DWG_ENTITY(TEXT)
+ * 스펙 §20.4.3 TEXT
  */
 public class TextObjectReader implements ObjectReader {
 

@@ -5,16 +5,18 @@ import io.dwg.core.io.BitStreamReader;
 import io.dwg.core.version.DwgVersion;
 
 /**
- * Entity header reading utilities, verified against libredwg source.
+ * Reads the start of an entity or object, after its type code.
  *
- * Per dwg_decode_entity() + common_entity_data.spec:
- *   1. bitsize (RL, no alignment) — R2000..R2007 only
- *   2. object handle (H, no alignment)
- *   3. EED loop (BS size → H handle → size bytes, until size=0)
- *   4. CommonEntityData fields
- *
- * All byte reads use readBits(8) — equivalent to libredwg bit_read_RC(),
- * which reads at the current bit position without byte alignment.
+ * <p>Follows the Open Design Specification for .dwg files, §20.4.1 "Common Entity Data" and
+ * chapter 28 "Extended Entity Data":
+ * <ol>
+ *   <li>object size in bits (RL) — R2000 to R2007;</li>
+ *   <li>the object's handle (H);</li>
+ *   <li>EED: repeated (BS length, application handle, length bytes) until a length of 0;</li>
+ *   <li>the common entity data fields.</li>
+ * </ol>
+ * The object data is a bit stream: raw bytes are read at the current bit position, without
+ * byte alignment.
  */
 public class EntityHeaderReader {
 
@@ -37,8 +39,7 @@ public class EntityHeaderReader {
         // object handle (H): first byte = code[7:4] + count[3:0], then count bytes
         readHandle(input);
 
-        // EED loop: BS size → if >0: H appid-handle + size data bytes; repeat until 0
-        // Per libredwg dwg_decode_eed(): size = bit_read_BS(dat)
+        // EED (spec chapter 28): BS length, application handle, length bytes; until length 0
         while (true) {
             int eedSize = r.readBitShort();
             if (eedSize == 0) break;
@@ -94,7 +95,13 @@ public class EntityHeaderReader {
     /**
      * Read CommonEntityData fields.
      * Must be called immediately after readEntityHeader().
-     * Per libredwg common_entity_data.spec, field order and version guards verified.
+     * Field order of spec §20.4.1, with two points the table there leaves open, both settled by
+     * the sample files (R2004+ files render like their R2000 counterparts only this way):
+     * <ul>
+     *   <li>Nolinks is present only up to R2000; R2004+ files have no such bit.</li>
+     *   <li>R2010+ entities have three visual style bits before the invisibility (the
+     *       handle data of §20.4.2 refers to them).</li>
+     * </ul>
      * The values are kept in {@link ObjectHeaderData}.
      */
     public static void readCommonEntityData(BitStreamReader r, DwgVersion v) throws Exception {
@@ -149,8 +156,11 @@ public class EntityHeaderReader {
 
         // 9. Color
         if (v.from(DwgVersion.R2004)) {
-            // ENC: BS raw value, upper byte = flags. Order per libredwg common_entity_data.spec:
-            // 0x20=alpha_raw (BL from dat), 0x40=handle (hdl_dat/dat), 0x80=rgb (BL, only if !0x40)
+            // ENC (spec §2.11): BS whose high byte holds flags. 0x20: a transparency BL follows;
+            // 0x80: an RGB value (BL) follows; 0x40: the color has an AcDbColor handle.
+            // Not in the spec, and not yet checked against a file (see TODO.md): the
+            // transparency is read before the RGB value, and R2004–R2007 files are read as
+            // having the color handle in the data stream rather than the handle stream.
             int colorRaw = r.readBitShort();
             int flags = (colorRaw >> 8) & 0xFF;
             header.colorIndex = colorRaw & 0x1FF;
@@ -199,15 +209,14 @@ public class EntityHeaderReader {
         }
 
         // 15. linewt (RC) — R2000+
-        // RC = readBits(8), no byte alignment per libredwg bit_read_RC()
         if (v.from(DwgVersion.R2000)) {
             header.lineWeight = input.readBits(8);
         }
     }
 
     /**
-     * Read handle (H) without byte alignment.
-     * Per libredwg bit_read_H(): first byte = code[7:4]+count[3:0], then count bytes.
+     * Skips a handle reference (spec §2.13): a byte holding the code (high nibble) and the
+     * number of handle bytes (low nibble), then that many bytes.
      */
     public static void readHandle(BitInput input) {
         int firstByte = input.readBits(8) & 0xFF;
@@ -218,8 +227,7 @@ public class EntityHeaderReader {
     }
 
     /**
-     * Read raw double (RD = 8 bytes, little-endian) without byte alignment.
-     * Per libredwg bit_read_RD(): 8 x bit_read_RC().
+     * Reads a raw double (RD): 8 bytes, least significant first, at the current bit position.
      */
     public static double readRawDouble(BitInput input) {
         long bits = 0;
@@ -230,61 +238,98 @@ public class EntityHeaderReader {
     }
 
     /**
-     * Skip embedded AcDbMTextObjectEmbedded subclass (R2018+).
-     * Called when ATTRIB/ATTDEF mtext_type > 1 (multi-line attribute).
-     * Fields from libredwg AcDbMTextObjectEmbedded_fields in dwg_spec_shared.h.
+     * Skips the part of a multi-line ATTRIB or ATTDEF (R2018+) that holds an embedded MTEXT,
+     * written from spec §20.4.4:
+     * <ol>
+     *   <li>all fields of an MTEXT entity, starting from the entity mode: the common entity data
+     *       of §20.4.1 from Entmode on, then the MTEXT fields of §20.4.46;</li>
+     *   <li>annotative data size (BS); if greater than zero, that many bytes and an unknown BS
+     *       (the registered application handle listed with them is in the handle stream).</li>
+     * </ol>
+     * Handles (the MTEXT style, the registered application) are in the handle stream in R2018
+     * files, so none is read here. Not yet checked against a file: none of the samples has a
+     * multi-line attribute.
      */
     public static void skipMTextEmbedded(BitStreamReader r, DwgVersion v) throws Exception {
         BitInput input = r.getInput();
-        // Common entity data portion of embedded MTEXT
-        input.readBits(2);      // entmode (BB)
-        r.readBitLong();        // num_reactors (BL)
-        input.readBit();        // is_xdic_missing (B)
-        input.readBit();        // has_ds_data (B)
-        r.readBitShort();       // color.raw (BSx = BS)
-        r.readBitDouble();      // ltype_scale (BD)
-        input.readBits(2);      // ltype_flags (BB)
-        input.readBits(2);      // plotstyle_flags (BB)
-        input.readBits(2);      // material_flags (BB)
-        input.readBits(8);      // shadow_flags (RC)
-        input.readBit();        // has_full_visualstyle (B)
-        input.readBit();        // has_face_visualstyle (B)
-        input.readBit();        // has_edge_visualstyle (B)
-        r.readBitShort();       // invisible (BS)
-        input.readBits(8);      // linewt (RC)
-        r.readHandle();         // layer handle
 
-        // Embedded MTEXT object fields (non-DXF order)
-        r.read3BitDouble();     // ins_pt (3BD)
-        r.read3BitDouble();     // extrusion (3BD)
-        r.read3BitDouble();     // x_axis_dir (3BD)
-        r.readBitDouble();      // rect_width (BD)
-        r.readBitDouble();      // rect_height (BD)
-        r.readBitDouble();      // text_height (BD)
-        r.readBitShort();       // attachment (BS)
-        r.readBitShort();       // flow_dir (BS)
-        r.readBitDouble();      // extents_height (BD)
-        r.readBitDouble();      // extents_width (BD)
-        r.readVariableText();   // text (T)
-        r.readHandle();         // style handle (HANDLE0)
-        r.readBitShort();       // linespace_style (BS)
-        r.readBitDouble();      // linespace_factor (BD)
-        input.readBit();        // unknown_b0 (B)
-        int bgFillFlag = r.readBitLong(); // bg_fill_flag (BL0)
-        // R2018: condition is (bgFillFlag & 1) per libredwg
-        if ((bgFillFlag & 1) != 0) {
-            r.readBitLong();    // bg_fill_scale (BL)
-            r.readCmColor();    // bg_fill_color (CMC = BS+BL+RC for R2004+)
-            r.readBitLong();    // bg_fill_trans (BL)
-        }
-        input.readBit();        // is_not_annotative (B)
-        input.readBit();        // is_really_locked (B)
+        // common entity data, from Entmode on (§20.4.1)
+        input.readBits(2);                 // entmode (BB)
+        r.readBitLong();                   // number of reactors (BL)
+        input.readBit();                   // XDic missing flag (B)
+        input.readBit();                   // has DS binary data (B), R2013+
+        skipEncColor(r);                   // color (ENC)
+        r.readBitDouble();                 // linetype scale (BD)
+        input.readBits(2);                 // linetype flags (BB)
+        input.readBits(2);                 // plotstyle flags (BB)
+        input.readBits(2);                 // material flags (BB)
+        input.readBits(8);                 // shadow flags (RC)
+        input.readBits(3);                 // full, face and edge visual style flags (B x3), R2010+
+        r.readBitShort();                  // invisibility (BS)
+        input.readBits(8);                 // lineweight (RC)
 
-        // Non-DXF: annotative data
-        int annotSize = r.readBitShort(); // annotative_data_size (BS)
-        for (int i = 0; i < annotSize; i++) {
-            input.readBits(8);  // annotative_data bytes (BINARY)
+        // MTEXT fields (§20.4.46)
+        r.read3BitDouble();                // insertion point (3BD)
+        r.read3BitDouble();                // extrusion (3BD)
+        r.read3BitDouble();                // x-axis direction (3BD)
+        r.readBitDouble();                 // rectangle width (BD)
+        r.readBitDouble();                 // rectangle height (BD)
+        r.readBitDouble();                 // text height (BD)
+        r.readBitShort();                  // attachment (BS)
+        r.readBitShort();                  // drawing direction (BS)
+        r.readBitDouble();                 // extents height (BD)
+        r.readBitDouble();                 // extents width (BD)
+        r.readVariableText();              // text (TV)
+        r.readBitShort();                  // line spacing style (BS)
+        r.readBitDouble();                 // line spacing factor (BD)
+        input.readBit();                   // unknown bit (B)
+        int background = r.readBitLong();  // background flags (BL)
+        if ((background & 0x11) != 0) {    // 0x01, or 0x10 (text frame) in R2018
+            r.readBitLong();               // background scale factor (BL)
+            r.readCmColor();               // background color (CMC)
+            r.readBitLong();               // background transparency (BL)
         }
+        boolean notAnnotative = input.readBit();
+        if (notAnnotative) {
+            r.readBitShort();              // version (BS)
+            input.readBit();               // default flag (B)
+            r.readBitLong();               // attachment point (BL)
+            r.read3BitDouble();            // x-axis direction (3BD)
+            r.read3BitDouble();            // insertion point (3BD)
+            r.readBitDouble();             // rectangle width (BD)
+            r.readBitDouble();             // rectangle height (BD)
+            r.readBitDouble();             // extents width (BD)
+            r.readBitDouble();             // extents height (BD)
+            int columnType = r.readBitShort();
+            if (columnType != 0) {
+                int heightCount = r.readBitLong();
+                r.readBitDouble();         // column width (BD)
+                r.readBitDouble();         // gutter (BD)
+                boolean autoHeight = input.readBit();
+                input.readBit();           // flow reversed (B)
+                if (!autoHeight && columnType == 2) {
+                    for (int i = 0; i < heightCount; i++) {
+                        r.readBitDouble(); // column height (BD)
+                    }
+                }
+            }
+        }
+
+        // annotative data (§20.4.4)
+        int annotativeSize = r.readBitShort();
+        if (annotativeSize > 0) {
+            for (int i = 0; i < annotativeSize; i++) {
+                input.readBits(8);
+            }
+            r.readBitShort();              // unknown (BS)
+        }
+    }
+
+    /** Skips an ENC color (spec §2.11) in the same way as {@link #readCommonEntityData}. */
+    private static void skipEncColor(BitStreamReader r) {
+        int flags = (r.readBitShort() >> 8) & 0xFF;
+        if ((flags & 0x20) != 0) r.readBitLong();
+        if ((flags & 0x40) == 0 && (flags & 0x80) != 0) r.readBitLong();
     }
 
     // --- private helpers ---

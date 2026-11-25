@@ -11,7 +11,7 @@ import io.dwg.sections.objects.ObjectReader;
 
 /**
  * SPLINE 엔티티 리더 (타입 0x24)
- * libredwg dwg.spec DWG_ENTITY(SPLINE)
+ * 스펙 §20.4.40 SPLINE
  *
  * scenario=1: rational B-spline (knots + control points)
  * scenario=2: bezier spline (fit points only)

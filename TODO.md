@@ -15,8 +15,14 @@
   - [ ] (선택) RS 오류 정정: 교재(Lin & Costello, *Error Control Coding*)와 Berlekamp-Massey·Chien·Forney 논문을 보고 직접 구현. 샘플 R2007 데이터 블록 303,887개에서 오류가 있는 블록은 0개였으므로 급하지 않음
   - [x] `core/io/BitStreamReader`: 스펙 2장과 대조, 출처 주석을 스펙 절 번호로 교체. 쓰지 않는 `readBitDoubleWithDefault` 삭제
   - [ ] BLL(§2.4) 길이 읽는 방식을 실제 파일로 확인: 스펙은 3B라고 하지만 3B로는 1·3·4·5바이트를 표현할 수 없어 3비트 숫자로 읽고 있음. 샘플에는 이 값을 쓰는 엔티티(R2010+ 미리보기)가 없음
-  - [ ] `sections/objects/EntityHeaderReader`, `sections/handles/HandlesParsingUtil` — 주석이 libredwg 함수를 출처로 적고 있음. 스펙 기준으로 다시 확인하고 출처 주석은 스펙 절 번호로 바꾼다
-  - [ ] 나머지 리더의 "per libredwg" 주석 정리 (필드 순서 같은 형식 정보는 스펙 절 번호로 출처를 바꾼다)
+  - [x] 파일 구조 처리기(R13·R2000·R2004·R2007 헤더, 섹션 로케이터, R2004 헤더 복호화): 스펙 §3.2·§4.1·§4.5·§5.2와 대조, 코드는 일치하고 주석만 교체. 중복이던 `R2007SectionMap` 삭제
+  - [x] `EntityHeaderReader`: 스펙 §20.4.1·§2.11·28장과 대조. 여러 줄 속성의 내장 MTEXT 건너뛰기(`skipMTextEmbedded`)는 스펙 §20.4.4·§20.4.46을 보고 새로 작성
+  - [x] TEXT·ATTRIB·ATTDEF·MTEXT·3DFACE·LWPOLYLINE·SPLINE 리더: 스펙과 대조. LWPOLYLINE에서 R2010+ 정점 ID를 건너뛰지 않아 폭 값을 잘못 읽던 버그를 스펙대로 수정
+  - `src/io`와 `test`에 libredwg 언급 없음 (2026-11-25)
+- [ ] 스펙에 없거나 스펙과 다른데 샘플로 확인하지 못한 것 (확인할 파일이 필요함)
+  - [ ] ENC 색상(R2004+): 투명도를 RGB보다 먼저 읽음. R2004~R2007에서 색상 핸들(0x40)을 본문 스트림에서 읽음 (스펙은 핸들 스트림). 샘플에 0x40이 있는 엔티티 71개, 투명도+RGB가 함께 있는 것 24개
+  - [ ] R2018 여러 줄 속성(`skipMTextEmbedded`): 샘플에 없음
+  - [ ] LWPOLYLINE 정점 ID + 폭: 정점 ID가 있는 것은 6개지만 폭이 함께 있는 것은 없음
 - [ ] 쓰지 않는 예전 패키지 삭제: `src/decode`, `src/structure`, `src/run`, `src/debug` (207개 파일, `io.dwg`에서 쓰지 않음. `decode/util/ReedSolomon.java`는 libredwg 포팅이라고 적혀 있음)
 - [ ] 다시 작성하는 과정을 기록으로 남기기 (어떤 스펙 절을 보고 썼는지, 커밋 단위로)
 - [ ] 라이선스 변경: GPLv3 → **AGPLv3 + 상용 라이선스** (듀얼). 위의 포팅 코드를 모두 다시 쓴 뒤에 진행. 판매 전에 변호사 확인
