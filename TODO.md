@@ -26,6 +26,15 @@
   - [ ] ENC 색상(R2004+): 투명도를 RGB보다 먼저 읽음. R2004~R2007에서 색상 핸들(0x40)을 본문 스트림에서 읽음 (스펙은 핸들 스트림). 샘플에 0x40이 있는 엔티티 71개, 투명도+RGB가 함께 있는 것 24개
   - [ ] R2018 여러 줄 속성(`skipMTextEmbedded`): 샘플에 없음
   - [ ] LWPOLYLINE 정점 ID + 폭: 정점 ID가 있는 것은 6개지만 폭이 함께 있는 것은 없음
+  - [ ] EED 레이어 핸들(1003): 샘플에 없음. 엔티티 핸들(1005)과 같은 형식으로 읽음
+  - [ ] LTYPE 텍스트: R2004 이전 파일에서 텍스트 위치(바이트 오프셋으로 읽음)와, R2007+에서 텍스트 없이 모양만 있는 경우 텍스트 영역 유무. 샘플에 없음
+  - [ ] CMC 트루컬러(방식 0xC2 등): 샘플에 없음. 인덱스 필드를 그대로 둠
+- 스펙과 다르게 구현한 곳 (샘플로 측정해서 정함)
+  - DIMSTYLE: R2004+에서 DIMCLRD·DIMCLRE·DIMCLRT는 BS가 아니라 CMC
+  - LTYPE: 모양 플래그 2가 텍스트, 4가 모양 (스펙은 반대). R2007+ 텍스트 위치는 문자 단위 인덱스
+  - R2007+ 테이블 레코드 플래그: BS 하나뿐이고 256이 xref 종속. 64-플래그와 xref 인덱스는 없음
+  - LAYER: 스펙의 마지막 알 수 없는 핸들은 R2013+에만 있음 (534개 모두 null)
+  - CMC(R2004+): RGB 값의 최상위 바이트 0xC0은 ByLayer, 0xC1은 ByBlock, 0xC3은 하위 바이트가 색상 인덱스
 - [x] 쓰지 않는 예전 패키지 삭제: `src/decode`, `src/structure`, `src/run`, `src/debug` (207개 파일)와 이를 쓰던 `src/test`의 예전 프로그램 4개
 - [x] 문서 정리: `CLAUDE.md`의 조사 원칙을 "스펙 → 샘플 실험 → 일반 알고리즘은 문헌"으로 바꾸고 다른 구현의 소스는 보지 않도록 함. `README.md`, `RELEASE_NOTES.md`, `03_dwg-sections.md`는 스펙 절과 측정값을 출처로. 루트의 작업 기록 문서 23개 삭제
 - [x] 다시 작성하는 과정을 기록으로 남기기: 비공개 기록부 `D:\workspace\jDwgParser-records\cleanroom-log.md`
@@ -34,10 +43,12 @@
 
 ## P1 — 읽기 품질 (팔 수 있는 핵심)
 
-- [ ] EED(XData)를 버리지 않고 저장 (`EntityHeaderReader.skipExtendedData`)
-- [ ] 테이블 객체 필드를 모두 읽기: LTYPE(dash 배열), STYLE, DIMSTYLE, MLINESTYLE, xref 플래그
+- [x] EED(XData)를 버리지 않고 저장 (스펙 28장). `XDataRecord`에 DXF 그룹 코드로 담고, 1001은 애플리케이션 이름. 샘플에서 애플리케이션 데이터가 모두 길이에 딱 맞게 읽히고, 애플리케이션·엔티티 핸들이 파일의 객체를 가리킴
+- [x] 테이블 객체 필드를 모두 읽기: LTYPE(dash 배열, 텍스트), STYLE, DIMSTYLE(변수 전체), MLINESTYLE(선 목록), APPID, LAYER(플롯, 선 굵기), BLOCK_HEADER(설명, 미리보기, 소유 엔티티·INSERT·레이아웃 핸들), 모든 테이블 레코드의 xref 플래그와 xref 블록 핸들(`AbstractDwgTableRecord`). 샘플 전체에서 데이터 스트림과 핸들 스트림이 모두 객체 끝에서 정확히 끝나고(아래 villa_1 제외), R2000 사본과 값이 같음
+  - [ ] VIEW, UCS, VPORT 리더도 같은 방법(데이터 끝 위치 확인)으로 점검
 - [ ] XRECORD 데이터, 3DSOLID/REGION/BODY의 ACIS 데이터 읽기 (적어도 원본 바이트를 보관)
 - [ ] MULTILEADER 리더 추가
+- [ ] R2007 `AC1021/villa_1.dwg`, `bmw_1.dwg`: 객체 대부분이 잘못 읽힘(타입이 무작위, EED 애플리케이션 핸들이 APPID가 아님). 섹션이나 객체 맵 단계 문제로 보임
 - [ ] 알 수 없는 클래스를 `null` 대신 원본 바이트를 담은 객체로 반환 (`R2000ObjectStreamAdvancedParser.java:153`)
 - [ ] 한글: CP949 텍스트, MTEXT 제어코드, SHX/빅폰트 확인
 - [ ] 경고를 stdout에 출력하지 말고 리스너나 로거로 넘기기 (`DictionaryObjectReader` 경고가 대량으로 출력됨 → 원인도 조사)
