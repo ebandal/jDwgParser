@@ -35,6 +35,18 @@
   - R2007+ 테이블 레코드 플래그: BS 하나뿐이고 256이 xref 종속. 64-플래그와 xref 인덱스는 없음
   - LAYER: 스펙의 마지막 알 수 없는 핸들은 R2013+에만 있음 (534개 모두 null)
   - CMC(R2004+): RGB 값의 최상위 바이트 0xC0은 ByLayer, 0xC1은 ByBlock, 0xC3은 하위 바이트가 색상 인덱스
+  - Classes: R2010+ 비트 크기는 알 수 없는 RL 다음부터 셈. 그 RL은 R2010/R2013 유지보수 버전 > 3, R2018+에 있음
+  - XRECORD: R13~R2004 문자열 길이는 RS (스펙은 RC), 이진 데이터 길이는 RC
+  - MTEXT: 배경 배율은 BD (스펙은 BL)
+  - INSERT: R2004+ 소유 객체 수는 ATTRIB이 있을 때만 있음 (스펙은 항상)
+  - LAYOUT: R2004+ 뷰포트 수는 BL (스펙은 RL)
+  - DICTIONARYVAR: 문자열은 TV (스펙은 BS)
+  - VIEW: R2000+ UCS 핸들 2개는 연결된 UCS가 있을 때만 (샘플 1개로 확인)
+  - ACIS: 버전 1 문자는 0x9F에서 뺀 값이 0x20~0x7E일 때만 바뀜(공백은 0x7F로 저장). 실루엣의 와이어 수 앞에 비트가 하나 더 있음. R2007+ REGION에는 history 핸들이 없음
+  - EED·XRECORD 그룹 1003/1005 핸들: 샘플에 없음
+  - WIPEOUT은 IMAGE와 같은 구성. HATCH R2010+ 스플라인 접선은 맞춤점이 있을 때만. TOLERANCE R13~R14 알 수 없는 short는 BS, 텍스트는 TV. FIELD 값 문자열 길이는 BL
+  - TABLESTYLE: 옛 형식의 색은 TC, R2010+ 셀 스타일 목록의 각 항목 앞에 BL 하나. CELLSTYLEMAP은 스펙대로
+  - MULTILEADER: 끊김 정보는 개수만큼 반복, 스타일 블록 핸들은 블록 내용일 때만, 내장 컨텍스트에 AcDbObjectContextData 필드 없음
 - [x] 쓰지 않는 예전 패키지 삭제: `src/decode`, `src/structure`, `src/run`, `src/debug` (207개 파일)와 이를 쓰던 `src/test`의 예전 프로그램 4개
 - [x] 문서 정리: `CLAUDE.md`의 조사 원칙을 "스펙 → 샘플 실험 → 일반 알고리즘은 문헌"으로 바꾸고 다른 구현의 소스는 보지 않도록 함. `README.md`, `RELEASE_NOTES.md`, `03_dwg-sections.md`는 스펙 절과 측정값을 출처로. 루트의 작업 기록 문서 23개 삭제
 - [x] 다시 작성하는 과정을 기록으로 남기기: 비공개 기록부 `D:\workspace\jDwgParser-records\cleanroom-log.md`
@@ -45,13 +57,25 @@
 
 - [x] EED(XData)를 버리지 않고 저장 (스펙 28장). `XDataRecord`에 DXF 그룹 코드로 담고, 1001은 애플리케이션 이름. 샘플에서 애플리케이션 데이터가 모두 길이에 딱 맞게 읽히고, 애플리케이션·엔티티 핸들이 파일의 객체를 가리킴
 - [x] 테이블 객체 필드를 모두 읽기: LTYPE(dash 배열, 텍스트), STYLE, DIMSTYLE(변수 전체), MLINESTYLE(선 목록), APPID, LAYER(플롯, 선 굵기), BLOCK_HEADER(설명, 미리보기, 소유 엔티티·INSERT·레이아웃 핸들), 모든 테이블 레코드의 xref 플래그와 xref 블록 핸들(`AbstractDwgTableRecord`). 샘플 전체에서 데이터 스트림과 핸들 스트림이 모두 객체 끝에서 정확히 끝나고(아래 villa_1 제외), R2000 사본과 값이 같음
-  - [ ] VIEW, UCS, VPORT 리더도 같은 방법(데이터 끝 위치 확인)으로 점검
-- [ ] XRECORD 데이터, 3DSOLID/REGION/BODY의 ACIS 데이터 읽기 (적어도 원본 바이트를 보관)
-- [ ] MULTILEADER 리더 추가
+  - [x] VIEW, UCS, VPORT도 같은 방법으로 다시 작성 (필드는 이름-값으로 보관, `ValueHolder`)
+- [x] 읽기 점검을 라이브러리에 넣음: 리더가 데이터 끝에서 멈추지 않거나 핸들이 남으면 `ReadIssue`(OBJECT_DATA/OBJECT_HANDLES)로 알림. `DwgReader.onIssue`, `DwgDocument.issues()`. 점검을 통과한 타입은 `ReadCompletenessTest`가 지킴
+- [x] 경고를 출력하지 않고 `ReadIssue`로 넘김. 출력하던 예전 파서 3개 삭제. `DictionaryObjectReader` 경고의 원인은 리더가 공통 헤더를 두 번 읽던 것 (다시 작성)
+- [x] Classes 섹션(10장, §5.8): 모든 클래스가 엔티티로 표시되던 버그, R2004+ 머리말·추가 필드, R2007+ 문자열 스트림. 샘플 전체에서 클래스 번호가 500부터 차례대로
+- [x] DICTIONARY, XRECORD(데이터를 그룹 코드와 값으로), DICTIONARYVAR, SCALE, GROUP, LAYOUT, VIEWPORT
+- [x] 엔티티: RAY, XLINE, DIMENSION 7종, MTEXT(배경, R2018 열), INSERT·MINSERT(ATTRIB 핸들), 옛 POLYLINE 4종(정점 핸들), ATTDEF, VERTEX_MESH
+- [x] 3DSOLID/REGION/BODY: ACIS 모델을 SAT 텍스트나 SAB 바이트로 보관, 와이어프레임 읽기. R14~R2010 샘플 전부 정확
+  - [ ] R2013+: 모델이 데이터 저장 섹션(AcDs)에 있는 경우. 그 섹션 읽기가 필요
+  - [ ] R13 `example_r13.dwg`의 ACIS 버전 0인 객체 3개
+- [x] 알 수 없는 클래스: 원래부터 `DwgGenericObject`로 반환. 이제 클래스 이름, 엔티티 여부, 객체 바이트도 보관
+- [x] SHAPE, TOLERANCE, MLINE, IMAGE, WIPEOUT, HATCH(R2010+ 스플라인), OLE2FRAME, FIELD, TABLESTYLE, CELLSTYLEMAP
+- [x] MULTILEADER 리더 추가 (컨텍스트, 리더 루트·선, 텍스트·블록 내용). 샘플 15개 모두 정확
+  - [ ] R2010+: 화살촉 목록과 블록 레이블 목록 중 어느 것이 있는지 (샘플은 둘 다 비어 있어 판정 못 함)
+- [x] 스펙에 없는 타입(VISUALSTYLE, MATERIAL, PERSSUBENTMANAGER, SURFACE, MESH, UNDERLAY): 지어낸 필드를 읽던 리더 대신 공통 데이터만 읽고 바이트를 보관(`rawData()`)
+- [ ] 아직 맞지 않는 것 (`ReadIssue`, 샘플 전체): ACAD_TABLE 8개(스펙 §20.4.96~98 큼), gh44의 xref BLOCK_HEADER 2개(INSERT 개수 앞에서 어긋남), ACIS 6개(R13 버전 0, R2013+ AcDs)
+- [ ] Header 섹션(9장) 리더가 스펙 순서를 따르지 않음. 다시 작성 필요 (코드페이지, 범위, 단위 등)
 - [ ] R2007 `AC1021/villa_1.dwg`, `bmw_1.dwg`: 객체 대부분이 잘못 읽힘(타입이 무작위, EED 애플리케이션 핸들이 APPID가 아님). 섹션이나 객체 맵 단계 문제로 보임
-- [ ] 알 수 없는 클래스를 `null` 대신 원본 바이트를 담은 객체로 반환 (`R2000ObjectStreamAdvancedParser.java:153`)
+- [ ] R2007 `samples/2007/Constraints.dwg`: 섹션 맵에 AcDb:Classes가 없음
 - [ ] 한글: CP949 텍스트, MTEXT 제어코드, SHX/빅폰트 확인
-- [ ] 경고를 stdout에 출력하지 말고 리스너나 로거로 넘기기 (`DictionaryObjectReader` 경고가 대량으로 출력됨 → 원인도 조사)
 
 ## P2 — 신뢰성 수치
 
@@ -84,6 +108,7 @@
 - [ ] 섹션 크기, CRC 임시값 (`HeaderSectionWriter.java:37`, `ClassesSectionWriter.java:44`, `R2000FileStructureHandler.java:211`)
 - [ ] R2007 이상 페이지맵 오프셋을 추정이 아니라 계산으로
 - [ ] 테이블 객체 writer
+- [ ] DIMENSION, MINSERT writer: 읽기를 다시 쓰기 전의 잘못된 구성으로 씀
 - [ ] 라운드트립 테스트
 - [ ] `R13SectionLocator.write`가 레코드 번호를 raw long으로 씀 (§3.2.6은 raw byte). `DwgWriter`의 헤더 크기 계산도 함께 고칠 것
 
