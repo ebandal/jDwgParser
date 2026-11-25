@@ -6,7 +6,7 @@ import io.dwg.core.io.ByteBufferBitInput;
 import io.dwg.core.io.SectionInputStream;
 import io.dwg.core.util.Lz77Decompressor;
 import io.dwg.core.util.Lz77Compressor;
-import io.dwg.core.util.ReedSolomon251Decoder;
+import io.dwg.core.util.ReedSolomonDecoder;
 import io.dwg.core.version.DwgVersion;
 import io.dwg.format.common.AbstractFileStructureHandler;
 import io.dwg.format.common.FileHeaderFields;
@@ -137,26 +137,13 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
             byte[] rsData = new byte[(int)pageSize];
             System.arraycopy(fileData, (int)filePageOffset, rsData, 0, (int)pageSize);
 
-            long pesize = (page.compSize + 7) & ~7L;
-            long blockCount = (pesize + 250) / 251;
-            byte[][] blocks = new byte[(int)blockCount][255];
-            for (int i = 0; i < blockCount; i++) {
-                for (int j = 0; j < 255; j++) {
-                    int srcOffset = i + j * (int)blockCount;
-                    if (srcOffset < rsData.length) {
-                        blocks[i][j] = rsData[srcOffset];
-                    }
-                }
-            }
-
-            for (int i = 0; i < blockCount; i++) {
-                ReedSolomon251Decoder.decodeBlock(blocks[i], true);
-            }
-
-            byte[] pedata = new byte[(int)blockCount * 251];
-            for (int i = 0; i < blockCount; i++) {
-                System.arraycopy(blocks[i], 0, pedata, (int)i * 251, 251);
-            }
+            // Section 5.4: the page data is padded to a multiple of 8 bytes and Reed-Solomon
+            // encoded in interleaved code words of 251 data bytes.
+            long alignedSize = (page.compSize + 7) & ~7L;
+            int blockCount = (int) ((alignedSize + ReedSolomonDecoder.DATA_PAGE_DATA_SIZE - 1)
+                / ReedSolomonDecoder.DATA_PAGE_DATA_SIZE);
+            byte[] pedata = ReedSolomonDecoder.deinterleave(rsData, blockCount,
+                ReedSolomonDecoder.DATA_PAGE_DATA_SIZE);
 
             byte[] decompressed;
             if (page.compSize < page.uncompSize) {
