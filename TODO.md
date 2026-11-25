@@ -7,7 +7,7 @@
 
 - [ ] **libredwg에서 옮겨 온 코드를 ODA 스펙만 보고 다시 작성** (상용 라이선스를 따로 팔 권리를 확보하기 위해)
   - [x] `core/util/R2004Lz77Decompressor` — R2004~R2018 섹션 압축 해제 (스펙 §4.7). 샘플 244개에서 이전 구현과 결과 동일(호출 2,518회, 불일치 0), 무작위 입력 20만 건에서 예외 없음
-  - [ ] `core/util/Lz77Decompressor` — R2007 압축 해제 (스펙 §5.x)
+  - [x] `core/util/Lz77Decompressor` — R2007 압축 해제 (스펙 §5.10). 샘플 244개에서 이전 구현과 결과·예외 동일(호출 3,313회, 불일치 0), 무작위 입력 20만 건에서 런타임 예외 없음. 쓰지 않던 `Lz77Decompressor_Fixed`, `ByteLevelLz77Decompressor`, `Lz77DecompressorInterface` 삭제
   - [ ] `core/util/ReedSolomonDecoder` — R2007 RS 디코딩
   - [ ] `format/r2007/R2007SystemPageReader`, `R2007SectionMapParser`
   - [ ] `core/io/BitStreamReader` (UMC, BOT, BLL), `sections/objects/EntityHeaderReader`, `sections/handles/HandlesParsingUtil` — 주석이 libredwg 함수를 출처로 적고 있음. 스펙 기준으로 다시 확인하고 출처 주석은 스펙 절 번호로 바꾼다

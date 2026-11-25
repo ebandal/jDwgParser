@@ -1,401 +1,282 @@
 package io.dwg.core.util;
 
 /**
- * R2007+ LZ77 Decompressor
- * Direct port of libredwg's decompress_r2007() from decode_r2007.c
- * OpenDesign Spec v5.4.1 §4.7 (R2007 uses same compression as R2004/R18)
+ * Decompressor for the LZ77 variant used by R2007 (AC1021) pages, the page map, the section map
+ * and the compressed part of the file header.
+ *
+ * <p>Written from the Open Design Specification for .dwg files, section 5.10 "Decompression".
+ *
+ * <p>The stream alternates between literal runs, copied from the input, and back references,
+ * copied from the output already produced:
+ * <ol>
+ *   <li>A literal run whose length comes from the first opcode (or, if the first opcode's high
+ *       nibble is 2, from the low three bits of the fourth byte).</li>
+ *   <li>One or more back references ({@link #readInstruction}). The low three bits of the last
+ *       opcode give the length of the next literal run. When they are zero, the next byte is
+ *       either another back reference or, if its high nibble is zero, the opcode of a literal
+ *       length.</li>
+ * </ol>
+ *
+ * <p>Literal bytes are not copied in order. The specification gives the order as a table for
+ * 1–32 bytes ({@link #LITERAL_ORDER}); longer runs are copied in blocks of 32.
  */
 public class Lz77Decompressor {
 
-    private byte[] src;
-    private int srcPos;
-    private byte[] dst;
-    private int dstPos;
+    /**
+     * The table of section 5.10.1. Row {@code n} describes how {@code n} literal bytes are copied:
+     * a list of blocks {size, source index}, written to the output one after the other. A block of
+     * size {@code s} at source index {@code i} is itself copied as row {@code s} applied at
+     * {@code i}; a block of size 1 is a single byte. Rows 2, 3, 4, 8, 16 and 32 therefore define
+     * the blocks the other rows are made of.
+     */
+    private static final int[][] LITERAL_ORDER = {
+        /*  0 */ {},
+        /*  1 */ {1, 0},
+        /*  2 */ {1, 1, 1, 0},
+        /*  3 */ {1, 2, 1, 1, 1, 0},
+        /*  4 */ {1, 0, 1, 1, 1, 2, 1, 3},
+        /*  5 */ {1, 4, 4, 0},
+        /*  6 */ {1, 5, 4, 1, 1, 0},
+        /*  7 */ {2, 5, 4, 1, 1, 0},
+        /*  8 */ {4, 0, 4, 4},
+        /*  9 */ {1, 8, 8, 0},
+        /* 10 */ {1, 9, 8, 1, 1, 0},
+        /* 11 */ {2, 9, 8, 1, 1, 0},
+        /* 12 */ {4, 8, 8, 0},
+        /* 13 */ {1, 12, 4, 8, 8, 0},
+        /* 14 */ {1, 13, 4, 9, 8, 1, 1, 0},
+        /* 15 */ {2, 13, 4, 9, 8, 1, 1, 0},
+        /* 16 */ {8, 8, 8, 0},
+        /* 17 */ {8, 9, 1, 8, 8, 0},
+        /* 18 */ {1, 17, 16, 1, 1, 0},
+        /* 19 */ {3, 16, 16, 0},
+        /* 20 */ {4, 16, 16, 0},
+        /* 21 */ {1, 20, 4, 16, 16, 0},
+        /* 22 */ {2, 20, 4, 16, 16, 0},
+        /* 23 */ {3, 20, 4, 16, 16, 0},
+        /* 24 */ {8, 16, 16, 0},
+        /* 25 */ {8, 17, 1, 16, 16, 0},
+        /* 26 */ {1, 25, 8, 17, 1, 16, 16, 0},
+        /* 27 */ {2, 25, 8, 17, 1, 16, 16, 0},
+        /* 28 */ {4, 24, 8, 16, 16, 0},
+        /* 29 */ {1, 28, 4, 24, 8, 16, 16, 0},
+        /* 30 */ {2, 28, 4, 24, 8, 16, 16, 0},
+        /* 31 */ {1, 30, 4, 26, 8, 18, 16, 2, 2, 0},
+        /* 32 */ {16, 16, 16, 0},
+    };
 
     /**
-     * Decompress R2007 LZ77-compressed data
+     * {@code PERMUTATION[n][k]} is the input index, relative to the start of the run, of the
+     * {@code k}-th output byte of an {@code n}-byte literal run.
+     */
+    private static final int[][] PERMUTATION = new int[33][];
+
+    static {
+        for (int n = 0; n <= 32; n++) {
+            int[] p = new int[n];
+            int filled = expand(n, 0, p, 0);
+            if (filled != n) {
+                throw new IllegalStateException("literal order row " + n + " has " + filled + " bytes");
+            }
+            PERMUTATION[n] = p;
+        }
+    }
+
+    /** Writes the source indices of row {@code size} applied at {@code base} into {@code p}. */
+    private static int expand(int size, int base, int[] p, int at) {
+        if (size == 1) {
+            p[at] = base;
+            return at + 1;
+        }
+        int[] row = LITERAL_ORDER[size];
+        for (int i = 0; i < row.length; i += 2) {
+            at = expand(row[i], base + row[i + 1], p, at);
+        }
+        return at;
+    }
+
+    private byte[] in;
+    private int inPos;
+    private byte[] out;
+    private int outPos;
+
+    // Result of readInstruction.
+    private int opcode;
+    private int distance;
+    private int length;
+
+    /**
+     * Decompresses {@code compressed} into a buffer of {@code expectedSize} bytes. Decoding stops
+     * when the input ends or the buffer is full; the rest of the buffer stays zero.
      *
-     * @param compressed Source compressed data
-     * @param expectedSize Expected decompressed size (e.g., 0x110 = 272 for R2007 header)
-     * @return Decompressed data
+     * @throws Exception if the data is too short or a back reference points before the start
      */
     public byte[] decompress(byte[] compressed, int expectedSize) throws Exception {
-        this.src = compressed;
-        this.srcPos = 0;
-        this.dst = new byte[expectedSize];
-        this.dstPos = 0;
+        in = compressed;
+        inPos = 0;
+        out = new byte[expectedSize];
+        outPos = 0;
 
-        if (compressed.length < 2) {
+        if (in.length < 2) {
             throw new Exception("Compressed data too short");
         }
 
-        int dstEnd = expectedSize;
-        int srcEnd = compressed.length;
-
-        long length = 0;
-        long offset = 0;
-
-        // Read first opcode
-        int opcode = src[srcPos++] & 0xFF;
-
-        // Special case: opcode 0x20-0x2F (header literal)
+        opcode = nextByte();
+        int literal = 0;
         if ((opcode & 0xF0) == 0x20) {
-            srcPos += 2;  // skip 2 bytes
-            if (srcPos >= srcEnd) {
+            inPos += 2;
+            if (inPos >= in.length) {
                 throw new Exception("Header truncated");
             }
-            length = src[srcPos++] & 0x07;  // literal length 0-7 (low 3 bits)
-            if (length == 0) {
+            literal = nextByte() & 0x07;
+            if (literal == 0) {
                 throw new Exception("Decompression error: zero length");
             }
         }
 
-        // Main outer loop
-        while (srcPos < srcEnd) {
-            // Read literal length if not yet set
-            if (length == 0) {
-                length = readLiteralLength(opcode);
+        while (inPos < in.length) {
+            if (literal == 0) {
+                literal = literalLength(opcode);
+            }
+            copyLiterals(literal);
+            if (inPos >= in.length) {
+                break;
             }
 
-            // Validate bounds
-            if (dstPos + length > dstEnd || srcPos + length > srcEnd) {
-                // Truncate to available
-                length = Math.min(dstEnd - dstPos, srcEnd - srcPos);
-                if (length <= 0) break;
-            }
-
-            // Copy literal bytes with special byte-reversal rules (like libredwg's copy_compressed_bytes)
-            copyCompressedBytes((int)length);
-            length = 0;
-
-            if (srcPos >= srcEnd) break;
-
-            // Read back-reference instruction
-            opcode = src[srcPos++] & 0xFF;
-            int[] result = readInstructions(opcode);
-            opcode = result[0];
-            offset = result[1] & 0xFFFFFFFFL;
-            length = result[2] & 0xFFFFFFFFL;
-
-            // Inner back-reference loop
+            opcode = nextByte();
+            readInstruction();
             while (true) {
-                // Validate bounds
-                if (dstPos + length > dstEnd) {
-                    return dst;  // Truncate at end
+                if (outPos + length > out.length) {
+                    return out;
                 }
-                if (offset > dstPos) {
-                    throw new Exception("Decompression error: offset " + offset
-                        + " > dstPos " + dstPos);
+                if (distance > outPos) {
+                    throw new Exception("Decompression error: offset " + distance + " > dstPos " + outPos);
                 }
+                copyBack();
 
-                // Copy back-reference bytes
-                copyBytes((int)offset, (int)length);
-
-                // Set literal count from opcode's low 3 bits
-                length = opcode & 7;
-
-                if (length != 0 || srcPos >= srcEnd) {
-                    break;  // Exit inner loop with literal count set
+                literal = opcode & 0x07;
+                if (literal != 0 || inPos >= in.length) {
+                    break;
                 }
-
-                opcode = src[srcPos++] & 0xFF;
-
+                opcode = nextByte();
                 if ((opcode >> 4) == 0) {
-                    break;  // Low opcode: outer loop will handle literal length
+                    break; // a literal length follows
                 }
-
-                // Special case: high nibble == 0xF, mask away high nibble
                 if ((opcode >> 4) == 0x0F) {
                     opcode &= 0x0F;
                 }
-
-                // Decode another back-reference
-                int[] result2 = readInstructions(opcode);
-                opcode = result2[0];
-                offset = result2[1] & 0xFFFFFFFFL;
-                length = result2[2] & 0xFFFFFFFFL;
+                readInstruction();
             }
         }
+        return out;
+    }
 
-        return dst;
+    /** Returns the next input byte (0–255), or 0 past the end of the input. */
+    private int nextByte() {
+        return inPos < in.length ? in[inPos++] & 0xFF : 0;
     }
 
     /**
-     * Read literal length per libredwg's read_literal_length()
-     * Spec §4.7 page 50
+     * Literal length from an opcode whose high nibble is zero: opcode + 8. For opcode 0x0F
+     * (length 0x17) the next byte is added, and if that byte is 0xFF, 16-bit little-endian
+     * values are added until one is not 0xFFFF.
      */
-    private int readLiteralLength(int opcode) throws Exception {
-        int length = (opcode & 0xFF) + 8;
-
-        if (length == 0x17) {  // opcode == 0x0F
-            if (srcPos >= src.length) return length;
-            int n = src[srcPos++] & 0xFF;
-            length += n;
-
+    private int literalLength(int op) {
+        int len = op + 8;
+        if (len == 0x17) {
+            if (inPos >= in.length) {
+                return len;
+            }
+            int n = nextByte();
+            len += n;
             if (n == 0xFF) {
-                while (srcPos + 1 < src.length) {
-                    int n2 = (src[srcPos] & 0xFF) | ((src[srcPos + 1] & 0xFF) << 8);
-                    srcPos += 2;
-                    length += n2;
-                    if (n2 != 0xFFFF) break;
+                while (inPos + 1 < in.length) {
+                    int n2 = nextByte() | (nextByte() << 8);
+                    len += n2;
+                    if (n2 != 0xFFFF) {
+                        break;
+                    }
                 }
             }
         }
-        return length;
+        return len;
     }
 
     /**
-     * Decode back-reference instruction per libredwg's read_instructions()
-     * Returns: [new_opcode, offset, length]
-     * Spec §4.7 page 53
+     * Reads one back reference for {@link #opcode}, per the ReadInstructions function of section
+     * 5.10.2. Sets {@link #distance}, {@link #length} and the next {@link #opcode}.
      */
-    private int[] readInstructions(int opcode) throws Exception {
-        int caseNum = opcode >> 4;
-        int length, offset;
-        int newOpcode;
-
-        switch (caseNum) {
-        case 0:
-            length = (opcode & 0xF) + 0x13;
-            if (srcPos >= src.length) return new int[] { 0, 0, length };
-            offset = src[srcPos++] & 0xFF;
-            if (srcPos >= src.length) return new int[] { 0, offset, length };
-            newOpcode = src[srcPos++] & 0xFF;
-            length = ((newOpcode >> 3) & 0x10) + length;
-            offset = ((newOpcode & 0x78) << 5) + 1 + offset;
-            break;
-
-        case 1:
-            length = (opcode & 0xF) + 3;
-            if (srcPos >= src.length) return new int[] { 0, 0, length };
-            offset = src[srcPos++] & 0xFF;
-            if (srcPos >= src.length) return new int[] { 0, offset, length };
-            newOpcode = src[srcPos++] & 0xFF;
-            offset = ((newOpcode & 0xF8) << 5) + 1 + offset;
-            break;
-
-        case 2:
-            if (srcPos >= src.length) return new int[] { opcode, 0, 0 };
-            offset = src[srcPos++] & 0xFF;
-            if (srcPos >= src.length) return new int[] { opcode, offset, 0 };
-            offset = ((src[srcPos++] & 0xFF) << 8) | offset;
-            length = opcode & 0x07;
-
-            if ((opcode & 0x08) == 0) {
-                if (srcPos >= src.length) return new int[] { opcode, offset, length };
-                newOpcode = src[srcPos++] & 0xFF;
-                length = (newOpcode & 0xF8) + length;
-            } else {
-                offset++;
-                if (srcPos >= src.length) return new int[] { opcode, offset, length };
-                length = ((src[srcPos++] & 0xFF) << 3) + length;
-                if (srcPos >= src.length) return new int[] { opcode, offset, length };
-                newOpcode = src[srcPos++] & 0xFF;
-                length = (((newOpcode & 0xF8) << 8) + length) + 0x100;
+    private void readInstruction() {
+        int op = opcode;
+        switch (op >> 4) {
+            case 0: {
+                length = (op & 0x0F) + 0x13;
+                int low = nextByte();
+                op = nextByte();
+                length += (op >> 3) & 0x10;
+                distance = ((op & 0x78) << 5) + 1 + low;
+                break;
             }
-            break;
-
-        default:  // case 3+
-            length = opcode >> 4;
-            offset = opcode & 0x0F;
-            if (srcPos >= src.length) return new int[] { 0, offset, length };
-            newOpcode = src[srcPos++] & 0xFF;
-            offset = (((newOpcode & 0xF8) << 1) + offset) + 1;
-            break;
+            case 1: {
+                length = (op & 0x0F) + 3;
+                int low = nextByte();
+                op = nextByte();
+                distance = ((op & 0xF8) << 5) + 1 + low;
+                break;
+            }
+            case 2: {
+                int d = nextByte();
+                d |= nextByte() << 8;
+                length = op & 0x07;
+                if ((op & 0x08) == 0) {
+                    op = nextByte();
+                    length += op & 0xF8;
+                } else {
+                    d++;
+                    length += nextByte() << 3;
+                    op = nextByte();
+                    length += ((op & 0xF8) << 8) + 0x100;
+                }
+                distance = d;
+                break;
+            }
+            default: {
+                length = op >> 4;
+                int low = op & 0x0F;
+                op = nextByte();
+                distance = ((op & 0xF8) << 1) + low + 1;
+                break;
+            }
         }
-
-        return new int[] { newOpcode, offset, length };
+        opcode = op;
     }
 
-    private void copyCompressedBytes(int length) {
-        // Direct port of libredwg copy_compressed_bytes() from decode_r2007.c
-        // Macros: copy_1(o)=1 byte; copy_2(o)=REVERSED 2 bytes; copy_3(o)=REVERSED 3 bytes;
-        //         copy_4(o)=4 bytes straight; copy_8(o)=8 bytes straight;
-        //         copy_16(o)=16 bytes with 8-byte half-swap
-        while (length >= 32) {
-            // copy_16(16): dst[0..7]=src[24..31], dst[8..15]=src[16..23]
-            System.arraycopy(src, srcPos + 24, dst, dstPos, 8);
-            System.arraycopy(src, srcPos + 16, dst, dstPos + 8, 8);
-            dstPos += 16;
-            // copy_16(0): dst[0..7]=src[8..15], dst[8..15]=src[0..7]
-            System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
-            System.arraycopy(src, srcPos + 0, dst, dstPos + 8, 8);
-            dstPos += 16;
-            srcPos += 32;
-            length -= 32;
+    /** Copies a literal run of {@code count} bytes in the order of {@link #LITERAL_ORDER}. */
+    private void copyLiterals(int count) {
+        count = Math.min(count, Math.min(out.length - outPos, in.length - inPos));
+        while (count >= 32) {
+            copyBlock(PERMUTATION[32]);
+            count -= 32;
         }
-
-        switch (length) {
-            case 0: break;
-            case 1:
-                dst[dstPos++] = src[srcPos];
-                srcPos += 1; break;
-            case 2:  // copy_2(0)
-                dst[dstPos++] = src[srcPos + 1]; dst[dstPos++] = src[srcPos];
-                srcPos += 2; break;
-            case 3:  // copy_3(0)
-                dst[dstPos++] = src[srcPos + 2]; dst[dstPos++] = src[srcPos + 1]; dst[dstPos++] = src[srcPos];
-                srcPos += 3; break;
-            case 4:  // copy_4(0)
-                System.arraycopy(src, srcPos, dst, dstPos, 4); dstPos += 4;
-                srcPos += 4; break;
-            case 5:  // copy_1(4); copy_4(0)
-                dst[dstPos++] = src[srcPos + 4];
-                System.arraycopy(src, srcPos, dst, dstPos, 4); dstPos += 4;
-                srcPos += 5; break;
-            case 6:  // copy_1(5); copy_4(1); copy_1(0)
-                dst[dstPos++] = src[srcPos + 5];
-                System.arraycopy(src, srcPos + 1, dst, dstPos, 4); dstPos += 4;
-                dst[dstPos++] = src[srcPos];
-                srcPos += 6; break;
-            case 7:  // copy_2(5); copy_4(1); copy_1(0)
-                dst[dstPos++] = src[srcPos + 6]; dst[dstPos++] = src[srcPos + 5];
-                System.arraycopy(src, srcPos + 1, dst, dstPos, 4); dstPos += 4;
-                dst[dstPos++] = src[srcPos];
-                srcPos += 7; break;
-            case 8:  // copy_8(0)
-                System.arraycopy(src, srcPos, dst, dstPos, 8); dstPos += 8;
-                srcPos += 8; break;
-            case 9:  // copy_1(8); copy_8(0)
-                dst[dstPos++] = src[srcPos + 8];
-                System.arraycopy(src, srcPos, dst, dstPos, 8); dstPos += 8;
-                srcPos += 9; break;
-            case 10:  // copy_1(9); copy_8(1); copy_1(0)
-                dst[dstPos++] = src[srcPos + 9];
-                System.arraycopy(src, srcPos + 1, dst, dstPos, 8); dstPos += 8;
-                dst[dstPos++] = src[srcPos];
-                srcPos += 10; break;
-            case 11:  // copy_2(9); copy_8(1); copy_1(0)
-                dst[dstPos++] = src[srcPos + 10]; dst[dstPos++] = src[srcPos + 9];
-                System.arraycopy(src, srcPos + 1, dst, dstPos, 8); dstPos += 8;
-                dst[dstPos++] = src[srcPos];
-                srcPos += 11; break;
-            case 12:  // copy_4(8); copy_8(0)
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 4); dstPos += 4;
-                System.arraycopy(src, srcPos, dst, dstPos, 8); dstPos += 8;
-                srcPos += 12; break;
-            case 13:  // copy_1(12); copy_4(8); copy_8(0)
-                dst[dstPos++] = src[srcPos + 12];
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 4); dstPos += 4;
-                System.arraycopy(src, srcPos, dst, dstPos, 8); dstPos += 8;
-                srcPos += 13; break;
-            case 14:  // copy_1(13); copy_4(9); copy_8(1); copy_1(0)
-                dst[dstPos++] = src[srcPos + 13];
-                System.arraycopy(src, srcPos + 9, dst, dstPos, 4); dstPos += 4;
-                System.arraycopy(src, srcPos + 1, dst, dstPos, 8); dstPos += 8;
-                dst[dstPos++] = src[srcPos];
-                srcPos += 14; break;
-            case 15:  // copy_2(13); copy_4(9); copy_8(1); copy_1(0)
-                dst[dstPos++] = src[srcPos + 14]; dst[dstPos++] = src[srcPos + 13];
-                System.arraycopy(src, srcPos + 9, dst, dstPos, 4); dstPos += 4;
-                System.arraycopy(src, srcPos + 1, dst, dstPos, 8); dstPos += 8;
-                dst[dstPos++] = src[srcPos];
-                srcPos += 15; break;
-            case 16:  // copy_16(0)
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
-                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
-                srcPos += 16; break;
-            case 17:  // copy_8(9); copy_1(8); copy_8(0)
-                System.arraycopy(src, srcPos + 9, dst, dstPos, 8); dstPos += 8;
-                dst[dstPos++] = src[srcPos + 8];
-                System.arraycopy(src, srcPos, dst, dstPos, 8); dstPos += 8;
-                srcPos += 17; break;
-            case 18:  // copy_1(17); copy_16(1); copy_1(0)
-                dst[dstPos++] = src[srcPos + 17];
-                System.arraycopy(src, srcPos + 9, dst, dstPos, 8);
-                System.arraycopy(src, srcPos + 1, dst, dstPos + 8, 8); dstPos += 16;
-                dst[dstPos++] = src[srcPos];
-                srcPos += 18; break;
-            case 19:  // copy_3(16); copy_16(0)
-                dst[dstPos++] = src[srcPos + 18]; dst[dstPos++] = src[srcPos + 17]; dst[dstPos++] = src[srcPos + 16];
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
-                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
-                srcPos += 19; break;
-            case 20:  // copy_4(16); copy_16(0)
-                System.arraycopy(src, srcPos + 16, dst, dstPos, 4); dstPos += 4;
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
-                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
-                srcPos += 20; break;
-            case 21:  // copy_1(20); copy_4(16); copy_16(0)
-                dst[dstPos++] = src[srcPos + 20];
-                System.arraycopy(src, srcPos + 16, dst, dstPos, 4); dstPos += 4;
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
-                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
-                srcPos += 21; break;
-            case 22:  // copy_2(20); copy_4(16); copy_16(0)
-                dst[dstPos++] = src[srcPos + 21]; dst[dstPos++] = src[srcPos + 20];
-                System.arraycopy(src, srcPos + 16, dst, dstPos, 4); dstPos += 4;
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
-                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
-                srcPos += 22; break;
-            case 23:  // copy_3(20); copy_4(16); copy_16(0)
-                dst[dstPos++] = src[srcPos + 22]; dst[dstPos++] = src[srcPos + 21]; dst[dstPos++] = src[srcPos + 20];
-                System.arraycopy(src, srcPos + 16, dst, dstPos, 4); dstPos += 4;
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
-                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
-                srcPos += 23; break;
-            case 24:  // copy_8(16); copy_16(0)
-                System.arraycopy(src, srcPos + 16, dst, dstPos, 8); dstPos += 8;
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
-                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
-                srcPos += 24; break;
-            case 25:  // copy_8(17); copy_1(16); copy_16(0)
-                System.arraycopy(src, srcPos + 17, dst, dstPos, 8); dstPos += 8;
-                dst[dstPos++] = src[srcPos + 16];
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
-                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
-                srcPos += 25; break;
-            case 26:  // copy_1(25); copy_8(17); copy_1(16); copy_16(0)
-                dst[dstPos++] = src[srcPos + 25];
-                System.arraycopy(src, srcPos + 17, dst, dstPos, 8); dstPos += 8;
-                dst[dstPos++] = src[srcPos + 16];
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
-                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
-                srcPos += 26; break;
-            case 27:  // copy_2(25); copy_8(17); copy_1(16); copy_16(0)
-                dst[dstPos++] = src[srcPos + 26]; dst[dstPos++] = src[srcPos + 25];
-                System.arraycopy(src, srcPos + 17, dst, dstPos, 8); dstPos += 8;
-                dst[dstPos++] = src[srcPos + 16];
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
-                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
-                srcPos += 27; break;
-            case 28:  // copy_4(24); copy_8(16); copy_16(0)
-                System.arraycopy(src, srcPos + 24, dst, dstPos, 4); dstPos += 4;
-                System.arraycopy(src, srcPos + 16, dst, dstPos, 8); dstPos += 8;
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
-                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
-                srcPos += 28; break;
-            case 29:  // copy_1(28); copy_4(24); copy_8(16); copy_16(0)
-                dst[dstPos++] = src[srcPos + 28];
-                System.arraycopy(src, srcPos + 24, dst, dstPos, 4); dstPos += 4;
-                System.arraycopy(src, srcPos + 16, dst, dstPos, 8); dstPos += 8;
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
-                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
-                srcPos += 29; break;
-            case 30:  // copy_2(28); copy_4(24); copy_8(16); copy_16(0)
-                dst[dstPos++] = src[srcPos + 29]; dst[dstPos++] = src[srcPos + 28];
-                System.arraycopy(src, srcPos + 24, dst, dstPos, 4); dstPos += 4;
-                System.arraycopy(src, srcPos + 16, dst, dstPos, 8); dstPos += 8;
-                System.arraycopy(src, srcPos + 8, dst, dstPos, 8);
-                System.arraycopy(src, srcPos, dst, dstPos + 8, 8); dstPos += 16;
-                srcPos += 30; break;
-            case 31:  // copy_1(30); copy_4(26); copy_8(18); copy_16(2); copy_2(0)
-                dst[dstPos++] = src[srcPos + 30];
-                System.arraycopy(src, srcPos + 26, dst, dstPos, 4); dstPos += 4;
-                System.arraycopy(src, srcPos + 18, dst, dstPos, 8); dstPos += 8;
-                System.arraycopy(src, srcPos + 10, dst, dstPos, 8);
-                System.arraycopy(src, srcPos + 2, dst, dstPos + 8, 8); dstPos += 16;
-                dst[dstPos++] = src[srcPos + 1]; dst[dstPos++] = src[srcPos];
-                srcPos += 31; break;
+        if (count > 0) {
+            copyBlock(PERMUTATION[count]);
         }
     }
 
-    private void copyBytes(int offset, int length) {
-        // Copy back-reference bytes from already-decompressed data
-        int srcOffset = dstPos - offset;
+    private void copyBlock(int[] order) {
+        for (int k = 0; k < order.length; k++) {
+            out[outPos + k] = in[inPos + order[k]];
+        }
+        outPos += order.length;
+        inPos += order.length;
+    }
+
+    /** Copies {@link #length} bytes from {@link #distance} bytes back; the ranges may overlap. */
+    private void copyBack() {
+        int from = outPos - distance;
         for (int i = 0; i < length; i++) {
-            dst[dstPos + i] = dst[srcOffset + i];
+            out[outPos + i] = out[from + i];
         }
-        dstPos += length;
+        outPos += length;
     }
 }
