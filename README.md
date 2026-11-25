@@ -294,7 +294,7 @@ for (DwgEntity e : entities) {
 
 ## 라이선스
 
-MIT License
+GNU General Public License v3.0 (see [LICENSE](LICENSE))
 
 ## 참고 자료
 

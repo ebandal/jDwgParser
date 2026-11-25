@@ -203,12 +203,11 @@ mvn clean compile && ./run_test.sh path/to/samples/
 
 ## License
 
-MIT License - See LICENSE file for details
+GNU General Public License v3.0 - See LICENSE file for details
 
 ## Support & Feedback
 
 For issues, questions, or feature requests:
-- 📧 Email: heesu.ban@k2web.co.kr
 - 📋 GitHub Issues: For bug reports and enhancement requests
 
 ## Appendix: Phase 9 Root Cause Analysis
