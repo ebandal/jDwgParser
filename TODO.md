@@ -23,7 +23,8 @@
   - [ ] ENC 색상(R2004+): 투명도를 RGB보다 먼저 읽음. R2004~R2007에서 색상 핸들(0x40)을 본문 스트림에서 읽음 (스펙은 핸들 스트림). 샘플에 0x40이 있는 엔티티 71개, 투명도+RGB가 함께 있는 것 24개
   - [ ] R2018 여러 줄 속성(`skipMTextEmbedded`): 샘플에 없음
   - [ ] LWPOLYLINE 정점 ID + 폭: 정점 ID가 있는 것은 6개지만 폭이 함께 있는 것은 없음
-- [ ] 쓰지 않는 예전 패키지 삭제: `src/decode`, `src/structure`, `src/run`, `src/debug` (207개 파일, `io.dwg`에서 쓰지 않음. `decode/util/ReedSolomon.java`는 libredwg 포팅이라고 적혀 있음)
+- [x] 쓰지 않는 예전 패키지 삭제: `src/decode`, `src/structure`, `src/run`, `src/debug` (207개 파일)와 이를 쓰던 `src/test`의 예전 프로그램 4개
+- [ ] 문서 정리: `CLAUDE.md`(조사 우선순위에 libredwg 참고가 들어 있으면 빼고 "스펙만 본다"로), `README.md`, `RELEASE_NOTES.md`, `03_dwg-sections.md`, 루트의 `PHASE_*`·`SESSION_*` 등 작업 기록 문서
 - [ ] 다시 작성하는 과정을 기록으로 남기기 (어떤 스펙 절을 보고 썼는지, 커밋 단위로)
 - [ ] 라이선스 변경: GPLv3 → **AGPLv3 + 상용 라이선스** (듀얼). 위의 포팅 코드를 모두 다시 쓴 뒤에 진행. 판매 전에 변호사 확인
 - [ ] 외부 기여를 받기 전에 CLA 준비
