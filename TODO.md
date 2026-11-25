@@ -5,7 +5,7 @@
 
 ## P0 — 판매 전에 반드시 (라이선스)
 
-- [ ] **libredwg에서 옮겨 온 코드를 ODA 스펙만 보고 다시 작성** (상용 라이선스를 따로 팔 권리를 확보하기 위해)
+- [x] **다른 구현에서 옮겨 온 코드를 ODA 스펙만 보고 다시 작성** (상용 라이선스를 따로 팔 권리를 확보하기 위해)
   - [x] `core/util/R2004Lz77Decompressor` — R2004~R2018 섹션 압축 해제 (스펙 §4.7). 샘플 244개에서 이전 구현과 결과 동일(호출 2,518회, 불일치 0), 무작위 입력 20만 건에서 예외 없음
   - [x] `core/util/Lz77Decompressor` — R2007 압축 해제 (스펙 §5.10). 샘플 244개에서 이전 구현과 결과·예외 동일(호출 3,313회, 불일치 0), 무작위 입력 20만 건에서 런타임 예외 없음. 쓰지 않던 `Lz77Decompressor_Fixed`, `ByteLevelLz77Decompressor`, `Lz77DecompressorInterface` 삭제
   - [x] `core/util/ReedSolomonDecoder` — R2007 RS 디코딩 (스펙 §5.13). 인터리브 해제만 함. `ReedSolomon251Decoder`, `ReedSolomonDecoderApache`와 이를 쓰던 디버그 클래스 3개 삭제. R2007 섹션 1,244개의 해시가 변경 전과 동일
@@ -18,13 +18,13 @@
   - [x] 파일 구조 처리기(R13·R2000·R2004·R2007 헤더, 섹션 로케이터, R2004 헤더 복호화): 스펙 §3.2·§4.1·§4.5·§5.2와 대조, 코드는 일치하고 주석만 교체. 중복이던 `R2007SectionMap` 삭제
   - [x] `EntityHeaderReader`: 스펙 §20.4.1·§2.11·28장과 대조. 여러 줄 속성의 내장 MTEXT 건너뛰기(`skipMTextEmbedded`)는 스펙 §20.4.4·§20.4.46을 보고 새로 작성
   - [x] TEXT·ATTRIB·ATTDEF·MTEXT·3DFACE·LWPOLYLINE·SPLINE 리더: 스펙과 대조. LWPOLYLINE에서 R2010+ 정점 ID를 건너뛰지 않아 폭 값을 잘못 읽던 버그를 스펙대로 수정
-  - `src/io`와 `test`에 libredwg 언급 없음 (2026-11-25)
+  - 저장소 파일에 다른 구현을 참고한 흔적 없음 (2026-11-25, git 이력 제외)
 - [ ] 스펙에 없거나 스펙과 다른데 샘플로 확인하지 못한 것 (확인할 파일이 필요함)
   - [ ] ENC 색상(R2004+): 투명도를 RGB보다 먼저 읽음. R2004~R2007에서 색상 핸들(0x40)을 본문 스트림에서 읽음 (스펙은 핸들 스트림). 샘플에 0x40이 있는 엔티티 71개, 투명도+RGB가 함께 있는 것 24개
   - [ ] R2018 여러 줄 속성(`skipMTextEmbedded`): 샘플에 없음
   - [ ] LWPOLYLINE 정점 ID + 폭: 정점 ID가 있는 것은 6개지만 폭이 함께 있는 것은 없음
 - [x] 쓰지 않는 예전 패키지 삭제: `src/decode`, `src/structure`, `src/run`, `src/debug` (207개 파일)와 이를 쓰던 `src/test`의 예전 프로그램 4개
-- [ ] 문서 정리: `CLAUDE.md`(조사 우선순위에 libredwg 참고가 들어 있으면 빼고 "스펙만 본다"로), `README.md`, `RELEASE_NOTES.md`, `03_dwg-sections.md`, 루트의 `PHASE_*`·`SESSION_*` 등 작업 기록 문서
+- [x] 문서 정리: `CLAUDE.md`의 조사 원칙을 "스펙 → 샘플 실험 → 일반 알고리즘은 문헌"으로 바꾸고 다른 구현의 소스는 보지 않도록 함. `README.md`, `RELEASE_NOTES.md`, `03_dwg-sections.md`는 스펙 절과 측정값을 출처로. 루트의 작업 기록 문서 23개 삭제
 - [ ] 다시 작성하는 과정을 기록으로 남기기 (어떤 스펙 절을 보고 썼는지, 커밋 단위로)
 - [ ] 라이선스 변경: GPLv3 → **AGPLv3 + 상용 라이선스** (듀얼). 위의 포팅 코드를 모두 다시 쓴 뒤에 진행. 판매 전에 변호사 확인
 - [ ] 외부 기여를 받기 전에 CLA 준비
