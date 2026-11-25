@@ -2,6 +2,9 @@ package io.dwg.sections.objects;
 
 import io.dwg.core.io.BitStreamReader;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * 객체 하나를 읽는 동안 공통 헤더에서 얻은 값.
  * 핸들 스트림은 이 값들에 따라 구성이 달라지므로, 헤더를 읽을 때 보관해 두었다가 핸들을 읽을 때 쓴다.
@@ -10,6 +13,9 @@ import io.dwg.core.io.BitStreamReader;
 public final class ObjectHeaderData {
     /** 객체 데이터 시작부터 핸들 스트림 시작까지의 비트 수. 알 수 없으면 -1 */
     public long bitSize = -1;
+
+    /** EED (스펙 28장): 애플리케이션마다 APPID 핸들과 데이터 바이트 */
+    public final List<ExtendedData> extendedData = new ArrayList<>();
 
     public int numReactors;
     public boolean xdicMissing;
@@ -31,6 +37,10 @@ public final class ObjectHeaderData {
     public boolean hasEdgeVisualStyle;
     public int invisible;
     public int lineWeight;
+
+    /** 한 애플리케이션의 EED */
+    public record ExtendedData(long appHandle, byte[] data) {
+    }
 
     /** 이 리더로 읽고 있는 객체의 헤더 값. 없으면 만든다. */
     public static ObjectHeaderData of(BitStreamReader r) {

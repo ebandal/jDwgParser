@@ -9,6 +9,7 @@ import io.dwg.entities.AbstractDwgEntity;
 import io.dwg.entities.AbstractDwgObject;
 import io.dwg.entities.DwgObject;
 import io.dwg.entities.DwgObjectType;
+import io.dwg.entities.XDataRecord;
 import io.dwg.entities.concrete.*;
 import io.dwg.format.common.SectionType;
 import io.dwg.sections.AbstractSectionParser;
@@ -67,7 +68,35 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                 // an object that cannot be read is left out
             }
         }
+        nameExtendedDataApplications(result);
         return result;
+    }
+
+    /**
+     * The EED of each application starts with a 1001 record that holds the APPID handle. Once all
+     * objects are read, the handle is replaced by the application name, as DXF writes it. A handle
+     * whose APPID is not in the file stays as it is.
+     */
+    private static void nameExtendedDataApplications(Map<Long, DwgObject> objects) {
+        Map<Long, String> names = new HashMap<>();
+        for (DwgObject obj : objects.values()) {
+            if (obj instanceof DwgAppId) {
+                names.put(obj.handle(), ((DwgAppId) obj).name());
+            }
+        }
+        for (DwgObject obj : objects.values()) {
+            if (!obj.xData().isEmpty()) {
+                ((AbstractDwgObject) obj).replaceXData(record -> {
+                    if (record.groupCode() == 1001 && record.value() instanceof DwgHandleRef) {
+                        String name = names.get(((DwgHandleRef) record.value()).rawHandle());
+                        if (name != null) {
+                            return new XDataRecord(1001, name);
+                        }
+                    }
+                    return record;
+                });
+            }
+        }
     }
 
     private Iterable<Map.Entry<Long, Long>> sortedHandleOffsets() {
@@ -178,11 +207,25 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         } catch (Exception e) {
             // Type-specific parsing failed silently
         }
+        addExtendedData(obj, r, version);
         try {
             readHandleStream(obj, reader, r, version, dataStartBit, objSizeBytes, handleStreamBits);
         } catch (Exception e) {
             // Handle stream parsing failed silently
         }
+    }
+
+    /** 공통 헤더에서 읽어 둔 EED를 객체의 XData로 옮긴다. */
+    private void addExtendedData(DwgObject obj, BitStreamReader r, DwgVersion version) {
+        ObjectHeaderData header = ObjectHeaderData.of(r);
+        if (header.extendedData.isEmpty()) {
+            return;
+        }
+        java.util.List<XDataRecord> records = new java.util.ArrayList<>();
+        for (ObjectHeaderData.ExtendedData eed : header.extendedData) {
+            ExtendedDataDecoder.decode(eed.appHandle(), eed.data(), version, textCharset, records);
+        }
+        records.forEach(((AbstractDwgObject) obj)::addXData);
     }
 
     /**

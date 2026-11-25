@@ -57,6 +57,11 @@ public class BitStreamReader {
         }
     }
 
+    /** The character set T strings are decoded with. */
+    public Charset textCharset() {
+        return textCharset;
+    }
+
     public long position() {
         return input.position();
     }
@@ -97,6 +102,16 @@ public class BitStreamReader {
     // ---------------------------------------------------------------------------------------
     // integers
     // ---------------------------------------------------------------------------------------
+
+    /** RC (§2): a raw byte, unsigned. */
+    public int readRawChar() {
+        return nextByte();
+    }
+
+    /** RS (§2): a raw short, least significant byte first, unsigned. */
+    public int readRawShort() {
+        return (int) littleEndian(2);
+    }
 
     /** BITSHORT (§2.2): 00 a short follows, 01 an unsigned byte follows, 10 is 0, 11 is 256. */
     public int readBitShort() {

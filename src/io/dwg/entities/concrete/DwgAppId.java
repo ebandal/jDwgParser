@@ -1,26 +1,20 @@
 package io.dwg.entities.concrete;
 
-import io.dwg.entities.AbstractDwgObject;
-import io.dwg.entities.DwgNonEntityObject;
+import io.dwg.entities.AbstractDwgTableRecord;
 import io.dwg.entities.DwgObjectType;
 
 /**
- * APPID 테이블 엔트리 (타입 0x39)
- * 애플리케이션 식별자 (확장 데이터 소유권)
+ * APPID table record (type 67, spec §20.4.66): the name of an application that attaches
+ * extended data to objects.
  */
-public class DwgAppId extends AbstractDwgObject implements DwgNonEntityObject {
-    private String name = "";
-    private int flags;
+public class DwgAppId extends AbstractDwgTableRecord {
+    private int unknown;
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.APPID; }
 
-    @Override
-    public boolean isEntity() { return false; }
+    /** The undocumented RC after the flags (DXF group 71, written only when it is not 0). */
+    public int flags() { return unknown; }
 
-    public String name() { return name; }
-    public int flags() { return flags; }
-
-    public void setName(String name) { this.name = name; }
-    public void setFlags(int flags) { this.flags = flags; }
+    public void setFlags(int value) { this.unknown = value; }
 }

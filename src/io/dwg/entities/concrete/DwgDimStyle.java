@@ -1,38 +1,50 @@
 package io.dwg.entities.concrete;
 
-import io.dwg.entities.AbstractDwgObject;
-import io.dwg.entities.DwgNonEntityObject;
+import io.dwg.entities.AbstractDwgTableRecord;
 import io.dwg.entities.DwgObjectType;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
- * DIMSTYLE 테이블 엔트리 (타입 0x3A)
- * 치수 스타일 정의 (텍스트 크기, 화살표, 선 유형 등)
+ * DIMSTYLE table record (type 69, spec §20.4.68). The dimension variables are kept under their
+ * system variable names (DIMSCALE, DIMTXT, ...), in file order, with these value types: Boolean
+ * (B), Integer (RC, BS), Double (BD), String (T, TV), {@link io.dwg.core.type.CmColor} (CMC, and
+ * the colors DIMCLRD, DIMCLRE, DIMCLRT in every version) and
+ * {@link io.dwg.core.type.DwgHandleRef} for the handles (DIMTXSTY, and from R2000 DIMLDRBLK,
+ * DIMBLK, DIMBLK1, DIMBLK2; from R2007 DIMLTYPE, DIMLTEX1, DIMLTEX2). R13–R14 files name the
+ * arrow blocks DIMBLK, DIMBLK1, DIMBLK2 with strings instead.
  */
-public class DwgDimStyle extends AbstractDwgObject implements DwgNonEntityObject {
-    private String name = "";
-    private double textHeight = 1.0;
-    private double textGap = 0.625;
-    private double arrowSize = 1.0;
-    private double lineExtension = 0.625;
-    private double lineOffset = 0.625;
+public class DwgDimStyle extends AbstractDwgTableRecord {
+    private final Map<String, Object> variables = new LinkedHashMap<>();
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.DIMSTYLE; }
 
-    @Override
-    public boolean isEntity() { return false; }
+    /** All dimension variables read from the file. */
+    public Map<String, Object> variables() { return Collections.unmodifiableMap(variables); }
 
-    public String name() { return name; }
-    public double textHeight() { return textHeight; }
-    public double textGap() { return textGap; }
-    public double arrowSize() { return arrowSize; }
-    public double lineExtension() { return lineExtension; }
-    public double lineOffset() { return lineOffset; }
+    /** The value of one variable, or {@code null} when the file does not hold it. */
+    public Object get(String name) { return variables.get(name); }
 
-    public void setName(String name) { this.name = name; }
-    public void setTextHeight(double height) { this.textHeight = height; }
-    public void setTextGap(double gap) { this.textGap = gap; }
-    public void setArrowSize(double size) { this.arrowSize = size; }
-    public void setLineExtension(double ext) { this.lineExtension = ext; }
-    public void setLineOffset(double offset) { this.lineOffset = offset; }
+    public void set(String name, Object value) { variables.put(name, value); }
+
+    /** DIMTXT */
+    public double textHeight() { return number("DIMTXT", 0.18); }
+    /** DIMGAP */
+    public double textGap() { return number("DIMGAP", 0.09); }
+    /** DIMASZ */
+    public double arrowSize() { return number("DIMASZ", 0.18); }
+    /** DIMEXE */
+    public double lineExtension() { return number("DIMEXE", 0.18); }
+    /** DIMEXO */
+    public double lineOffset() { return number("DIMEXO", 0.0625); }
+    /** DIMSCALE */
+    public double scale() { return number("DIMSCALE", 1.0); }
+
+    private double number(String name, double otherwise) {
+        Object value = variables.get(name);
+        return value instanceof Number ? ((Number) value).doubleValue() : otherwise;
+    }
 }

@@ -1,7 +1,6 @@
 package io.dwg.sections.objects.readers;
 
 import io.dwg.core.io.BitStreamReader;
-import io.dwg.core.type.CmColor;
 import io.dwg.core.type.DwgHandleRef;
 import io.dwg.core.version.DwgVersion;
 import io.dwg.entities.DwgObject;
@@ -10,6 +9,18 @@ import io.dwg.entities.concrete.DwgLayer;
 import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
 
+/**
+ * LAYER (type 51), spec §20.4.54.
+ * <pre>
+ *   name TV, table record flags,
+ *   R13–R14 frozen B, off B, frozen in new viewports B, locked B
+ *   R2000+  flags BS: 1 frozen, 2 off, 4 frozen in new viewports, 8 locked, 16 plotted,
+ *           0x03E0 lineweight
+ *   color CMC
+ *   handles: (control, reactors, xdictionary,) xref block, R2000+ plot style, R2007+ material,
+ *            linetype, R2013+ one more handle (null)
+ * </pre>
+ */
 public class LayerObjectReader implements ObjectReader {
 
     @Override
@@ -21,9 +32,7 @@ public class LayerObjectReader implements ObjectReader {
     @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgLayer layer = (DwgLayer) target;
-        layer.setName(r.readVariableText());
-        // 테이블 레코드 공통 플래그
-        EntityHeaderReader.readTableRecordFlags(r, v);
+        EntityHeaderReader.readTableRecordName(r, v, layer);
 
         if (v.from(DwgVersion.R2000)) {
             int flags = r.readBitShort();
@@ -32,6 +41,8 @@ public class LayerObjectReader implements ObjectReader {
             layer.setOn((flags & 0x02) == 0);
             layer.setFrozenInNewViewports((flags & 0x04) != 0);
             layer.setLocked((flags & 0x08) != 0);
+            layer.setPlotted((flags & 0x10) != 0);
+            layer.setLineWeight((flags & 0x03E0) >> 5);
         } else {
             // R13/R14 : frozen, off, frozen in new viewports, locked (B each).
             // The second bit is set when the layer is switched off (checked against the R2000 files).
@@ -41,24 +52,14 @@ public class LayerObjectReader implements ObjectReader {
             layer.setLocked(r.getInput().readBit());
         }
 
-        int[] colorData = r.readCmColor();
-        int colorIndex = colorData[0];
-        if (colorData.length > 1) {
-            // R2004+ : 인덱스 필드는 쓰이지 않고, RGB 값의 최상위 바이트가 색 지정 방식이다.
-            // 0xC3이면 하위 바이트가 색상 인덱스이다. (R2004 파일로 확인, 그 밖의 방식은 확인하지 않음)
-            int method = (colorData[1] >>> 24) & 0xFF;
-            if (method == 0xC3) {
-                colorIndex = colorData[1] & 0xFF;
-            }
-        }
-        layer.setColor(new CmColor(colorIndex));
+        layer.setColor(Colors.of(r.readCmColor()));
     }
 
     @Override
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgLayer layer = (DwgLayer) target;
         long self = target.handle();
-        r.readHandleReference(self);                // xref block (null)
+        layer.setXrefBlockHandle(new DwgHandleRef(r.readHandleReference(self)));
         if (v.from(DwgVersion.R2000)) {
             layer.setPlotStyleHandle(new DwgHandleRef(r.readHandleReference(self)));
         }
@@ -66,5 +67,10 @@ public class LayerObjectReader implements ObjectReader {
             r.readHandleReference(self);            // material
         }
         layer.setLineTypeHandle(new DwgHandleRef(r.readHandleReference(self)));
+        if (v.from(DwgVersion.R2013)) {
+            // The specification lists an unknown handle that "always seems to be NULL" for all
+            // versions. In the samples only R2013+ layers have it, and it is null in all 534.
+            r.readHandleReference(self);
+        }
     }
 }

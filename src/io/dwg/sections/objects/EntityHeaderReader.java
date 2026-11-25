@@ -3,6 +3,7 @@ package io.dwg.sections.objects;
 import io.dwg.core.io.BitInput;
 import io.dwg.core.io.BitStreamReader;
 import io.dwg.core.version.DwgVersion;
+import io.dwg.entities.AbstractDwgTableRecord;
 
 /**
  * Reads the common start of objects and entities, after the object type.
@@ -23,6 +24,9 @@ import io.dwg.core.version.DwgVersion;
  */
 public class EntityHeaderReader {
 
+    /** The bit of the R2007+ table record flags that marks an xref-dependent record. */
+    private static final int XREF_DEPENDENT_R2007 = 256;
+
     /** Reads the object data size (R2000–R2007), the handle and the EED. */
     public static void readEntityHeader(BitStreamReader r, DwgVersion v) throws Exception {
         BitInput input = r.getInput();
@@ -31,17 +35,22 @@ public class EntityHeaderReader {
             header.bitSize = readRawLong(input) & 0xFFFFFFFFL;
         }
         readHandle(input);
-        skipExtendedData(r);
+        readExtendedData(r, header);
     }
 
-    /** EED (chapter 28): BS length, application handle, then length bytes; ends at length 0. */
-    private static void skipExtendedData(BitStreamReader r) {
+    /**
+     * EED (chapter 28): BS length, application handle, then length bytes; ends at length 0.
+     * The bytes are kept in {@link ObjectHeaderData#extendedData} and decoded later.
+     */
+    private static void readExtendedData(BitStreamReader r, ObjectHeaderData header) {
         BitInput input = r.getInput();
         for (int length = r.readBitShort(); length > 0 && length <= 0x7FFF; length = r.readBitShort()) {
-            readHandle(input);
+            long appHandle = r.readHandleReference(0);
+            byte[] data = new byte[length];
             for (int i = 0; i < length; i++) {
-                input.readBits(8);
+                data[i] = (byte) input.readBits(8);
             }
+            header.extendedData.add(new ObjectHeaderData.ExtendedData(appHandle, data));
         }
     }
 
@@ -64,18 +73,28 @@ public class EntityHeaderReader {
 
     /**
      * Reads the flags after the name of a table record (LAYER, BLOCK_HEADER, ...). Spec
-     * (e.g. §20.4.54): 64-flag (B), xref index + 1 (BS), xdep (B). R2007+ files hold only the
-     * BS (with 256 meaning xdep). The specification does not describe this; read as it
-     * describes, the R2007+ samples no longer agree with their R2000 counterparts.
+     * (e.g. §20.4.54): 64-flag (B), xref index + 1 (BS), xdep (B). R2007+ files hold only one
+     * BS, which the specification does not describe; read as it describes, the R2007+ samples no
+     * longer agree with their R2000 counterparts. Measured on the samples: the BS is 256 for
+     * each of the 78 xref-dependent records (names with '|', an xref block handle) and 0 for all
+     * others, also for those whose R2000 copy has the 64-flag set. So R2007+ files give only the
+     * xref-dependent flag; the 64-flag is false and the xref index -1 there.
      */
-    public static void readTableRecordFlags(BitStreamReader r, DwgVersion v) throws Exception {
+    public static void readTableRecordFlags(BitStreamReader r, DwgVersion v, AbstractDwgTableRecord record) {
         if (v.from(DwgVersion.R2007)) {
-            r.readBitShort();
+            int flags = r.readBitShort();
+            record.setXrefDependent((flags & XREF_DEPENDENT_R2007) != 0);
             return;
         }
-        r.getInput().readBit();
-        r.readBitShort();
-        r.getInput().readBit();
+        record.setReferenced(r.getInput().readBit());
+        record.setXrefIndex(r.readBitShort() - 1);
+        record.setXrefDependent(r.getInput().readBit());
+    }
+
+    /** Reads the name (TV) of a table record and the flags that follow it. */
+    public static void readTableRecordName(BitStreamReader r, DwgVersion v, AbstractDwgTableRecord record) {
+        record.setName(r.readVariableText());
+        readTableRecordFlags(r, v, record);
     }
 
     /**

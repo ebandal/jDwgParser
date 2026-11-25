@@ -30,4 +30,6 @@ public abstract class AbstractDwgObject implements DwgObject {
     public void addReactorHandle(DwgHandleRef h) { this.reactorHandles.add(h); }
     public void setXDicHandle(DwgHandleRef xDicHandle) { this.xDicHandle = xDicHandle; }
     public void addXData(XDataRecord record) { this.xData.add(record); }
+    /** Replaces each XData record by what {@code change} returns for it. */
+    public void replaceXData(java.util.function.UnaryOperator<XDataRecord> change) { this.xData.replaceAll(change); }
 }
