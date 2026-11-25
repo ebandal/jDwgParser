@@ -41,122 +41,32 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         this.resolver = ObjectTypeResolver.defaultResolver(this.classRegistry);
     }
 
+    /**
+     * Reads every object the object map (AcDb:Handles) points to. The offsets are byte offsets
+     * into the objects data: absolute file addresses for R13–R2000, offsets into AcDb:AcDbObjects
+     * for R2004+ (spec §23).
+     */
     @Override
     public Map<Long, DwgObject> parse(SectionInputStream stream, DwgVersion version) throws Exception {
         Map<Long, DwgObject> result = new HashMap<>();
-
-        boolean useSequentialParsing = false;
-
-        if (handles != null && !handles.allHandles().isEmpty() && version.from(DwgVersion.R2007)) {
-            byte[] raw = stream.rawBytes();
-            long outOfRangeCount = 0;
-
-            for (long h : handles.allHandles()) {
-                var offset = handles.offsetFor(h);
-                if (offset.isPresent()) {
-                    long off = offset.get();
-                    if (off < 0 || off >= raw.length) outOfRangeCount++;
-                }
-            }
-
-            double invalidRatio = (double) outOfRangeCount / handles.allHandles().size();
-            if (invalidRatio > 0.2) {
-                useSequentialParsing = true;
-            }
+        if (handles == null) {
+            return result;
         }
-
-        if (!useSequentialParsing && handles != null && !handles.allHandles().isEmpty()) {
-            byte[] raw = stream.rawBytes();
-
-            for (Map.Entry<Long, Long> entry : sortedHandleOffsets()) {
-                long handle = entry.getKey();
-                long offset = entry.getValue();
-
-                if (offset < 0 || offset >= raw.length) {
-                    continue;
-                }
-
-                try {
-                    DwgObject obj = parseObjectAt(raw, (int) offset, version, handle);
-                    if (obj != null) {
-                        result.put(handle, obj);
-                    }
-                } catch (Exception e) {
-                    // Silently skip failed objects
-                }
-            }
-        } else {
-            result = parseStreaming(stream, version);
-        }
-
-        return result;
-    }
-
-    private Map<Long, DwgObject> parseStreaming(SectionInputStream stream, DwgVersion version) throws Exception {
-        Map<Long, DwgObject> result = new HashMap<>();
         byte[] raw = stream.rawBytes();
-        long nextHandle = 1;
-        long bitOffset = 0;
-
-        // Create buffer once and seek per iteration — ByteBuffer.wrap() loses the offset
-        // because the ByteBufferBitInput constructor calls buffer.position(0).
-        ByteBufferBitInput bbuf = new ByteBufferBitInput(raw);
-
-        while (bitOffset < (long)(raw.length - 6) * 8L) {
-            long startBitOffset = bitOffset;
+        for (Map.Entry<Long, Long> entry : sortedHandleOffsets()) {
+            long offset = entry.getValue();
+            if (offset < 0 || offset >= raw.length) {
+                continue;
+            }
             try {
-                bbuf.seek(bitOffset);
-                BitStreamReader r = new BitStreamReader(bbuf, version);
-                r.setTextCharset(textCharset);
-
-                // MS: entity length in bytes, not counting itself or the CRC (spec §20.4.1)
-                int objSizeBytes = r.readModularShort();
-
-                // R2010+: UMC (handlestream_size in bits) comes between MS and type code.
-                // obj->address = dat->byte after UMC; next object at (obj->address + obj->size).
-                long handleStreamBits = -1;
-                if (version.from(DwgVersion.R2010)) {
-                    handleStreamBits = r.readUMC();
+                DwgObject obj = parseObjectAt(raw, (int) offset, version, entry.getKey());
+                if (obj != null) {
+                    result.put(entry.getKey(), obj);
                 }
-
-                // Bit position of obj->address (start of object data, after MS+UMC)
-                long objDataStartBit = bbuf.position();
-
-                if (objSizeBytes <= 0 || objSizeBytes > 0x40000) {
-                    bitOffset = startBitOffset + 16;
-                    continue;
-                }
-
-                // R2010+ uses BOT; pre-R2010 uses BS
-                int typeCode = version.from(DwgVersion.R2010) ? r.readBOT() : r.readBitShort();
-
-                if (typeCode < 0 || typeCode > 5000) {
-                    bitOffset = startBitOffset + 16;
-                    continue;
-                }
-
-                DwgObjectType type = resolveType(typeCode);
-                DwgObject obj = createObject(type);
-                if (obj == null) {
-                    // Next object starts at obj->address + obj->size (both in bytes → bits)
-                    bitOffset = objDataStartBit + (long)objSizeBytes * 8L;
-                    continue;
-                }
-
-                ((AbstractDwgObject) obj).setHandle(nextHandle);
-                ((AbstractDwgObject) obj).setRawTypeCode(typeCode);
-                readObjectData(obj, type, r, version, raw, objDataStartBit, objSizeBytes, handleStreamBits);
-
-                result.put(nextHandle, obj);
-                nextHandle++;
-
-                bitOffset = objDataStartBit + (long)objSizeBytes * 8L;
-
             } catch (Exception e) {
-                bitOffset = startBitOffset + 16;
+                // an object that cannot be read is left out
             }
         }
-
         return result;
     }
 
@@ -168,6 +78,11 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         return map.entrySet();
     }
 
+    /**
+     * Reads the object at {@code byteOffset} (spec §20.1, §20.2): MS object size in bytes
+     * (without the CRC), for R2010+ an unsigned modular char with the size of the handle stream
+     * in bits, then the object type (BS; R2010+ the bit-pair form of §2.12) and the data.
+     */
     private DwgObject parseObjectAt(byte[] raw, int byteOffset, DwgVersion version, long handle)
             throws Exception {
         ByteBufferBitInput buf = new ByteBufferBitInput(raw);
