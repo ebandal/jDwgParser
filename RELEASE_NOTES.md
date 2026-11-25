@@ -48,7 +48,7 @@ jDwgParser v0.1.0 is the first production release of a comprehensive Java-based 
 
 **Phase 9 Tier 3 - Critical Architectural Fix**
 
-Discovered and fixed a critical routing bug where R2010, R2013, and R2018 files were being processed by the R2007 file structure handler. LibreDWG analysis revealed that:
+Discovered and fixed a critical routing bug where R2010, R2013, and R2018 files were being processed by the R2007 file structure handler. Chapters 6 to 8 of the specification state that:
 
 - **R2007** is the ONLY version using Reed-Solomon(255,239) header encoding
 - **R2010, R2013, R2018** use R2004 file structure (XOR encryption + LZ77)
@@ -221,14 +221,11 @@ Initial investigation suggested the Reed-Solomon Berlekamp-Massey error correcti
 
 **Lesson learned**: Always verify input format before debugging algorithms. Algorithm bugs are often symptoms of data format mismatches.
 
-### libredwg Insights
+### Specification Notes
 
-Analysis of libredwg source code (version 0.12.5) revealed:
-1. File structure routing (decode.c:222-226)
-2. RS decoder disabled error correction (commented-out rs_decode_block call)
-3. XOR decryption applied as big-endian 4-byte chunks
-
-These insights guided the architecture fix.
+1. File structure routing: chapters 6 to 8 (R2010+ use the R2004 file structure)
+2. Reed-Solomon: section 5.13 (the data bytes are taken out of interleaved code words)
+3. R2004 header decryption: section 4.1
 
 ## Release Statistics
 

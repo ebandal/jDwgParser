@@ -69,39 +69,32 @@ In the `*.md` spec files:
 
 ## Investigation Priority for Uncertain Matters
 
-When implementation details are unclear, follow this **strict priority order**:
+This library is written **from the specification only** (clean-room), so that it can be offered under a
+commercial license. Never read, copy or port the source code of any other DWG implementation
+(open source or commercial), and do not cite one as a source.
+
+When implementation details are unclear, follow this order:
 
 ### 1️⃣ **Spec Document (PRIMARY)**
-- **First source:** OpenDesign Specification PDF (`doc/OpenDesign_Specification_for_.dwg_files.pdf`)
-- **Second source:** Project spec files (`01_dwg-core.md` through `05_dwg-api-and-test.md`)
-- **Third source:** Version comparison matrix in `03_dwg-sections.md`
-- **Action:** Read the relevant spec section (§ number), extract exact format/algorithm
-- **Time investment:** 30-60 minutes per uncertainty
-- **Outcome:** Authoritative understanding, document findings in project spec
+- **Source:** OpenDesign Specification PDF (`doc/OpenDesign_Specification_for_.dwg_files.pdf`;
+  `pdftotext -layout` gives searchable text)
+- **Action:** Read the relevant section (§ number) and implement the format or algorithm from it
+- **In code:** name the section in the comment, e.g. `// spec §20.4.85`
 
-### 2️⃣ **LibreDWG Source Code (SECONDARY)**
-- **When:** Spec is ambiguous or incomplete
-- **Where:** Local copy at `C:\workspace_ebandal\libredwg` (shared reference implementation)
-- **How to use:**
-  - Search for function handling the same structure (e.g., `decode_handles()`)
-  - Read the implementation logic
-  - Cross-reference with spec to understand intent
-  - Document the insight in project memory
-- **Time investment:** 20-40 minutes per lookup
-- **Outcome:** Proven working implementation, reference for edge cases
-- **Important:** DO NOT copy code directly; understand the logic and reimplement
-
-### 3️⃣ **Reverse Engineering (TERTIARY - Last Resort)**
-- **When:** Spec is silent AND LibreDWG has no equivalent code
+### 2️⃣ **Experiments on Sample Files (SECONDARY)**
+- **When:** The spec is ambiguous, silent, or contradicts itself
 - **How:**
-  1. Create binary analysis tool (hex dump, marker search)
-  2. Test on multiple sample files
-  3. Document patterns in memory
-  4. Verify against known-good data
-- **Time investment:** 1-2 hours, may fail
-- **Outcome:** Possible insight, often incomplete
-- **Risk:** High uncertainty, prone to false patterns
-- **Use sparingly:** Only when 1️⃣ and 2️⃣ are exhausted
+  1. Write the possible readings as variants
+  2. Run them over all sample files and measure which one decodes consistently
+     (sections byte-identical, objects ending at their stated bit size, versions rendering alike)
+  3. Keep the variant the files support, and say in the comment that the samples settled it
+- **If no sample can settle it:** keep the most plausible reading, mark it "not yet checked against a
+  file" in the comment, and add it to `TODO.md`
+
+### 3️⃣ **Published Literature (for general algorithms)**
+- Textbooks and papers may be used for algorithms that are not DWG-specific
+  (e.g. Reed-Solomon decoding: Lin & Costello, *Error Control Coding*; Berlekamp-Massey, Chien, Forney)
+- Implement from the description, not from someone else's code; cite the paper or book in the comment
 
 ---
 
@@ -116,57 +109,30 @@ When investigating uncertain matters, document the decision:
 What is the [exact technical detail]?
 
 ### Investigation Path
-1. ✅ Spec check: [Section X.Y mentions...]
-2. ✅ LibreDWG: [function name shows...]
-3. ❌ Reverse engineering: [not needed]
+1. Spec: [Section X.Y says...]
+2. Samples: [variant A vs B, what was measured, result]
 
 ### Decision
 [Final conclusion with confidence level]
 
 ### Reference
 - Spec §X.Y: [quote]
-- LibreDWG: [file:function]
-- Memory: [document link]
+- Measurement: [files, counts]
 ```
 
 ---
 
-## Key Examples from Phase 5 (R2000 Investigation)
+## Verifying a Rewrite
 
-### Example: "What is R2000 Objects Section Structure?"
-
-**Correct approach (used):**
-1. ✅ **Spec:** Read §3 (R13-R2000), §10 (Classes), §23 (Handles), §20 (Objects)
-   - Found: "Group A (R13~R2002): Classes/Handles/Objects in one section"
-   - Found: Handles use "RS_BE page_size" (big-endian!)
-   
-2. ✅ **LibreDWG:** Cross-check `decode_handles()`, `decode_objects()`
-   - Confirmed: PageSize reads as RS_BE (most significant byte first)
-   - Confirmed: Handle deltas use MC encoding
-   
-3. ❌ **Reverse engineering:** Not needed (Spec + LibreDWG sufficient)
-
-**Result:** Clear implementation path with 100% confidence
-
-### Anti-Pattern Example (Avoided)
-
-**Wrong approach (what we avoided):**
-1. ❌ **Reverse engineering first:** Binary analysis with `00 FF` marker search
-   - Result: False patterns, wasted 2+ hours
-   - Conclusion: "Structure unclear"
-   
-2. ❌ **Skip spec reading:** Too long, too abstract
-   - Result: Missed critical detail (RS_BE byte order)
-   
-3. ❌ **Ignore LibreDWG:** Wrote own code from scratch
-   - Result: Different algorithm, incompatible output
+When replacing an existing implementation, keep the old one temporarily and compare both on all
+sample files (byte for byte), fuzz the new one with random input, then delete the old copy.
 
 ---
 
 ## When to Write Memory Documents
 
 Use memory (`C:\Users\heesu\.claude\projects\*\memory\`) to record:
-- ✅ Investigation findings (what Spec/LibreDWG revealed)
+- ✅ Investigation findings (what the spec and the sample files revealed)
 - ✅ Design decisions (why we chose approach X over Y)
 - ✅ Critical insights (edge cases, version differences)
 - ❌ Do NOT record: day-to-day debugging, temporary analysis, dead ends

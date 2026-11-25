@@ -167,12 +167,7 @@ java -cp target/classes io.dwg.render.tool.RenderTest path/to/file.dwg out
 
 **문제**: R2010, R2013, R2018 파일이 0개 엔티티 추출 (완전 실패)
 
-**근본 원인**: libredwg를 참고한 결과, 파일 구조 라우팅에서 중대한 아키텍처 차이 발견
-```c
-// libredwg/src/decode.c:222-226
-VERSIONS (R_2007a, R_2007)  { return decode_R2007 (dat, dwg); }
-SINCE (R_2010b)             { return decode_R2004 (dat, dwg); }
-```
+**근본 원인**: 파일 구조 라우팅 오류. 스펙 6~8장에 따르면 R2010, R2013, R2018의 파일 헤더, 페이지 맵, 섹션 맵, 압축은 R2004와 같다.
 
 **발견**: R2010, R2013, R2018은 R2004 파일 구조 사용
 - R2007은 유일하게 Reed-Solomon(255,239) 헤더 암호화 사용
@@ -190,8 +185,7 @@ case R2007:
 ```
 
 **보너스 발견**: Reed-Solomon 디코더 단순화
-- libredwg는 RS 에러 정정 호출을 주석 처리
-- 디코더를 deinterleave 전용으로 단순화
+- 디코더를 스펙 §5.13의 deinterleave 전용으로 단순화 (샘플 R2007 데이터 블록 303,887개에 오류가 있는 블록이 없음)
 - 이전 Berlekamp-Massey 에러 정정 제거
 
 **결과**: 

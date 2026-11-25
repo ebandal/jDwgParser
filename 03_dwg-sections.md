@@ -743,7 +743,7 @@ Sentinel End (16 bytes)
 
 ## Handles Section 파싱 상세 (§23)
 
-⚠️ **중요:** libredwg 검증 결과, 모든 DWG 버전(R13~R2018)에서 동일한 구조 사용
+⚠️ **중요:** 스펙 §23 기준, 모든 DWG 버전(R13~R2018)에서 동일한 구조 사용 (샘플 파일로 확인)
 
 ### Object Map 인코딩 구조 (모든 버전)
 
@@ -828,7 +828,7 @@ for entry in entries:
 
 ## Objects Section 파싱 파이프라인 (§20)
 
-⚠️ **중요:** 모든 DWG 버전(R13~R2018)에서 Objects section은 **헤더 없이** 바이트 오프셋 0부터 객체 데이터가 시작됨 (libredwg 검증)
+⚠️ **중요:** 모든 DWG 버전(R13~R2018)에서 Objects section은 **헤더 없이** 바이트 오프셋 0부터 객체 데이터가 시작됨 (샘플 파일로 확인)
 - R13~R2002: 직접 Objects 데이터 (비트스트림)
 - R2004~R2018: LZ77 해제 후 동일한 구조 사용
 
