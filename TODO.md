@@ -13,11 +13,14 @@
   - [x] `format/r2007/R2007SectionMapParser` (스펙 §5.2). 페이지 수 상한 1,000을 없애고 남은 데이터 길이로 검사 (큰 파일에서 섹션이 잘리던 문제 방지)
   - [ ] R2007: 스펙 §5.2의 "0으로만 된 페이지는 파일에 쓰지 않는다" 규칙 처리 (페이지 데이터 오프셋으로 빈 페이지 채우기). 지금은 페이지를 이어 붙이기만 함
   - [ ] (선택) RS 오류 정정: 교재(Lin & Costello, *Error Control Coding*)와 Berlekamp-Massey·Chien·Forney 논문을 보고 직접 구현. 샘플 R2007 데이터 블록 303,887개에서 오류가 있는 블록은 0개였으므로 급하지 않음
-  - [x] `core/io/BitStreamReader`: 스펙 2장과 대조, 출처 주석을 스펙 절 번호로 교체. 쓰지 않는 `readBitDoubleWithDefault` 삭제
+  - [x] `core/io/BitStreamReader`: 스펙 2장을 보고 다시 작성. 쓰지 않는 `readBitDoubleWithDefault` 삭제
   - [ ] BLL(§2.4) 길이 읽는 방식을 실제 파일로 확인: 스펙은 3B라고 하지만 3B로는 1·3·4·5바이트를 표현할 수 없어 3비트 숫자로 읽고 있음. 샘플에는 이 값을 쓰는 엔티티(R2010+ 미리보기)가 없음
-  - [x] 파일 구조 처리기(R13·R2000·R2004·R2007 헤더, 섹션 로케이터, R2004 헤더 복호화): 스펙 §3.2·§4.1·§4.5·§5.2와 대조, 코드는 일치하고 주석만 교체. 중복이던 `R2007SectionMap` 삭제
-  - [x] `EntityHeaderReader`: 스펙 §20.4.1·§2.11·28장과 대조. 여러 줄 속성의 내장 MTEXT 건너뛰기(`skipMTextEmbedded`)는 스펙 §20.4.4·§20.4.46을 보고 새로 작성
-  - [x] TEXT·ATTRIB·ATTDEF·MTEXT·3DFACE·LWPOLYLINE·SPLINE 리더: 스펙과 대조. LWPOLYLINE에서 R2010+ 정점 ID를 건너뛰지 않아 폭 값을 잘못 읽던 버그를 스펙대로 수정
+  - [x] 파일 구조 처리기: R13~R2000 헤더(`R13FileHeaderReader`, §3.2), 섹션 로케이터(§3.2.6), R2004 헤더와 복호화(§4.1), R2007 헤더(§5.2)를 스펙을 보고 다시 작성. 중복이던 `R2007SectionMap`, 샘플에서 쓰이지 않던 R2004 페이지 순차 탐색 대체 경로 삭제
+  - [x] 객체 맵(`HandlesParsingUtil`, 23장): R13과 R2000+를 하나의 구현으로. 섹션마다 핸들·위치를 0부터 다시 세는 것이 맞음을 측정으로 확인 (한 번만 초기화하면 223만 → 10만 객체)
+  - [x] `ObjectsSectionParser`: 객체 시작 형식(§20.1) 주석 정리, 샘플에서 쓰이지 않던 순차 탐색 대체 경로 삭제
+  - [x] `EntityHeaderReader`: 스펙 §20.1·§20.2·§20.4.1·28장을 보고 다시 작성. R2007+ 테이블 레코드 플래그는 BS 하나뿐임을 측정으로 확인 (스펙대로 읽으면 R2007~R2018 버전 비교 테스트 4개 실패)
+  - [x] TEXT·ATTRIB·ATTDEF·MTEXT·3DFACE·LWPOLYLINE·SPLINE 리더: 스펙 §20.4를 보고 다시 작성. 버그 2건 수정: LWPOLYLINE R2010+ 정점 ID, R13 ATTDEF(R13 이전 형식으로 읽고 있었음)
+  - 검증 방법: 재작성마다 샘플 244개의 모든 객체 필드를 덤프해 변경 전과 비교 (스크립트는 `D:\workspace\jDwgParser-records`)
   - 저장소 파일에 다른 구현을 참고한 흔적 없음 (2026-11-25, git 이력 제외)
 - [ ] 스펙에 없거나 스펙과 다른데 샘플로 확인하지 못한 것 (확인할 파일이 필요함)
   - [ ] ENC 색상(R2004+): 투명도를 RGB보다 먼저 읽음. R2004~R2007에서 색상 핸들(0x40)을 본문 스트림에서 읽음 (스펙은 핸들 스트림). 샘플에 0x40이 있는 엔티티 71개, 투명도+RGB가 함께 있는 것 24개
@@ -25,13 +28,13 @@
   - [ ] LWPOLYLINE 정점 ID + 폭: 정점 ID가 있는 것은 6개지만 폭이 함께 있는 것은 없음
 - [x] 쓰지 않는 예전 패키지 삭제: `src/decode`, `src/structure`, `src/run`, `src/debug` (207개 파일)와 이를 쓰던 `src/test`의 예전 프로그램 4개
 - [x] 문서 정리: `CLAUDE.md`의 조사 원칙을 "스펙 → 샘플 실험 → 일반 알고리즘은 문헌"으로 바꾸고 다른 구현의 소스는 보지 않도록 함. `README.md`, `RELEASE_NOTES.md`, `03_dwg-sections.md`는 스펙 절과 측정값을 출처로. 루트의 작업 기록 문서 23개 삭제
-- [ ] 다시 작성하는 과정을 기록으로 남기기 (어떤 스펙 절을 보고 썼는지, 커밋 단위로)
+- [x] 다시 작성하는 과정을 기록으로 남기기: 비공개 기록부 `D:\workspace\jDwgParser-records\cleanroom-log.md`
 - [ ] 라이선스 변경: GPLv3 → **AGPLv3 + 상용 라이선스** (듀얼). 위의 포팅 코드를 모두 다시 쓴 뒤에 진행. 판매 전에 변호사 확인
 - [ ] 외부 기여를 받기 전에 CLA 준비
 
 ## P1 — 읽기 품질 (팔 수 있는 핵심)
 
-- [ ] EED(XData)를 버리지 않고 저장 (`EntityHeaderReader.java:47`)
+- [ ] EED(XData)를 버리지 않고 저장 (`EntityHeaderReader.skipExtendedData`)
 - [ ] 테이블 객체 필드를 모두 읽기: LTYPE(dash 배열), STYLE, DIMSTYLE, MLINESTYLE, xref 플래그
 - [ ] XRECORD 데이터, 3DSOLID/REGION/BODY의 ACIS 데이터 읽기 (적어도 원본 바이트를 보관)
 - [ ] MULTILEADER 리더 추가
@@ -48,7 +51,7 @@
 
 ## P3 — 도입하기 쉽게
 
-- [ ] 루트 정리: `PHASE_*.md`, `SESSION_*.md`, `test_*.java`, `Analyze*.java` 등을 지우거나 `doc/history`로 옮기기
+- [ ] 루트 정리: `test_*.java`, `Analyze*.java` 같은 작업용 파일 (작업 기록 문서는 정리함)
 - [ ] Java 11(가능하면 8)로 낮추기 검토 (지금은 16)
 - [ ] 공개 API 정리, 내부 패키지 숨기기, 5줄 빠른 시작 예제, Javadoc
 - [ ] Maven Central 배포
@@ -71,6 +74,7 @@
 - [ ] R2007 이상 페이지맵 오프셋을 추정이 아니라 계산으로
 - [ ] 테이블 객체 writer
 - [ ] 라운드트립 테스트
+- [ ] `R13SectionLocator.write`가 레코드 번호를 raw long으로 씀 (§3.2.6은 raw byte). `DwgWriter`의 헤더 크기 계산도 함께 고칠 것
 
 ## 렌더링에서 아직 안 되는 것
 
