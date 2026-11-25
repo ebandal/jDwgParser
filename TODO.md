@@ -13,7 +13,9 @@
   - [x] `format/r2007/R2007SectionMapParser` (스펙 §5.2). 페이지 수 상한 1,000을 없애고 남은 데이터 길이로 검사 (큰 파일에서 섹션이 잘리던 문제 방지)
   - [ ] R2007: 스펙 §5.2의 "0으로만 된 페이지는 파일에 쓰지 않는다" 규칙 처리 (페이지 데이터 오프셋으로 빈 페이지 채우기). 지금은 페이지를 이어 붙이기만 함
   - [ ] (선택) RS 오류 정정: 교재(Lin & Costello, *Error Control Coding*)와 Berlekamp-Massey·Chien·Forney 논문을 보고 직접 구현. 샘플 R2007 데이터 블록 303,887개에서 오류가 있는 블록은 0개였으므로 급하지 않음
-  - [ ] `core/io/BitStreamReader` (UMC, BOT, BLL), `sections/objects/EntityHeaderReader`, `sections/handles/HandlesParsingUtil` — 주석이 libredwg 함수를 출처로 적고 있음. 스펙 기준으로 다시 확인하고 출처 주석은 스펙 절 번호로 바꾼다
+  - [x] `core/io/BitStreamReader`: 스펙 2장과 대조, 출처 주석을 스펙 절 번호로 교체. 쓰지 않는 `readBitDoubleWithDefault` 삭제
+  - [ ] BLL(§2.4) 길이 읽는 방식을 실제 파일로 확인: 스펙은 3B라고 하지만 3B로는 1·3·4·5바이트를 표현할 수 없어 3비트 숫자로 읽고 있음. 샘플에는 이 값을 쓰는 엔티티(R2010+ 미리보기)가 없음
+  - [ ] `sections/objects/EntityHeaderReader`, `sections/handles/HandlesParsingUtil` — 주석이 libredwg 함수를 출처로 적고 있음. 스펙 기준으로 다시 확인하고 출처 주석은 스펙 절 번호로 바꾼다
   - [ ] 나머지 리더의 "per libredwg" 주석 정리 (필드 순서 같은 형식 정보는 스펙 절 번호로 출처를 바꾼다)
 - [ ] 쓰지 않는 예전 패키지 삭제: `src/decode`, `src/structure`, `src/run`, `src/debug` (207개 파일, `io.dwg`에서 쓰지 않음. `decode/util/ReedSolomon.java`는 libredwg 포팅이라고 적혀 있음)
 - [ ] 다시 작성하는 과정을 기록으로 남기기 (어떤 스펙 절을 보고 썼는지, 커밋 단위로)

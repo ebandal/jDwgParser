@@ -118,9 +118,9 @@ public class BitStreamReader {
     }
 
     /**
-     * R2010+ UMC (Unsigned Modular Count): variable-length unsigned integer.
-     * Each RC byte: bit7=continuation, bits6-0=7 value bits (LSB first across bytes).
-     * Equivalent to libredwg bit_read_UMC.
+     * Unsigned modular char (spec §2.6, without the negation): bytes, least significant first,
+     * each holding 7 value bits, with the high bit set while another byte follows. Reads at most
+     * 8 bytes. Used for the handle stream size of R2010+ objects.
      */
     public long readUMC() {
         long result = 0;
@@ -135,11 +135,8 @@ public class BitStreamReader {
     }
 
     /**
-     * R2010+ BOT (Bit Object Type): 2-bit BB + 8 or 16 bits.
-     * BB=00: type = next 8 bits (0-255)
-     * BB=01: type = next 8 bits + 0x1F0 (extended)
-     * BB=10/11: type = next 16 bits LE
-     * Equivalent to libredwg bit_read_BOT.
+     * Object type of R2010+ (spec §2.12): a bit pair, then
+     * 0: one byte; 1: one byte + 0x1F0; 2 (and 3): a raw short, little-endian.
      */
     public int readBOT() {
         int bb = input.readBits(2);
@@ -153,9 +150,12 @@ public class BitStreamReader {
     }
 
     /**
-     * §2.4: BitLongLong (BLL) 읽기
-     * 3-bit len = number of bytes to follow (LE). Per libredwg bit_read_BLL().
-     * len=0 → 0; len=1 → RC; len=2 → RS; len=4 → RL; others → len LE bytes.
+     * BitLongLong (spec §2.4): a byte count, then that many bytes, least significant first.
+     *
+     * <p>The specification says the count is a 3B (§2.1), but a 3B can only take the values
+     * 0, 2, 6 and 7, which cannot describe 1, 3, 4 or 5 bytes. The count is therefore read as a
+     * plain 3-bit number (0–7). Not yet checked against a file: none of the samples has a value
+     * read with this method (see TODO.md).
      */
     public long readBitLongLong() {
         int len = input.readBits(3);
@@ -167,9 +167,8 @@ public class BitStreamReader {
     }
 
     /**
-     * §2.5: BitDouble (BD) 읽기
-     * 2비트 opcode + 조건부 데이터
-     * opcode 00: 비트 스트림에서 정렬 없이 8바이트 읽기 (libredwg bit_read_RD 동일)
+     * BitDouble (spec §2.5): 2-bit code; 00: a raw double (8 bytes, not byte aligned),
+     * 01: 1.0, 10: 0.0, 11: not used.
      */
     public double readBitDouble() {
         int opcode = input.readBits(2);
@@ -183,26 +182,12 @@ public class BitStreamReader {
     }
 
     /**
-     * §2.9: BitDouble with Default (BDWMD) 읽기
-     */
-    public double readBitDoubleWithDefault(double def) {
-        int opcode = input.readBits(2);
-        switch (opcode) {
-            case 0b00: return readRawDoubleNoAlign();
-            case 0b01: return def;
-            case 0b10: return 0.0;
-            case 0b11: throw new IllegalStateException("Invalid BDWMD opcode 11");
-            default: throw new IllegalStateException();
-        }
-    }
-
-    /**
-     * DD (Default Double) 읽기 - libredwg bit_read_DD()
-     * 2비트 opcode:
-     *   00 = 기본값 반환
-     *   01 = 스트림에서 바이트[0-3] 읽기, 기본값 바이트[4-7] 유지
-     *   10 = 스트림에서 바이트 6개([4,5,0,1,2,3] 순서) 읽기, 기본값 바이트[6-7] 유지
-     *   11 = 전체 8바이트 읽기
+     * BitDouble With Default, DD (spec §2.9). 2-bit code, with the bytes of the default value
+     * taken little-endian:
+     *   00 = the default;
+     *   01 = 4 bytes follow and replace bytes 0–3 of the default;
+     *   10 = 6 bytes follow: the first 2 replace bytes 4–5, the last 4 replace bytes 0–3;
+     *   11 = a raw double follows.
      */
     public double readDD(double def) {
         int opcode = input.readBits(2);
@@ -244,8 +229,8 @@ public class BitStreamReader {
     }
 
     /**
-     * 비트 스트림에서 정렬 없이 RD (8바이트 IEEE 754) 읽기.
-     * libredwg bit_read_RD() - 비바이트정렬 시 bit_read_RC() 8회 호출과 동일.
+     * Raw double: 8 bytes of an IEEE 754 double, least significant first, read at the current
+     * bit position (bit streams are not byte aligned).
      */
     private double readRawDoubleNoAlign() {
         long bits = 0;
@@ -256,9 +241,9 @@ public class BitStreamReader {
     }
 
     /**
-     * §2.6: Modular Char (MC) 읽기 - Signed
-     * libredwg 호환 구현: high bit=계속 플래그, bit 6=부호 플래그 (최종 바이트만)
-     * 비트 레벨 읽기: 바이트 정렬을 강제하지 않음
+     * Modular char (spec §2.6): bytes, least significant first, 7 value bits each, the high bit
+     * set while another byte follows. In the last byte, bit 0x40 means the number is negative and
+     * is not part of the value. Read at the current bit position.
      */
     public int readModularChar() {
         int result = 0;
@@ -290,38 +275,31 @@ public class BitStreamReader {
     }
 
     /**
-     * UMC (Unsigned Modular Char) 읽기
-     * MC 인코딩이지만 부호는 없음 (항상 양수)
-     * 비트 레벨 읽기: 바이트 정렬을 강제하지 않음 (libredwg 호환)
+     * Modular char without negation, as used for handle offsets in the object map (spec §2.6,
+     * last paragraph). Read at the current bit position.
      */
     public int readUnsignedModularChar() {
         int result = 0;
         int shift = 0;
         int b;
-        boolean debug = false;  // Toggle for debugging
-        if (debug) System.out.printf("[DEBUG UMC] Start reading at pos %d\n", input.position());
         do {
-            b = input.readBits(8) & 0xFF;  // 비트 레벨: 정렬 강제 없음
-            if (debug) System.out.printf("[DEBUG UMC]   byte[%d] = 0x%02X (high=%d, value=0x%02X)\n",
-                shift, b, (b & 0x80) >> 7, b & 0x7F);
+            b = input.readBits(8) & 0xFF;
             result |= (b & 0x7F) << (shift * 7);
             shift++;
         } while ((b & 0x80) != 0);
-        if (debug) System.out.printf("[DEBUG UMC] Result = 0x%X (%d)\n", result, result);
         return result;
     }
 
     /**
-     * §2.7: Modular Short (MS) 읽기
-     * RS (Raw Short)는 LE16 포맷 — libredwg bit_read_MS 참조.
-     * MS는 항상 양수(sign bit 없음). libredwg BITCODE_MS = uint32_t.
+     * Modular short (spec §2.7): like a modular char, but in units of little-endian shorts with
+     * 15 value bits each and the high bit set while another short follows. Never negative.
      */
     public int readModularShort() {
         int result = 0;
         int shift = 0;
         int w;
         do {
-            // LE16: low byte first, then high byte (matches libredwg bit_read_RS)
+            // little-endian: low byte first
             int lo = input.readBits(8) & 0xFF;
             int hi = input.readBits(8) & 0xFF;
             w = lo | (hi << 8);
@@ -492,10 +470,7 @@ public class BitStreamReader {
         return new double[]{readBitDouble(), readBitDouble(), readBitDouble()};
     }
 
-    /**
-     * RD (Raw Double) 읽기 — 비트 스트림에서 정렬 없이 8바이트.
-     * libredwg bit_read_RD() 비바이트정렬 동작과 동일.
-     */
+    /** Raw double (RD): 8 bytes, least significant first, at the current bit position. */
     public double readRawDouble() {
         return readRawDoubleNoAlign();
     }
