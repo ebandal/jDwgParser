@@ -27,71 +27,21 @@ public class R13FileStructureHandler extends AbstractFileStructureHandler {
 
     @Override
     public FileHeaderFields readHeader(BitInput input) throws Exception {
+        R13FileHeaderReader.Header h = R13FileHeaderReader.read(input, id -> id.startsWith("AC101"), "R13");
+
         FileHeaderFields fields = new FileHeaderFields(DwgVersion.R13);
+        fields.setPreviewOffset(h.imageSeeker);
+        fields.setMaintenanceVersion(h.maintenanceVersion);
+        fields.setCodePage(h.codePage);
 
-        // R13/R14 file header (spec §3.2)
-        // 0x00-0x05: Version string (6 바이트)
-        // 0x06-0x0B: Reserved (6 바이트)
-        // 0x0C 이후: Header fields 시작
-
-        // 1. Version string (6 바이트): AC1012, AC1013, 또는 AC1014
-        byte[] versionBytes = new byte[6];
-        for (int i = 0; i < 6; i++) {
-            versionBytes[i] = (byte) input.readRawChar();
-        }
-        String version = new String(versionBytes, java.nio.charset.StandardCharsets.US_ASCII);
-        if (!version.startsWith("AC101")) {
-            throw new IllegalArgumentException("Invalid R13 version string: " + version);
-        }
-
-        // 2. Reserved (5 바이트): spec §3.2.1, zeros (R14: the last of the six is ACADMAINTVER)
-        for (int i = 0; i < 5; i++) {
-            input.readRawChar();
-        }
-
-        // 3. RC (1 바이트): maint_rel_version (byte 11, per header.spec)
-        input.readRawChar();
-
-        // 4. RC (1 바이트): zero_one_or_three (byte 12)
-        input.readRawChar();
-
-        // 5. RL (4 바이트): thumbnail_address (bytes 13-16)
-        int thumbnailAddress = input.readRawLong();
-        fields.setPreviewOffset(thumbnailAddress & 0xFFFFFFFFL);
-
-        // 6. RC (1 바이트): dwg_version (byte 17)
-        input.readRawChar();
-
-        // 7. RC (1 바이트): maint_version (byte 18)
-        int maintVersion = input.readRawChar();
-        fields.setMaintenanceVersion(maintVersion);
-
-        // 8. RS (2 바이트): codepage (bytes 19-20)
-        short codePage = input.readRawShort();
-        fields.setCodePage(codePage & 0xFFFF);
-
-        // 9. RL (4 바이트): number of section-locator records at 0x15 (spec §3.2.6)
-        int sectionCount = input.readRawLong();
-
-        // 9. 섹션 Locator 배열 읽기
-        java.util.List<R13SectionLocator> locators = new java.util.ArrayList<>();
         Map<String, Long> offsets = new HashMap<>();
         Map<String, Long> sizes = new HashMap<>();
-
-        for (int i = 0; i < sectionCount; i++) {
-            R13SectionLocator locator = R13SectionLocator.read(input);
-            locators.add(locator);
-            String sectionName = locator.toSectionName();
-            offsets.put(sectionName, locator.seeker());
-            sizes.put(sectionName, locator.size());
+        for (R13SectionLocator locator : h.locators) {
+            offsets.put(locator.toSectionName(), locator.seeker());
+            sizes.put(locator.toSectionName(), locator.size());
         }
-
         fields.setSectionOffsets(offsets);
         fields.setSectionSizes(sizes);
-
-        // 10. RS (2 바이트): CRC 검증 (섹션 locators 이후)
-        input.readRawShort();
-
         return fields;
     }
 
