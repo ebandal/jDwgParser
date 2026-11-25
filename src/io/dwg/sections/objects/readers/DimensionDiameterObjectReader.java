@@ -1,44 +1,20 @@
 package io.dwg.sections.objects.readers;
 
 import io.dwg.core.io.BitStreamReader;
-import io.dwg.core.type.Point3D;
 import io.dwg.core.version.DwgVersion;
-import io.dwg.entities.DwgObject;
+import io.dwg.entities.AbstractDwgDimension;
 import io.dwg.entities.DwgObjectType;
-import io.dwg.entities.concrete.DwgDimensionDiameter;
-import io.dwg.sections.objects.EntityHeaderReader;
-import io.dwg.sections.objects.ObjectReader;
-import io.dwg.core.type.DwgHandleRef;
-import io.dwg.entities.DwgDimension;
 
-public class DimensionDiameterObjectReader implements ObjectReader {
+/** DIMENSION_DIAMETER, spec §20.4.29: 15, 10 points (3BD), leader length BD. */
+public class DimensionDiameterObjectReader extends AbstractDimensionReader {
+
     @Override
     public int objectType() { return DwgObjectType.DIMENSION_DIAMETER.typeCode(); }
 
     @Override
-    public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
-        EntityHeaderReader.readEntityHeader(r, v);
-        EntityHeaderReader.readCommonEntityData(r, v);
-
-        DwgDimensionDiameter dim = (DwgDimensionDiameter) target;
-        double[] pt = r.read3RawDouble();
-        dim.setDefinitionPoint(new Point3D(pt[0], pt[1], pt[2]));
-        double[] mpt = r.read3RawDouble();
-        dim.setMidpointOfText(new Point3D(mpt[0], mpt[1], mpt[2]));
-        String text = r.readVariableText();
-        dim.setText(text);
-        double textRotation = r.readBitDouble();
-        dim.setTextRotation(textRotation);
-        double insertionScale = r.readBitDouble();
-        dim.setInsertionScale(insertionScale);
-        String dimensionStyleName = r.readVariableText();
-        dim.setDimensionStyleName(dimensionStyleName);
-    }
-
-    @Override
-    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
-        DwgDimension dim = (DwgDimension) target;
-        dim.setDimStyleHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
-        dim.setBlockHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
+    protected void readTypeFields(AbstractDwgDimension dim, BitStreamReader r, DwgVersion v, double elevation) {
+        dim.setPoint15(point(r));
+        dim.setPoint10(point(r));
+        dim.setLeaderLength(r.readBitDouble());
     }
 }

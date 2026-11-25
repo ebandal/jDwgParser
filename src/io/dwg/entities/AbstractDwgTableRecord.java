@@ -42,6 +42,16 @@ public abstract class AbstractDwgTableRecord extends AbstractDwgObject implement
     /** The block of the xref this record came from; a null handle when there is none. */
     public DwgHandleRef xrefBlockHandle() { return xrefBlockHandle; }
 
+    protected double doubleValue(String name, double otherwise) {
+        Object v = value(name);
+        return v instanceof Number ? ((Number) v).doubleValue() : otherwise;
+    }
+
+    protected io.dwg.core.type.Point3D pointValue(String name) {
+        Object v = value(name);
+        return v instanceof io.dwg.core.type.Point3D ? (io.dwg.core.type.Point3D) v : null;
+    }
+
     public void setName(String name) { this.name = name == null ? "" : name; }
     public void setReferenced(boolean referenced) { this.referenced = referenced; }
     public void setXrefIndex(int xrefIndex) { this.xrefIndex = xrefIndex; }

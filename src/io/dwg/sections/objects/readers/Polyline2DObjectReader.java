@@ -2,6 +2,7 @@ package io.dwg.sections.objects.readers;
 
 import io.dwg.core.io.BitStreamReader;
 import io.dwg.core.version.DwgVersion;
+import io.dwg.entities.AbstractDwgPolyline;
 import io.dwg.entities.DwgObject;
 import io.dwg.entities.DwgObjectType;
 import io.dwg.entities.concrete.DwgPolyline2D;
@@ -31,8 +32,11 @@ public class Polyline2DObjectReader implements ObjectReader {
         polyline.setThickness(r.readBitThickness());
         polyline.setElevation(r.readBitDouble());
         polyline.setExtrusion(r.readBitExtrusion());
-        if (v.from(DwgVersion.R2004)) {
-            r.readBitLong();                    // owned object count
-        }
+        PolylineHandles.readOwnedCount(polyline, r, v);
+    }
+
+    @Override
+    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
+        PolylineHandles.read((AbstractDwgPolyline) target, r, v);
     }
 }

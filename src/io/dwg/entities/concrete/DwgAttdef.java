@@ -21,6 +21,7 @@ public class DwgAttdef extends AbstractDwgEntity {
     private double widthFactor;      // 가로 배율
     private double obliquingAngle;   // 기울기각
     private String styleName;        // 스타일명
+    private io.dwg.core.type.DwgHandleRef styleHandle;
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.ATTDEF; }
@@ -37,6 +38,9 @@ public class DwgAttdef extends AbstractDwgEntity {
     public double widthFactor() { return widthFactor; }
     public double obliquingAngle() { return obliquingAngle; }
     public String styleName() { return styleName; }
+    /** The STYLE record (DXF 7). */
+    public io.dwg.core.type.DwgHandleRef styleHandle() { return styleHandle; }
+    public void setStyleHandle(io.dwg.core.type.DwgHandleRef h) { this.styleHandle = h; }
 
     public void setInsertionPoint(Point3D insertionPoint) { this.insertionPoint = insertionPoint; }
     public void setTag(String tag) { this.tag = tag; }

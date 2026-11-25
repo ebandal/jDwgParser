@@ -19,6 +19,13 @@ public interface ObjectReader {
     default boolean readsOwnHeader() { return true; }
 
     /**
+     * Whether this reader reads the whole data of the object. When it does not (types the
+     * specification does not describe), the parser keeps the object's bytes and does not report
+     * the unread rest.
+     */
+    default boolean readsAllData() { return true; }
+
+    /**
      * 핸들 스트림에서 이 타입 고유의 핸들을 읽는다.
      * 파서가 공통 핸들(소유자, 리액터, 확장 사전, 엔티티의 레이어 등)을 읽은 다음 위치에서 호출한다.
      * 상대 핸들은 {@link BitStreamReader#readHandleReference(long)}에 {@code target.handle()}을 넘겨 푼다.

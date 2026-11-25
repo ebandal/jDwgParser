@@ -32,4 +32,26 @@ public class DwgMLine extends AbstractDwgEntity {
     public void setJustification(int justification) { this.justification = justification; }
     public void addVertex(Point3D vertex) { this.vertices.add(vertex); }
     public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+
+    /**
+     * A vertex of the multiline: its point, direction and miter direction, and for each line of
+     * the style the segment parameters and the area fill parameters.
+     */
+    public record Vertex(Point3D point, Point3D direction, Point3D miter,
+                         List<double[]> segmentParameters, List<double[]> areaFillParameters) {
+    }
+
+    private final List<Vertex> vertexData = new ArrayList<>();
+    private int openClosed;
+    private io.dwg.core.type.DwgHandleRef mlineStyleHandle;
+
+    public List<Vertex> vertexData() { return java.util.Collections.unmodifiableList(vertexData); }
+    /** 1 open, 3 closed. */
+    public int openClosed() { return openClosed; }
+    /** The MLINESTYLE. */
+    public io.dwg.core.type.DwgHandleRef mlineStyleHandle() { return mlineStyleHandle; }
+
+    public void addVertexData(Vertex v) { vertexData.add(v); }
+    public void setOpenClosed(int v) { this.openClosed = v; }
+    public void setMlineStyleHandle(io.dwg.core.type.DwgHandleRef h) { this.mlineStyleHandle = h; }
 }

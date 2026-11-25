@@ -1,7 +1,7 @@
 package io.dwg.entities.concrete;
 
 import io.dwg.core.type.Point3D;
-import io.dwg.entities.AbstractDwgEntity;
+import io.dwg.entities.AbstractDwgPolyline;
 import io.dwg.entities.DwgObjectType;
 
 import java.util.ArrayList;
@@ -12,7 +12,7 @@ import java.util.List;
  * 2D 폴리라인 (여러 선분의 연결)
  * VERTEX_2D 객체들의 컨테이너
  */
-public class DwgPolyline2D extends AbstractDwgEntity {
+public class DwgPolyline2D extends AbstractDwgPolyline {
     private List<Point3D> vertices = new ArrayList<>();
     private int flags;  // 닫힘, 곡선 필 등의 플래그
     private double defaultStartWidth;

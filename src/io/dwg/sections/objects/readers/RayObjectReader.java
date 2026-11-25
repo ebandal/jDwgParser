@@ -10,8 +10,8 @@ import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
 
 /**
- * RAY 엔티티 리더 (타입 0x28)
- * 시작점과 방향으로 정의된 반무한 선
+ * RAY (type 40), spec §20.4.42: the common entity data, a point (3BD) and a
+ * direction vector (3BD).
  */
 public class RayObjectReader implements ObjectReader {
 
@@ -24,13 +24,9 @@ public class RayObjectReader implements ObjectReader {
         EntityHeaderReader.readCommonEntityData(r, v);
 
         DwgRay ray = (DwgRay) target;
-
-        // 시작점 (3D, 압축됨)
-        double[] start = r.read3RawDouble();
-        ray.setStart(new Point3D(start[0], start[1], start[2]));
-
-        // 방향 벡터 (3D, 단위 벡터)
-        double[] direction = r.read3RawDouble();
-        ray.setDirection(new Point3D(direction[0], direction[1], direction[2]));
+        double[] point = r.read3BitDouble();
+        ray.setStart(new Point3D(point[0], point[1], point[2]));
+        double[] vector = r.read3BitDouble();
+        ray.setDirection(new Point3D(vector[0], vector[1], vector[2]));
     }
 }

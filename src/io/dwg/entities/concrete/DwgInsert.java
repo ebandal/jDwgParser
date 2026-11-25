@@ -20,6 +20,8 @@ public class DwgInsert extends AbstractDwgEntity {
     private DwgHandleRef firstAttribHandle;
     private DwgHandleRef lastAttribHandle;
     private DwgHandleRef seqendHandle;
+    private int ownedObjectCount;
+    private final java.util.List<DwgHandleRef> attribHandles = new java.util.ArrayList<>();
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.INSERT; }
@@ -35,6 +37,10 @@ public class DwgInsert extends AbstractDwgEntity {
     public DwgHandleRef firstAttribHandle() { return firstAttribHandle; }
     public DwgHandleRef lastAttribHandle() { return lastAttribHandle; }
     public DwgHandleRef seqendHandle() { return seqendHandle; }
+    /** R2004+: the number of ATTRIBs the insert owns. */
+    public int ownedObjectCount() { return ownedObjectCount; }
+    /** R2004+: the ATTRIBs, in order. Earlier files give only the first and the last. */
+    public java.util.List<DwgHandleRef> attribHandles() { return java.util.Collections.unmodifiableList(attribHandles); }
 
     public void setInsertionPoint(Point3D p) { this.insertionPoint = p; }
     public void setXScale(double v) { this.xScale = v; }
@@ -47,4 +53,6 @@ public class DwgInsert extends AbstractDwgEntity {
     public void setFirstAttribHandle(DwgHandleRef h) { this.firstAttribHandle = h; }
     public void setLastAttribHandle(DwgHandleRef h) { this.lastAttribHandle = h; }
     public void setSeqendHandle(DwgHandleRef h) { this.seqendHandle = h; }
+    public void setOwnedObjectCount(int n) { this.ownedObjectCount = n; }
+    public void addAttribHandle(DwgHandleRef h) { this.attribHandles.add(h); }
 }

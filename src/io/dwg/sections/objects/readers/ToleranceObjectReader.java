@@ -1,6 +1,7 @@
 package io.dwg.sections.objects.readers;
 
 import io.dwg.core.io.BitStreamReader;
+import io.dwg.core.type.DwgHandleRef;
 import io.dwg.core.type.Point3D;
 import io.dwg.core.version.DwgVersion;
 import io.dwg.entities.DwgObject;
@@ -10,8 +11,10 @@ import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
 
 /**
- * TOLERANCE 엔티티 리더 (타입 0x2E)
- * 공차 기하공차 표시
+ * TOLERANCE (type 46), spec §20.4.49: R13–R14 unknown BS, height BD, dimgap BD (in the values
+ * HEIGHT, DIMGAP); insertion point 3BD, x direction 3BD, extrusion 3BD, text TV; handle: DIMSTYLE
+ * (in the values). The specification gives the text as BS; it is a TV. The R13–R14 "unknown
+ * short" is a BS (read as a raw short, the R13 and R14 samples fail; as a BS they end exactly).
  */
 public class ToleranceObjectReader implements ObjectReader {
     @Override
@@ -21,23 +24,20 @@ public class ToleranceObjectReader implements ObjectReader {
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         EntityHeaderReader.readEntityHeader(r, v);
         EntityHeaderReader.readCommonEntityData(r, v);
-
         DwgTolerance tolerance = (DwgTolerance) target;
+        if (!v.from(DwgVersion.R2000)) {
+            r.readBitShort();                      // unknown
+            Fields.read(tolerance, r, "HEIGHT BD", "DIMGAP BD");
+        }
+        double[] p = r.read3BitDouble();
+        tolerance.setInsertionPoint(new Point3D(p[0], p[1], p[2]));
+        tolerance.setDirection(r.read3BitDouble());
+        Fields.read(tolerance, r, "EXTRUSION 3BD");
+        tolerance.setToleranceText(r.readVariableText());
+    }
 
-        // 1. insertionPoint (3RD)
-        double[] pt = r.read3RawDouble();
-        tolerance.setInsertionPoint(new Point3D(pt[0], pt[1], pt[2]));
-
-        // 2. dimensionStyleName (TU)
-        String dimensionStyleName = r.readVariableText();
-        tolerance.setDimensionStyleName(dimensionStyleName);
-
-        // 3. toleranceText (TU)
-        String toleranceText = r.readVariableText();
-        tolerance.setToleranceText(toleranceText);
-
-        // 4. direction (3RD)
-        double[] dir = r.read3RawDouble();
-        tolerance.setDirection(dir);
+    @Override
+    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
+        ((DwgTolerance) target).setValue("DIMSTYLE", new DwgHandleRef(r.readHandleReference(target.handle())));
     }
 }

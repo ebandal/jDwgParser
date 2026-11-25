@@ -149,14 +149,18 @@ public class HatchObjectReader implements ObjectReader {
                     double[] p = r.read2RawDouble();
                     e.controlPoints[i] = new double[] { p[0], p[1], e.rational ? r.readBitDouble() : 1.0 };
                 }
-                // R2010+ : fit data follows (not verified)
+                // R2010+ : fit points, then the start and end tangents only when there are fit
+                // points. The spec lists the tangents always; read so, the 45 R2013 hatches with
+                // spline edges of the samples fail, read this way all end exactly.
                 if (v.from(DwgVersion.R2010)) {
                     int numFit = count(r.readBitLong());
                     for (int i = 0; i < numFit; i++) {
                         r.read2RawDouble();
                     }
-                    r.read2RawDouble();         // start tangent
-                    r.read2RawDouble();         // end tangent
+                    if (numFit > 0) {
+                        r.read2RawDouble();     // start tangent
+                        r.read2RawDouble();     // end tangent
+                    }
                 }
                 break;
             }

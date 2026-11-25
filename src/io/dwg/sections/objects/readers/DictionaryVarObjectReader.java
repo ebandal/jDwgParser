@@ -7,6 +7,11 @@ import io.dwg.entities.DwgObjectType;
 import io.dwg.entities.concrete.DwgDictionaryVar;
 import io.dwg.sections.objects.ObjectReader;
 
+/**
+ * DICTIONARYVAR (a class), spec §20.4.74: an integer RC and a string. The specification gives
+ * the string's type as BS; it is a TV. The variable's name is the key of the dictionary entry
+ * that points at it.
+ */
 public class DictionaryVarObjectReader implements ObjectReader {
 
     @Override
@@ -18,14 +23,7 @@ public class DictionaryVarObjectReader implements ObjectReader {
     @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgDictionaryVar var = (DwgDictionaryVar) target;
-
-        // Variable name
-        var.setVarName(r.readText());
-
-        // Variable type
-        var.setVarType(r.readBitShort());
-
-        // Variable value
-        var.setVarValue(r.readText());
+        var.setVarType(r.readRawChar());
+        var.setVarValue(r.readVariableText());
     }
 }

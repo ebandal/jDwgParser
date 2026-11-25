@@ -1,22 +1,11 @@
 package io.dwg.entities.concrete;
 
-import io.dwg.entities.AbstractDwgEntity;
+import io.dwg.entities.AbstractDwgAcisEntity;
 import io.dwg.entities.DwgObjectType;
 
-/**
- * BODY 엔티티 (타입 0x27)
- * 3D 솔리드 바디 (모델러 기하학 데이터 포함)
- */
-public class DwgBody extends AbstractDwgEntity {
-    private int numModelerFormatVersion; // 모델러 포맷 버전
-    private byte[] modelerGeometryData;  // 모델러 기하학 데이터
+/** BODY (type 39, spec §20.4.41): an ACIS model; see {@link AbstractDwgAcisEntity}. */
+public class DwgBody extends AbstractDwgAcisEntity {
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.BODY; }
-
-    public int numModelerFormatVersion() { return numModelerFormatVersion; }
-    public byte[] modelerGeometryData() { return modelerGeometryData; }
-
-    public void setNumModelerFormatVersion(int version) { this.numModelerFormatVersion = version; }
-    public void setModelerGeometryData(byte[] data) { this.modelerGeometryData = data; }
 }

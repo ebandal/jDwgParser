@@ -9,6 +9,7 @@ import io.dwg.entities.concrete.DwgWipeout;
 import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
 
+/** WIPEOUT, spec §20.4.80 (WIPEOUT has the layout of IMAGE); the fields are in the entity's values, see {@link RasterImageFields}. */
 public class WipeoutObjectReader implements ObjectReader {
 
     @Override
@@ -18,29 +19,19 @@ public class WipeoutObjectReader implements ObjectReader {
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         EntityHeaderReader.readEntityHeader(r, v);
         EntityHeaderReader.readCommonEntityData(r, v);
+        DwgWipeout e = (DwgWipeout) target;
+        RasterImageFields.read(e, r, v);
+        e.setInsertionPoint(RasterImageFields.point(e, "INSERTION"));
+        e.setUVector(RasterImageFields.vector(e, "UVECTOR"));
+        e.setVVector(RasterImageFields.vector(e, "VVECTOR"));
+        io.dwg.core.type.Point3D size = RasterImageFields.point(e, "SIZE");
+        e.setWidth(size.x());
+        e.setHeight(size.y());
+        e.setClippingState(Boolean.TRUE.equals(e.value("CLIPPING")) ? 1 : 0);
+    }
 
-        DwgWipeout wipeout = (DwgWipeout) target;
-
-        // Insertion point (3D vector)
-        double[] point = r.read3BitDouble();
-        wipeout.setInsertionPoint(new Point3D(point[0], point[1], point[2]));
-
-        // U vector (direction along width)
-        double[] uVec = r.read3BitDouble();
-        wipeout.setUVector(uVec);
-
-        // V vector (direction along height)
-        double[] vVec = r.read3BitDouble();
-        wipeout.setVVector(vVec);
-
-        // Width and height
-        wipeout.setWidth(r.readBitDouble());
-        wipeout.setHeight(r.readBitDouble());
-
-        // Clipping state
-        wipeout.setClippingState(r.readBitShort());
-
-        // Wipeout image type
-        wipeout.setWipeoutImageType(r.readBitShort());
+    @Override
+    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
+        RasterImageFields.readHandles((DwgWipeout) target, r);
     }
 }

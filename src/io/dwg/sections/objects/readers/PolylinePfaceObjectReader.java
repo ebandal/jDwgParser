@@ -2,6 +2,7 @@ package io.dwg.sections.objects.readers;
 
 import io.dwg.core.io.BitStreamReader;
 import io.dwg.core.version.DwgVersion;
+import io.dwg.entities.AbstractDwgPolyline;
 import io.dwg.entities.DwgObject;
 import io.dwg.entities.DwgObjectType;
 import io.dwg.entities.concrete.DwgPolylinePface;
@@ -25,8 +26,11 @@ public class PolylinePfaceObjectReader implements ObjectReader {
         DwgPolylinePface polyline = (DwgPolylinePface) target;
         polyline.setNumVertices(r.readBitShort());
         polyline.setNumFaces(r.readBitShort());
-        if (v.from(DwgVersion.R2004)) {
-            r.readBitLong();                    // owned object count
-        }
+        PolylineHandles.readOwnedCount(polyline, r, v);
+    }
+
+    @Override
+    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
+        PolylineHandles.read((AbstractDwgPolyline) target, r, v);
     }
 }

@@ -109,6 +109,7 @@ public enum DwgObjectType {
     ACAD_MATERIAL(0x1000F, "MATERIAL"),
     ACAD_DATASOURCE(0x10010),
     ACAD_PERSSUBENTMANAGER(0x10011, "ACDBPERSSUBENTMANAGER"),
+    MULTILEADER(0x10012, "MULTILEADER"),
     UNKNOWN(-1);
 
     /** 이 값 이상의 타입 코드는 Classes 섹션의 클래스 번호이다. */

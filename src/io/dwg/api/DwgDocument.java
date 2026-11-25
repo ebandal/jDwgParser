@@ -24,6 +24,7 @@ public class DwgDocument {
     private HandleRegistry handleRegistry;
     private DwgClassRegistry classRegistry;
     private List<DwgClassDefinition> customClasses = new ArrayList<>();
+    private List<ReadIssue> issues = new ArrayList<>();
 
     public DwgDocument(DwgVersion version) {
         this.version = version;
@@ -41,6 +42,9 @@ public class DwgDocument {
     public void setHandleRegistry(HandleRegistry h) { this.handleRegistry = h; }
 
     public DwgClassRegistry classRegistry() { return classRegistry; }
+    /** The problems met while reading, in order (at most 10,000; see {@link DwgReader#onIssue}). */
+    public List<ReadIssue> issues() { return Collections.unmodifiableList(issues); }
+    public void setIssues(List<ReadIssue> issues) { this.issues = issues; }
     public void setClassRegistry(DwgClassRegistry r) { this.classRegistry = r; }
 
     public List<DwgClassDefinition> customClasses() { return customClasses; }

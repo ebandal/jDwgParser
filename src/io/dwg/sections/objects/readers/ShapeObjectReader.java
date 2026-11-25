@@ -1,6 +1,7 @@
 package io.dwg.sections.objects.readers;
 
 import io.dwg.core.io.BitStreamReader;
+import io.dwg.core.type.DwgHandleRef;
 import io.dwg.core.type.Point3D;
 import io.dwg.core.version.DwgVersion;
 import io.dwg.entities.DwgObject;
@@ -10,8 +11,10 @@ import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
 
 /**
- * SHAPE 엔티티 리더 (타입 0x21)
- * 형태 파일(.SHX)에 정의된 모양
+ * SHAPE (type 33), spec §20.4.37: insertion point 3BD, scale BD, rotation BD, width factor BD,
+ * oblique BD, thickness BD, shape number BS, extrusion 3BD; handle: the STYLE (shape file).
+ * The width factor, oblique, thickness and shape number are in the entity's values (WIDTH,
+ * OBLIQUE, THICKNESS, SHAPENO); the style handle is STYLE.
  */
 public class ShapeObjectReader implements ObjectReader {
 
@@ -22,27 +25,17 @@ public class ShapeObjectReader implements ObjectReader {
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         EntityHeaderReader.readEntityHeader(r, v);
         EntityHeaderReader.readCommonEntityData(r, v);
-
         DwgShape shape = (DwgShape) target;
+        double[] p = r.read3BitDouble();
+        shape.setInsertionPoint(new Point3D(p[0], p[1], p[2]));
+        shape.setScale(r.readBitDouble());
+        shape.setAngle(r.readBitDouble());
+        Fields.read(shape, r, "WIDTH BD", "OBLIQUE BD", "THICKNESS BD", "SHAPENO BS");
+        shape.setExtrusion(r.read3BitDouble());
+    }
 
-        // 삽입 위치 (3D)
-        double[] insertionPoint = r.read3RawDouble();
-        shape.setInsertionPoint(new Point3D(insertionPoint[0], insertionPoint[1], insertionPoint[2]));
-
-        // 스케일
-        double scale = r.readRawDouble();
-        shape.setScale(scale);
-
-        // 회전 각도
-        double angle = r.readRawDouble();
-        shape.setAngle(angle);
-
-        // 형태 이름
-        String shapeName = r.readVariableText();
-        shape.setShapeName(shapeName);
-
-        // 노멀 벡터
-        double[] extrusion = r.readBitExtrusion();
-        shape.setExtrusion(extrusion);
+    @Override
+    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
+        ((DwgShape) target).setValue("STYLE", new DwgHandleRef(r.readHandleReference(target.handle())));
     }
 }

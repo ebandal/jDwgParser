@@ -38,4 +38,10 @@ public class AttdefObjectReader implements ObjectReader {
         }
         attdef.setPrompt(r.readVariableText());
     }
+
+    /** The STYLE handle, as for ATTRIB. */
+    @Override
+    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
+        ((DwgAttdef) target).setStyleHandle(new io.dwg.core.type.DwgHandleRef(r.readHandleReference(target.handle())));
+    }
 }

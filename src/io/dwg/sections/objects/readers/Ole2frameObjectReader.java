@@ -10,8 +10,8 @@ import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
 
 /**
- * OLE2FRAME 엔티티 리더 (타입 0x3E)
- * OLE 객체 임베딩
+ * OLE2FRAME (a class), spec §20.4.88: flags BS, R2000+ mode BS, data length BL, the OLE data,
+ * R2000+ an unknown RC.
  */
 public class Ole2frameObjectReader implements ObjectReader {
     @Override
@@ -21,29 +21,22 @@ public class Ole2frameObjectReader implements ObjectReader {
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         EntityHeaderReader.readEntityHeader(r, v);
         EntityHeaderReader.readCommonEntityData(r, v);
-
         DwgOle2frame ole = (DwgOle2frame) target;
-
-        // 1. insertionPoint (3RD)
-        double[] pt = r.read3RawDouble();
-        ole.setInsertionPoint(new Point3D(pt[0], pt[1], pt[2]));
-
-        // 2. scale (3RD)
-        double[] scale = r.read3BitDouble();
-        ole.setScale(scale);
-
-        // 3. rotation (BD)
-        double rotation = r.readBitDouble();
-        ole.setRotation(rotation);
-
-        // 4. oleName (TU)
-        String oleName = r.readVariableText();
-        ole.setOleName(oleName);
-
-        // 5. oleData (variable length binary) — skip blob, guard against garbage length
-        long dataLength = r.readBitLong();
-        if (dataLength > 0 && dataLength <= 0x100000L) {
-            r.seek(r.position() + dataLength * 8L);
+        ole.setFlags(r.readBitShort());
+        if (v.from(DwgVersion.R2000)) {
+            ole.setMode(r.readBitShort());
+        }
+        int length = r.readBitLong();
+        if (length < 0) {
+            throw new IllegalStateException("negative OLE data length " + length);
+        }
+        byte[] data = new byte[length];
+        for (int i = 0; i < length; i++) {
+            data[i] = (byte) r.readRawChar();
+        }
+        ole.setOleData(data);
+        if (v.from(DwgVersion.R2000)) {
+            r.readRawChar();                       // unknown
         }
     }
 }

@@ -21,17 +21,34 @@ import io.dwg.entities.DwgObject;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * DWG 파일 읽기 진입점. Fluent Builder 패턴.
  */
 public class DwgReader {
+
+    /** At most this many issues are kept in a document; the listener sees all of them. */
+    static final int MAX_KEPT_ISSUES = 10_000;
+
+    private Consumer<ReadIssue> issueListener;
+
     private DwgReader() {}
 
     public static DwgReader defaultReader() {
         return new DwgReader();
+    }
+
+    /**
+     * Calls {@code listener} for each problem met while reading (see {@link ReadIssue}). The
+     * issues are also kept in the document, {@link DwgDocument#issues()}.
+     */
+    public DwgReader onIssue(Consumer<ReadIssue> listener) {
+        this.issueListener = listener;
+        return this;
     }
 
     /** 파일 경로에서 DWG 파일 읽기 */
@@ -51,6 +68,16 @@ public class DwgReader {
         // ① 버전 감지
         DwgVersion version = DwgVersionDetector.detect(data);
         DwgDocument doc = new DwgDocument(version);
+        List<ReadIssue> kept = new ArrayList<>();
+        Consumer<ReadIssue> issues = issue -> {
+            if (kept.size() < MAX_KEPT_ISSUES) {
+                kept.add(issue);
+            }
+            if (issueListener != null) {
+                issueListener.accept(issue);
+            }
+        };
+        doc.setIssues(kept);
 
         // ② 포맷 핸들러 선택
         DwgFileStructureHandler handler = DwgFileStructureHandlerFactory.forVersion(version);
@@ -66,7 +93,9 @@ public class DwgReader {
         // ⑤ Header 섹션 파싱
         SectionInputStream headerStream = sections.get("AcDb:Header");
         if (headerStream != null) {
-            HeaderVariables vars = new HeaderSectionParser().parse(headerStream, version);
+            HeaderSectionParser headerParser = new HeaderSectionParser();
+            headerParser.setIssueListener(issues);
+            HeaderVariables vars = headerParser.parse(headerStream, version);
             doc.setHeaderVariables(vars);
         }
 
@@ -75,12 +104,16 @@ public class DwgReader {
         SectionInputStream classStream = sections.get("AcDb:Classes");
         if (classStream != null) {
             try {
-                List<DwgClassDefinition> classes =
-                    new ClassesSectionParser().parse(classStream, version);
+                ClassesSectionParser classesParser = new ClassesSectionParser();
+                classesParser.setIssueListener(issues);
+                classesParser.setMaintenanceVersion(headerFields.maintenanceVersion());
+                classesParser.setTextCharset(
+                    io.dwg.core.util.DwgStringDecoder.charsetForDwgCodePage(headerFields.codePage()));
+                List<DwgClassDefinition> classes = classesParser.parse(classStream, version);
                 doc.setCustomClasses(classes);
                 classes.forEach(classRegistry::register);
             } catch (Exception e) {
-                // Classes section parse failure is non-fatal
+                issues.accept(ReadIssue.section("cannot read AcDb:Classes; objects of custom classes are UNKNOWN: " + e));
             }
         }
         doc.setClassRegistry(classRegistry);
@@ -90,9 +123,11 @@ public class DwgReader {
         SectionInputStream handlesStream = sections.get("AcDb:Handles");
         if (handlesStream != null) {
             try {
-                handleRegistry = new HandlesSectionParser().parse(handlesStream, version);
+                HandlesSectionParser handlesParser = new HandlesSectionParser();
+                handlesParser.setIssueListener(issues);
+                handleRegistry = handlesParser.parse(handlesStream, version);
             } catch (Exception e) {
-                // Handles section parse failure is non-fatal
+                issues.accept(ReadIssue.section("cannot read AcDb:Handles; no objects can be found: " + e));
             }
         }
         doc.setHandleRegistry(handleRegistry);
@@ -113,6 +148,7 @@ public class DwgReader {
         }
         if (objectsStream != null) {
             ObjectsSectionParser objParser = new ObjectsSectionParser();
+            objParser.setIssueListener(issues);
             objParser.setHandleRegistry(handleRegistry);
             objParser.setClassRegistry(classRegistry);
             objParser.setTextCharset(

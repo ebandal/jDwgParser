@@ -1,6 +1,7 @@
 package io.dwg.sections.objects.readers;
 
 import io.dwg.core.io.BitStreamReader;
+import io.dwg.core.type.DwgHandleRef;
 import io.dwg.core.version.DwgVersion;
 import io.dwg.entities.DwgObject;
 import io.dwg.entities.DwgObjectType;
@@ -8,8 +9,8 @@ import io.dwg.entities.concrete.DwgGroup;
 import io.dwg.sections.objects.ObjectReader;
 
 /**
- * GROUP 엔티티 리더 (타입 0x3C)
- * 여러 엔티티의 그룹화
+ * GROUP (type 72), spec §20.4.72: name TV, unnamed BS, selectable BS, number of members BL;
+ * handles: (parent, reactors, xdictionary,) one per member.
  */
 public class GroupObjectReader implements ObjectReader {
     @Override
@@ -21,31 +22,17 @@ public class GroupObjectReader implements ObjectReader {
     @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgGroup group = (DwgGroup) target;
+        group.setGroupName(r.readVariableText());
+        group.setUnnamed(r.readBitShort() != 0);
+        group.setSelectable(r.readBitShort() != 0);
+        group.setMemberCount(r.readBitLong());
+    }
 
-        // 1. groupName (TU)
-        String groupName = r.readVariableText();
-        group.setGroupName(groupName);
-
-        // 2. isUnnamed (B - 1 bit)
-        boolean isUnnamed = r.getInput().readBit();
-        group.setUnnamed(isUnnamed);
-
-        // 3. isSelectable (B)
-        boolean isSelectable = r.getInput().readBit();
-        group.setSelectable(isSelectable);
-
-        // 4. numMembers (BL)
-        long numMembers = r.readBitLong();
-
-        // Sanity check: if numMembers is unreasonably large, skip reading
-        if (numMembers > 100000) {
-            return;
-        }
-
-        // 5. members - numMembers개의 핸들
-        for (int i = 0; i < numMembers; i++) {
-            long memberHandle = r.readBitLongLong();
-            group.addMember(memberHandle);
+    @Override
+    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
+        DwgGroup group = (DwgGroup) target;
+        for (int i = 0; i < group.memberCount(); i++) {
+            group.addMember(new DwgHandleRef(r.readHandleReference(target.handle())));
         }
     }
 }

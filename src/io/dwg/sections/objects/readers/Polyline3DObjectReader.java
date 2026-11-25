@@ -2,6 +2,7 @@ package io.dwg.sections.objects.readers;
 
 import io.dwg.core.io.BitStreamReader;
 import io.dwg.core.version.DwgVersion;
+import io.dwg.entities.AbstractDwgPolyline;
 import io.dwg.entities.DwgObject;
 import io.dwg.entities.DwgObjectType;
 import io.dwg.entities.concrete.DwgPolyline3D;
@@ -26,8 +27,11 @@ public class Polyline3DObjectReader implements ObjectReader {
         DwgPolyline3D polyline = (DwgPolyline3D) target;
         polyline.setCurveType(r.getInput().readBits(8));    // spline flags (RC)
         polyline.setFlags(r.getInput().readBits(8));        // closed flags (RC) : 1 = closed
-        if (v.from(DwgVersion.R2004)) {
-            r.readBitLong();                                // owned object count
-        }
+        PolylineHandles.readOwnedCount(polyline, r, v);
+    }
+
+    @Override
+    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
+        PolylineHandles.read((AbstractDwgPolyline) target, r, v);
     }
 }

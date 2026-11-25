@@ -4,6 +4,7 @@ import io.dwg.core.io.BitStreamWriter;
 import io.dwg.core.version.DwgVersion;
 import io.dwg.entities.DwgObject;
 import io.dwg.entities.DwgObjectType;
+import io.dwg.core.type.DwgHandleRef;
 import io.dwg.entities.concrete.DwgDictionary;
 import io.dwg.sections.objects.ObjectWriter;
 import java.util.Map;
@@ -17,11 +18,11 @@ public class DictionaryObjectWriter implements ObjectWriter {
         DwgDictionary dict = (DwgDictionary) source;
         w.writeBitShort(dict.dictionaryType());
         w.writeBitShort(dict.duplicateRecordCloning());
-        Map<String, Object> entries = dict.entries();
+        Map<String, DwgHandleRef> entries = dict.entries();
         w.writeBitLong(entries.size());
-        for (Map.Entry<String, Object> entry : entries.entrySet()) {
+        for (Map.Entry<String, DwgHandleRef> entry : entries.entrySet()) {
             w.writeVariableText(entry.getKey());
-            w.writeBitLongLong((Long) entry.getValue());
+            w.writeBitLongLong(entry.getValue().rawHandle());
         }
     }
 }

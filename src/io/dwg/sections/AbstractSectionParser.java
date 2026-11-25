@@ -1,13 +1,23 @@
 package io.dwg.sections;
 
+import io.dwg.api.ReadIssue;
 import io.dwg.core.io.BitStreamReader;
 import io.dwg.core.io.SectionInputStream;
 import io.dwg.core.version.DwgVersion;
+
+import java.util.function.Consumer;
 
 /**
  * 공통 편의 메서드 제공 기반 클래스.
  */
 public abstract class AbstractSectionParser<T> implements SectionParser<T> {
+
+    /** Where the problems met while parsing go. */
+    protected Consumer<ReadIssue> issues = issue -> { };
+
+    public void setIssueListener(Consumer<ReadIssue> listener) {
+        this.issues = listener != null ? listener : issue -> { };
+    }
 
     protected BitStreamReader reader(SectionInputStream s, DwgVersion v) {
         return s.reader(v);
@@ -37,8 +47,7 @@ public abstract class AbstractSectionParser<T> implements SectionParser<T> {
     }
 
     protected void logUnknown(String field, long bitPos) {
-        // 필요 시 로거 연결
-        System.err.println("[WARN] unknown field: " + field + " at bit " + bitPos);
+        issues.accept(ReadIssue.section(getClass().getSimpleName() + ": " + field + " at bit " + bitPos));
     }
 
     @Override

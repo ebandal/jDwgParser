@@ -29,4 +29,11 @@ public class DwgViewport extends AbstractDwgEntity {
     public void setHeight(double height) { this.height = height; }
     public void setViewHeight(double viewHeight) { this.viewHeight = viewHeight; }
     public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+
+    private final java.util.List<io.dwg.core.type.DwgHandleRef> frozenLayerHandles = new java.util.ArrayList<>();
+
+    /** R2000+: the layers frozen in this viewport. */
+    public java.util.List<io.dwg.core.type.DwgHandleRef> frozenLayerHandles() { return java.util.Collections.unmodifiableList(frozenLayerHandles); }
+
+    public void addFrozenLayerHandle(io.dwg.core.type.DwgHandleRef h) { frozenLayerHandles.add(h); }
 }

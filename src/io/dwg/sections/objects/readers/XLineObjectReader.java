@@ -10,8 +10,8 @@ import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
 
 /**
- * XLINE 엔티티 리더 (타입 0x29)
- * 시작점과 방향으로 정의된 무한 선 (양쪽 방향)
+ * XLINE (type 41), spec §20.4.43: the common entity data, a point (3BD) and a
+ * direction vector (3BD).
  */
 public class XLineObjectReader implements ObjectReader {
 
@@ -24,13 +24,9 @@ public class XLineObjectReader implements ObjectReader {
         EntityHeaderReader.readCommonEntityData(r, v);
 
         DwgXLine xline = (DwgXLine) target;
-
-        // 시작점 (3D, 압축됨)
-        double[] start = r.read3RawDouble();
-        xline.setStart(new Point3D(start[0], start[1], start[2]));
-
-        // 방향 벡터 (3D, 단위 벡터)
-        double[] direction = r.read3RawDouble();
-        xline.setDirection(new Point3D(direction[0], direction[1], direction[2]));
+        double[] point = r.read3BitDouble();
+        xline.setStart(new Point3D(point[0], point[1], point[2]));
+        double[] vector = r.read3BitDouble();
+        xline.setDirection(new Point3D(vector[0], vector[1], vector[2]));
     }
 }

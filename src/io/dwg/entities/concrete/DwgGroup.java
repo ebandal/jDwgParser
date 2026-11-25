@@ -34,4 +34,8 @@ public class DwgGroup extends AbstractDwgObject {
     public void setUnnamed(boolean unnamed) { this.isUnnamed = unnamed; }
     public void setSelectable(boolean selectable) { this.isSelectable = selectable; }
     public void addMember(Object member) { this.members.add(member); }
+    private int memberCount;
+    /** The number of members the data gives; {@link #members()} holds their handles. */
+    public int memberCount() { return memberCount; }
+    public void setMemberCount(int n) { this.memberCount = n; }
 }

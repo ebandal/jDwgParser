@@ -327,7 +327,8 @@ public final class DocumentDrawing {
             e.arrowhead = s.isArrowheadOn();
             return e;
         }
-        if (o instanceof DwgInsert) {
+        if (o instanceof DwgInsert && !(o instanceof io.dwg.entities.concrete.DwgMinsert)) {
+            // MINSERT is an INSERT with a grid; the renderer does not draw it yet
             DwgInsert s = (DwgInsert) o;
             Insert e = new Insert();
             e.insertion = xyz(s.insertionPoint());

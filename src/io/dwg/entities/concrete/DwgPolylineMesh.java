@@ -1,6 +1,6 @@
 package io.dwg.entities.concrete;
 
-import io.dwg.entities.AbstractDwgEntity;
+import io.dwg.entities.AbstractDwgPolyline;
 import io.dwg.entities.DwgObjectType;
 
 /**
@@ -8,13 +8,14 @@ import io.dwg.entities.DwgObjectType;
  * 메시 폴리라인 (M과 N 방향의 격자)
  * VERTEX_MESH 객체들의 컨테이너
  */
-public class DwgPolylineMesh extends AbstractDwgEntity {
+public class DwgPolylineMesh extends AbstractDwgPolyline {
     private int flags;              // 폴리라인 플래그
     private int mVertexCount;       // M 방향 꼭지점 개수
     private int nVertexCount;       // N 방향 꼭지점 개수
     private int mDensity;           // M 방향 곡선 밀도
     private int nDensity;           // N 방향 곡선 밀도
     private double[] extrusion;     // 돌출 벡터
+    private int curveType;          // DXF 75
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.POLYLINE_MESH; }
@@ -32,6 +33,9 @@ public class DwgPolylineMesh extends AbstractDwgEntity {
     public void setMDensity(int density) { this.mDensity = density; }
     public void setNDensity(int density) { this.nDensity = density; }
     public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+    /** Curve and smooth surface type (DXF 75). */
+    public int curveType() { return curveType; }
+    public void setCurveType(int curveType) { this.curveType = curveType; }
 
     public boolean isClosed() { return (flags & 0x01) != 0; }
     public boolean isMClosed() { return (flags & 0x02) != 0; }

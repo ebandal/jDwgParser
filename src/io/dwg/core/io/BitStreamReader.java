@@ -337,10 +337,20 @@ public class BitStreamReader {
      * @return {index} or {index, rgb, flags}
      */
     public int[] readCmColor() {
-        int index = readBitShort();
         if (!version.from(DwgVersion.R2004)) {
-            return new int[] {index};
+            return new int[] {readBitShort()};
         }
+        return readTrueColor();
+    }
+
+    /**
+     * TC (§2): a color in the R2004+ CMC form, in every version (the table style data uses it in
+     * older files too).
+     *
+     * @return {index, rgb, flags}
+     */
+    public int[] readTrueColor() {
+        int index = readBitShort();
         int rgb = readBitLong();
         int flags = nextByte();
         if ((flags & 1) != 0) {

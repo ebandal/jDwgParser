@@ -1,5 +1,6 @@
 package io.dwg.sections.objects;
 
+import io.dwg.entities.DwgObjectType;
 import io.dwg.sections.classes.DwgClassRegistry;
 import io.dwg.sections.objects.readers.*;
 
@@ -92,11 +93,11 @@ public class ObjectTypeResolver {
         resolver.register(new ImageObjectReader());
         resolver.register(new WipeoutObjectReader());
         resolver.register(new XrefObjectReader());
-        resolver.register(new UnderlayObjectReader());
-        resolver.register(new SurfaceObjectReader());
-        resolver.register(new MeshObjectReader());
+        resolver.register(new UndocumentedObjectReader(DwgObjectType.UNDERLAY, true));
+        resolver.register(new UndocumentedObjectReader(DwgObjectType.SURFACE, true));
+        resolver.register(new UndocumentedObjectReader(DwgObjectType.MESH, true));
         resolver.register(new ScaleObjectReader());
-        resolver.register(new VisualStyleObjectReader());
+        resolver.register(new UndocumentedObjectReader(DwgObjectType.VISUALSTYLE, false));
         resolver.register(new FieldObjectReader());
         resolver.register(new ProxyEntityObjectReader());
         resolver.register(new DictionaryVarObjectReader());
@@ -105,9 +106,10 @@ public class ObjectTypeResolver {
         resolver.register(new TableStyleObjectReader());
         resolver.register(new CellStyleObjectReader());
         resolver.register(new PlotStyleObjectReader());
-        resolver.register(new MaterialObjectReader());
+        resolver.register(new UndocumentedObjectReader(DwgObjectType.ACAD_MATERIAL, false));
         resolver.register(new DataSourceObjectReader());
-        resolver.register(new PersSubentManagerObjectReader());
+        resolver.register(new UndocumentedObjectReader(DwgObjectType.ACAD_PERSSUBENTMANAGER, false));
+        resolver.register(new MLeaderObjectReader());
         return resolver;
     }
 }

@@ -1,5 +1,6 @@
 package io.dwg.sections.objects;
 
+import io.dwg.api.ReadIssue;
 import io.dwg.core.io.BitStreamReader;
 import io.dwg.core.io.ByteBufferBitInput;
 import io.dwg.core.io.SectionInputStream;
@@ -65,7 +66,8 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                     result.put(entry.getKey(), obj);
                 }
             } catch (Exception e) {
-                // an object that cannot be read is left out
+                issues.accept(new ReadIssue(ReadIssue.Kind.OBJECT_SKIPPED, entry.getKey(), null,
+                        "cannot read the object at offset " + offset + ": " + describe(e)));
             }
         }
         nameExtendedDataApplications(result);
@@ -136,9 +138,32 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
         ((AbstractDwgObject) obj).setHandle(handle);
         ((AbstractDwgObject) obj).setRawTypeCode(typeCode);
+        ObjectReader typeReader = resolver.resolve(type.typeCode()).orElse(null);
+        if (keepsRawData(type) || (typeReader != null && !typeReader.readsAllData())) {
+            int start = (int) (dataStartBit / 8);
+            ((AbstractDwgObject) obj).setRawData(java.util.Arrays.copyOfRange(raw, start, Math.min(raw.length, start + objSize)));
+        }
+        if (obj instanceof DwgGenericObject && keepsRawData(type)) {
+            DwgGenericObject generic = (DwgGenericObject) obj;
+            if (classRegistry != null) {
+                classRegistry.find(typeCode).ifPresent(def -> {
+                    generic.setClassName(def.dxfRecordName());
+                    generic.setEntity(def.isEntity());
+                });
+            }
+        }
         readObjectData(obj, type, r, version, raw, dataStartBit, objSize, handleStreamBits);
 
         return obj;
+    }
+
+    private static String describe(Exception e) {
+        return e.getClass().getSimpleName() + (e.getMessage() != null ? ": " + e.getMessage() : "");
+    }
+
+    /** Objects of these types are kept with their bytes, as nothing reads their data. */
+    private static boolean keepsRawData(DwgObjectType type) {
+        return type == DwgObjectType.UNKNOWN || type == DwgObjectType.ACAD_PROXY_OBJECT;
     }
 
     /**
@@ -194,8 +219,11 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         }
         try {
             if (reader == null) {
-                // 리더가 없는 비엔티티 객체도 공통 헤더는 읽어 소유자를 알 수 있게 한다
-                if (!isEntityClass(obj.rawTypeCode())) {
+                // 리더가 없는 객체도 공통 헤더는 읽는다: 비엔티티는 소유자를, 엔티티는 EED를 알 수 있다
+                if (isEntityClass(obj.rawTypeCode())) {
+                    EntityHeaderReader.readEntityHeader(r, version);
+                    EntityHeaderReader.readCommonEntityData(r, version);
+                } else {
                     EntityHeaderReader.readObjectHeader(r, version);
                 }
             } else {
@@ -203,15 +231,18 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                     EntityHeaderReader.readObjectHeader(r, version);
                 }
                 reader.read(obj, r, version);
+                if (reader.readsAllData()) {
+                    ObjectHeaderData.of(r).dataEnd = r.position();
+                }
             }
         } catch (Exception e) {
-            // Type-specific parsing failed silently
+            issues.accept(new ReadIssue(ReadIssue.Kind.OBJECT_DATA, obj.handle(), obj.objectType().name(), describe(e)));
         }
         addExtendedData(obj, r, version);
         try {
             readHandleStream(obj, reader, r, version, dataStartBit, objSizeBytes, handleStreamBits);
         } catch (Exception e) {
-            // Handle stream parsing failed silently
+            issues.accept(new ReadIssue(ReadIssue.Kind.OBJECT_HANDLES, obj.handle(), obj.objectType().name(), describe(e)));
         }
     }
 
@@ -275,6 +306,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             return;
         }
         s.seek(start);
+        ObjectHeaderData.of(r).stringStreamStart = start;
         r.setStringStream(s);
     }
 
@@ -303,6 +335,8 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         if (startBit < dataStartBit || startBit > endBit || header.numReactors < 0 || header.numReactors > 100000) {
             return;
         }
+
+        checkDataEnd(obj, header, version, startBit);
 
         AbstractDwgObject ao = (AbstractDwgObject) obj;
         long self = obj.handle();
@@ -378,6 +412,29 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
         if (reader != null) {
             reader.readHandles(obj, r, version);
+            if (header.dataEnd >= 0 && endBit - r.position() >= 8) {
+                issues.accept(new ReadIssue(ReadIssue.Kind.OBJECT_HANDLES, obj.handle(), obj.objectType().name(),
+                        "handles left unread: " + (endBit - r.position()) / 8 + " bytes"));
+            }
+        }
+    }
+
+    /**
+     * The data of an object ends where its handle stream begins; in R2007+ the string stream comes
+     * before that, and with no string stream one bit (the "has strings" flag) does. A reader that
+     * stops elsewhere has read a field wrongly or has left fields out.
+     */
+    private void checkDataEnd(DwgObject obj, ObjectHeaderData header, DwgVersion version, long handleStart) {
+        if (header.dataEnd < 0) {
+            return;
+        }
+        long expected = header.stringStreamStart >= 0 ? header.stringStreamStart
+                : version.from(DwgVersion.R2007) ? handleStart - 1 : handleStart;
+        long difference = expected - header.dataEnd;
+        if (difference != 0) {
+            issues.accept(new ReadIssue(ReadIssue.Kind.OBJECT_DATA, obj.handle(), obj.objectType().name(),
+                    difference > 0 ? "the data has " + difference + " bits after the fields that were read"
+                                   : "the fields that were read run " + (-difference) + " bits past the data"));
         }
     }
 
@@ -467,6 +524,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             case ACAD_MATERIAL       -> new DwgMaterial();
             case ACAD_DATASOURCE     -> new DwgDataSource();
             case ACAD_PERSSUBENTMANAGER -> new DwgPersSubentManager();
+            case MULTILEADER         -> new DwgMLeader();
             // 전용 클래스가 없는 타입 : 테이블 제어 객체, 프록시 객체, 알 수 없는 클래스
             case OLEFRAME, BLOCK_CONTROL, LAYER_CONTROL, STYLE_CONTROL, LTYPE_CONTROL, VIEW_CONTROL,
                  UCS_CONTROL, VPORT_CONTROL, APPID_CONTROL, DIMSTYLE_CONTROL, VP_ENT_HDR_CONTROL,

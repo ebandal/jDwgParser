@@ -1,36 +1,23 @@
 package io.dwg.entities.concrete;
 
 import io.dwg.core.type.Point3D;
-import io.dwg.entities.AbstractDwgObject;
-import io.dwg.entities.DwgNonEntityObject;
+import io.dwg.entities.AbstractDwgTableRecord;
 import io.dwg.entities.DwgObjectType;
 
-/**
- * VIEW 테이블 엔트리 (타입 0x36)
- * 저장된 뷰 정의 (카메라 위치, 줌 레벨 등)
- */
-public class DwgView extends AbstractDwgObject implements DwgNonEntityObject {
-    private String name = "";
-    private Point3D viewTarget;
-    private Point3D viewDirection;
-    private double viewHeight = 1.0;
-    private double viewWidth = 1.0;
+/** VIEW table record (type 61, spec §20.4.60): a named view. All fields are in {@link #values()}. */
+public class DwgView extends AbstractDwgTableRecord {
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.VIEW; }
 
-    @Override
-    public boolean isEntity() { return false; }
-
-    public String name() { return name; }
-    public Point3D viewTarget() { return viewTarget; }
-    public Point3D viewDirection() { return viewDirection; }
-    public double viewHeight() { return viewHeight; }
-    public double viewWidth() { return viewWidth; }
-
-    public void setName(String name) { this.name = name; }
-    public void setViewTarget(Point3D target) { this.viewTarget = target; }
-    public void setViewDirection(Point3D direction) { this.viewDirection = direction; }
-    public void setViewHeight(double height) { this.viewHeight = height; }
-    public void setViewWidth(double width) { this.viewWidth = width; }
+    /** The view target (DXF 12). */
+    public Point3D viewTarget() { return pointValue("TARGET"); }
+    /** The direction from the target toward the camera (DXF 11). */
+    public Point3D viewDirection() { return pointValue("VIEWDIR"); }
+    /** DXF 40 */
+    public double viewHeight() { return doubleValue("HEIGHT", 1.0); }
+    /** DXF 41 */
+    public double viewWidth() { return doubleValue("WIDTH", 1.0); }
+    /** The view center in DCS (DXF 10). */
+    public Point3D viewCenter() { return pointValue("CENTER"); }
 }

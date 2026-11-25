@@ -1,36 +1,23 @@
 package io.dwg.entities.concrete;
 
 import io.dwg.core.type.Point3D;
-import io.dwg.entities.AbstractDwgObject;
-import io.dwg.entities.DwgNonEntityObject;
+import io.dwg.entities.AbstractDwgTableRecord;
 import io.dwg.entities.DwgObjectType;
 
-/**
- * VPORT 테이블 엔트리 (타입 0x38)
- * 뷰포트 설정 (뷰 윈도우 및 기본값)
- */
-public class DwgVport extends AbstractDwgObject implements DwgNonEntityObject {
-    private String name = "";
-    private Point3D viewCenter;
-    private Point3D snapBase;
-    private double gridSpacingX = 1.0;
-    private double gridSpacingY = 1.0;
+/** VPORT table record (type 65, spec §20.4.64): a model space viewport configuration. All fields are in {@link #values()}. */
+public class DwgVport extends AbstractDwgTableRecord {
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.VPORT; }
 
-    @Override
-    public boolean isEntity() { return false; }
-
-    public String name() { return name; }
-    public Point3D viewCenter() { return viewCenter; }
-    public Point3D snapBase() { return snapBase; }
-    public double gridSpacingX() { return gridSpacingX; }
-    public double gridSpacingY() { return gridSpacingY; }
-
-    public void setName(String name) { this.name = name; }
-    public void setViewCenter(Point3D center) { this.viewCenter = center; }
-    public void setSnapBase(Point3D base) { this.snapBase = base; }
-    public void setGridSpacingX(double x) { this.gridSpacingX = x; }
-    public void setGridSpacingY(double y) { this.gridSpacingY = y; }
+    /** The view center in DCS (DXF 12). */
+    public Point3D viewCenter() { return pointValue("CENTER"); }
+    /** DXF 40 */
+    public double viewHeight() { return doubleValue("HEIGHT", 1.0); }
+    /** DXF 13 */
+    public Point3D snapBase() { return pointValue("SNAPBASE"); }
+    /** DXF 15 */
+    public double gridSpacingX() { return pointValue("GRIDSPACING") == null ? 1.0 : pointValue("GRIDSPACING").x(); }
+    /** DXF 25 */
+    public double gridSpacingY() { return pointValue("GRIDSPACING") == null ? 1.0 : pointValue("GRIDSPACING").y(); }
 }

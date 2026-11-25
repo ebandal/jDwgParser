@@ -7,6 +7,10 @@ import io.dwg.entities.DwgObjectType;
 import io.dwg.entities.concrete.DwgScale;
 import io.dwg.sections.objects.ObjectReader;
 
+/**
+ * SCALE (a class), spec §20.4.92: unknown BS, name TV, paper units BD, drawing units BD, has unit
+ * scale B.
+ */
 public class ScaleObjectReader implements ObjectReader {
 
     @Override
@@ -18,16 +22,10 @@ public class ScaleObjectReader implements ObjectReader {
     @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgScale scale = (DwgScale) target;
-
-        // Scale name
-        scale.setScaleName(r.readText());
-
-        // Paper units and drawing units
+        r.readBitShort();                          // unknown, 0
+        scale.setScaleName(r.readVariableText());
         scale.setPaperUnits(r.readBitDouble());
         scale.setDrawingUnits(r.readBitDouble());
-
-        // Flags
-        scale.setIsUnitScale(r.readBitShort() != 0);
-        scale.setHasCustomScale(r.readBitShort() != 0);
+        scale.setIsUnitScale(r.getInput().readBit());
     }
 }

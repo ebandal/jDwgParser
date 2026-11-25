@@ -1,35 +1,38 @@
 package io.dwg.entities.concrete;
 
 import io.dwg.core.type.Point3D;
-import io.dwg.entities.AbstractDwgObject;
+import io.dwg.entities.AbstractDwgEntity;
 import io.dwg.entities.DwgObjectType;
 
 /**
- * OLE2FRAME 오브젝트 (타입 0x3E)
- * OLE 객체 임베딩 (Microsoft Word, Excel 등)
+ * OLE2FRAME (a class, spec §20.4.88): an embedded OLE object. The file holds its flags, mode and
+ * the OLE data; the position of the frame is inside that data, which is not interpreted here.
  */
-public class DwgOle2frame extends AbstractDwgObject {
-    private Point3D insertionPoint;  // 삽입점
-    private double[] scale;          // 스케일
-    private double rotation;         // 회전각
-    private String oleName;          // OLE 객체 이름
-    private byte[] oleData;          // OLE 객체 데이터
+public class DwgOle2frame extends AbstractDwgEntity {
+    private int flags;
+    private int mode;
+    private byte[] oleData;
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.OLE2FRAME; }
 
-    @Override
-    public boolean isEntity() { return false; }
-
-    public Point3D insertionPoint() { return insertionPoint; }
-    public double[] scale() { return scale; }
-    public double rotation() { return rotation; }
-    public String oleName() { return oleName; }
+    /** DXF 70 */
+    public int flags() { return flags; }
+    /** R2000+ */
+    public int mode() { return mode; }
+    /** The OLE data as stored. */
     public byte[] oleData() { return oleData; }
 
-    public void setInsertionPoint(Point3D insertionPoint) { this.insertionPoint = insertionPoint; }
-    public void setScale(double[] scale) { this.scale = scale; }
-    public void setRotation(double rotation) { this.rotation = rotation; }
-    public void setOleName(String oleName) { this.oleName = oleName; }
-    public void setOleData(byte[] oleData) { this.oleData = oleData; }
+    /** The file holds no insertion point outside the OLE data; always {@code null}. */
+    public Point3D insertionPoint() { return null; }
+    /** Not stored outside the OLE data; always (1, 1, 1). */
+    public double[] scale() { return new double[] {1, 1, 1}; }
+    /** Not stored outside the OLE data; always 0. */
+    public double rotation() { return 0; }
+    /** Not stored; always "". */
+    public String oleName() { return ""; }
+
+    public void setFlags(int flags) { this.flags = flags; }
+    public void setMode(int mode) { this.mode = mode; }
+    public void setOleData(byte[] data) { this.oleData = data; }
 }

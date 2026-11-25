@@ -9,10 +9,7 @@ import io.dwg.entities.concrete.DwgVertexMesh;
 import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
 
-/**
- * VERTEX_MESH 엔티티 리더 (타입 0x0C)
- * 메시 폴리라인의 꼭지점
- */
+/** VERTEX (MESH) (type 12), spec §20.4.13: as VERTEX (3D), flags EC and point 3BD. */
 public class VertexMeshObjectReader implements ObjectReader {
 
     @Override
@@ -25,12 +22,8 @@ public class VertexMeshObjectReader implements ObjectReader {
 
         DwgVertexMesh vertex = (DwgVertexMesh) target;
 
-        // 1. location (3RD)
-        double[] loc = r.read3RawDouble();
+        vertex.setFlags(r.getInput().readBits(8));          // flags (EC)
+        double[] loc = r.read3BitDouble();                  // point (3BD)
         vertex.setLocation(new Point3D(loc[0], loc[1], loc[2]));
-
-        // 2. flags (BS)
-        int flags = r.readBitShort();
-        vertex.setFlags(flags);
     }
 }

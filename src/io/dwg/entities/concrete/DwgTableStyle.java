@@ -1,44 +1,22 @@
 package io.dwg.entities.concrete;
 
-import io.dwg.entities.AbstractDwgEntity;
+import io.dwg.entities.AbstractDwgObject;
+import io.dwg.entities.DwgNonEntityObject;
 import io.dwg.entities.DwgObjectType;
 
-public class DwgTableStyle extends AbstractDwgEntity {
-    private String tableName;
-    private String description;
-    private int tableStyleFlags;
-    private int rowHeight;
-    private int columnWidth;
-    private int titleRowHeight;
-    private int headerRowHeight;
-    private int dataRowHeight;
+/**
+ * TABLESTYLE (a class, spec §20.4.101). The fields are in {@link #values()} under the names of
+ * {@code TableStyleObjectReader}: up to R2007 the description, margins and three row styles
+ * (ROWSTYLES); from R2010 the cell styles (TABLECELLSTYLE and CELLSTYLES).
+ */
+public class DwgTableStyle extends AbstractDwgObject implements DwgNonEntityObject {
 
     @Override
-    public DwgObjectType objectType() {
-        return DwgObjectType.ACAD_TABLESTYLE;
-    }
+    public DwgObjectType objectType() { return DwgObjectType.ACAD_TABLESTYLE; }
 
-    public String tableName() { return tableName; }
-    public void setTableName(String tableName) { this.tableName = tableName; }
+    @Override
+    public boolean isEntity() { return false; }
 
-    public String description() { return description; }
-    public void setDescription(String description) { this.description = description; }
-
-    public int tableStyleFlags() { return tableStyleFlags; }
-    public void setTableStyleFlags(int tableStyleFlags) { this.tableStyleFlags = tableStyleFlags; }
-
-    public int rowHeight() { return rowHeight; }
-    public void setRowHeight(int rowHeight) { this.rowHeight = rowHeight; }
-
-    public int columnWidth() { return columnWidth; }
-    public void setColumnWidth(int columnWidth) { this.columnWidth = columnWidth; }
-
-    public int titleRowHeight() { return titleRowHeight; }
-    public void setTitleRowHeight(int titleRowHeight) { this.titleRowHeight = titleRowHeight; }
-
-    public int headerRowHeight() { return headerRowHeight; }
-    public void setHeaderRowHeight(int headerRowHeight) { this.headerRowHeight = headerRowHeight; }
-
-    public int dataRowHeight() { return dataRowHeight; }
-    public void setDataRowHeight(int dataRowHeight) { this.dataRowHeight = dataRowHeight; }
+    /** DXF 3 */
+    public String description() { return value("DESCRIPTION") instanceof String ? (String) value("DESCRIPTION") : ""; }
 }

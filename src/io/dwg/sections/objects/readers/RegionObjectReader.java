@@ -1,35 +1,17 @@
 package io.dwg.sections.objects.readers;
 
-import io.dwg.core.io.BitStreamReader;
-import io.dwg.core.version.DwgVersion;
-import io.dwg.entities.DwgObject;
 import io.dwg.entities.DwgObjectType;
-import io.dwg.entities.concrete.DwgRegion;
-import io.dwg.sections.objects.EntityHeaderReader;
-import io.dwg.sections.objects.ObjectReader;
 
 /**
- * REGION 엔티티 리더 (타입 0x25)
- * 영역 (모델러 기하학 데이터)
+ * REGION, spec §20.4.41; see {@link AcisReader}. The specification gives every R2007+ ACIS entity
+ * a history handle; the R2007+ REGIONs of the samples have none (read with it, their handles run
+ * past the end of the object; without it they end exactly).
  */
-public class RegionObjectReader implements ObjectReader {
+public class RegionObjectReader extends AcisReader {
+
     @Override
     public int objectType() { return DwgObjectType.REGION.typeCode(); }
 
     @Override
-    public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
-        EntityHeaderReader.readEntityHeader(r, v);
-        EntityHeaderReader.readCommonEntityData(r, v);
-
-        DwgRegion region = (DwgRegion) target;
-
-        // 1. numModelerFormatVersion (BL)
-        long version = r.readBitLong();
-        region.setNumModelerFormatVersion((int)version);
-
-        long dataLength = r.readBitLong();
-        if (dataLength > 0 && dataLength <= 0x100000L) {
-            r.seek(r.position() + dataLength * 8L);
-        }
-    }
+    protected boolean hasHistoryHandle() { return false; }
 }

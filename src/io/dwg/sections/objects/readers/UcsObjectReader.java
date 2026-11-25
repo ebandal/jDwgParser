@@ -1,16 +1,17 @@
 package io.dwg.sections.objects.readers;
 
 import io.dwg.core.io.BitStreamReader;
-import io.dwg.core.type.Point3D;
+import io.dwg.core.type.DwgHandleRef;
 import io.dwg.core.version.DwgVersion;
+import io.dwg.entities.AbstractDwgTableRecord;
 import io.dwg.entities.DwgObject;
 import io.dwg.entities.DwgObjectType;
-import io.dwg.entities.concrete.DwgUcs;
+import io.dwg.sections.objects.EntityHeaderReader;
 import io.dwg.sections.objects.ObjectReader;
 
 /**
- * UCS (사용자 좌표계) 테이블 엔트리 ObjectReader.
- * 타입 0x37
+ * UCS (type 63), spec §20.4.62: ORIGIN, XDIR, YDIR (3BD), R2000+ ELEVATION BD, ORTHOVIEWTYPE BS,
+ * ORTHOTYPE BS, kept in the record's values. Handles: xref block, R2000+ BASEUCS, NAMEDUCS.
  */
 public class UcsObjectReader implements ObjectReader {
 
@@ -22,17 +23,26 @@ public class UcsObjectReader implements ObjectReader {
 
     @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
-        DwgUcs ucs = (DwgUcs) target;
+        AbstractDwgTableRecord record = (AbstractDwgTableRecord) target;
+        EntityHeaderReader.readTableRecordName(r, v, record);
+        Fields.read(record, r, "ORIGIN 3BD", "XDIR 3BD", "YDIR 3BD");
+        if (v.from(DwgVersion.R2000)) {
+            Fields.read(record, r, "ELEVATION BD", "ORTHOVIEWTYPE BS", "ORTHOTYPE BS");
+        }
+    }
 
-        ucs.setName(r.readVariableText());
+    @Override
+    public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
+        AbstractDwgTableRecord record = (AbstractDwgTableRecord) target;
+        long self = target.handle();
+        record.setXrefBlockHandle(new DwgHandleRef(r.readHandleReference(self)));
+        if (v.from(DwgVersion.R2000)) {
+            handle(record, "BASEUCS", r, self);
+            handle(record, "NAMEDUCS", r, self);
+        }
+    }
 
-        double[] origin3d = r.read3BitDouble();
-        ucs.setOrigin(new Point3D(origin3d[0], origin3d[1], origin3d[2]));
-
-        double[] xDir3d = r.read3BitDouble();
-        ucs.setXDirection(new Point3D(xDir3d[0], xDir3d[1], xDir3d[2]));
-
-        double[] yDir3d = r.read3BitDouble();
-        ucs.setYDirection(new Point3D(yDir3d[0], yDir3d[1], yDir3d[2]));
+    private static void handle(AbstractDwgTableRecord record, String name, BitStreamReader r, long self) {
+        record.setValue(name, new DwgHandleRef(r.readHandleReference(self)));
     }
 }
