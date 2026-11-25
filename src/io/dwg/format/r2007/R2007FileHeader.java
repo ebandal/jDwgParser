@@ -53,7 +53,7 @@ public class R2007FileHeader {
             throw new Exception("RS decoding failed for R2007 header");
         }
 
-        // libredwg reads compr_len as int32_t (signed) at offset 24
+        // ComprLen at 0x18 is signed: negative means the data is not compressed (spec §5.2)
         int comprLen = (int) ByteUtils.readLE32(decodedHeader, 24);
 
         if (comprLen < 0 || comprLen > decodedHeader.length - 32) {
@@ -80,7 +80,7 @@ public class R2007FileHeader {
         }
 
         // Extract fields from decompressed header - all LE64
-        // Per libredwg dwg.h struct r2007_file_header
+        // Offsets of the decompressed file header, spec §5.2
         h.pageMapCorrection = ByteUtils.readLE64(decompressedHeader, 24);
         h.pageMapOffset = ByteUtils.readLE64(decompressedHeader, 56);
         h.pageMapSizeComp = ByteUtils.readLE64(decompressedHeader, 80);

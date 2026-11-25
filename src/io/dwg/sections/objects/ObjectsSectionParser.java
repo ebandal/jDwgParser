@@ -109,7 +109,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                 BitStreamReader r = new BitStreamReader(bbuf, version);
                 r.setTextCharset(textCharset);
 
-                // MS returns object size in BYTES (libredwg: obj->size = bit_read_MS(dat); dat->size = obj->size)
+                // MS: entity length in bytes, not counting itself or the CRC (spec §20.4.1)
                 int objSizeBytes = r.readModularShort();
 
                 // R2010+: UMC (handlestream_size in bits) comes between MS and type code.

@@ -33,8 +33,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
 
     @Override
     public boolean supports(DwgVersion version) {
-        // libredwg uses decode_R2004 for R2010+ as well (see decode.c line 222-226).
-        // R2010, R2013, R2018 share the R2004 file structure with different version strings.
+        // Spec chapters 6-8: R2010, R2013 and R2018 have the file structure of R2004.
         return version == DwgVersion.R2004
             || version == DwgVersion.R2010
             || version == DwgVersion.R2013
@@ -155,7 +154,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
 
     /**
      * 암호화된 R2004 헤더를 복호화합니다.
-     * libredwg 구현을 기반으로 함: decrypt_R2004_header()
+     * 스펙 §4.1: 0x6C 바이트를 randseed 수열(randseed = randseed * 0x343FD + 0x269EC3, 상위 16비트의 하위 바이트)과 XOR.
      */
     private byte[] decryptR2004Header(byte[] encryptedData) {
         byte[] decrypted = new byte[encryptedData.length];
@@ -473,7 +472,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         }
 
         // SECOND PASS: Assemble each section using address-based placement.
-        // libredwg: max_decomp_size = 0x7400 for all standard sections (Objects, Handles, Classes, etc.)
+        // Spec §4.5: the maximum decompressed size of a section page is normally 0x7400.
         // Each page is decompressed into a fixed 0x7400-byte slot at page.address offset.
         final int MAX_DECOMP_SIZE = 0x7400;
 

@@ -29,7 +29,7 @@ public class R13FileStructureHandler extends AbstractFileStructureHandler {
     public FileHeaderFields readHeader(BitInput input) throws Exception {
         FileHeaderFields fields = new FileHeaderFields(DwgVersion.R13);
 
-        // R13 헤더 구조 (libredwg header.spec 참고)
+        // R13/R14 file header (spec §3.2)
         // 0x00-0x05: Version string (6 바이트)
         // 0x06-0x0B: Reserved (6 바이트)
         // 0x0C 이후: Header fields 시작
@@ -44,7 +44,7 @@ public class R13FileStructureHandler extends AbstractFileStructureHandler {
             throw new IllegalArgumentException("Invalid R13 version string: " + version);
         }
 
-        // 2. Reserved (5 바이트) per libredwg: version magic is 11 bytes total (6+5)
+        // 2. Reserved (5 바이트): spec §3.2.1, zeros (R14: the last of the six is ACADMAINTVER)
         for (int i = 0; i < 5; i++) {
             input.readRawChar();
         }
@@ -70,7 +70,7 @@ public class R13FileStructureHandler extends AbstractFileStructureHandler {
         short codePage = input.readRawShort();
         fields.setCodePage(codePage & 0xFFFF);
 
-        // 9. RL (4 바이트): sections count (bytes 21-24) per libredwg PRE(R_2004a)
+        // 9. RL (4 바이트): number of section-locator records at 0x15 (spec §3.2.6)
         int sectionCount = input.readRawLong();
 
         // 9. 섹션 Locator 배열 읽기

@@ -22,8 +22,8 @@ public class DwgFileStructureHandlerFactory {
             case R2010:
             case R2013:
             case R2018:
-                // libredwg's decode.c (line 222-226) uses decode_R2004 for R2010+ files.
-                // R2010, R2013, R2018 share R2004 file structure (only version string differs).
+                // Spec chapters 6-8: R2010, R2013 and R2018 have the file header, page map,
+                // section map and compression of R2004.
                 return new io.dwg.format.r2004.R2004FileStructureHandler();
             case R2007:
                 // R2007 uses its own RS-encoded format (the only version using RS).

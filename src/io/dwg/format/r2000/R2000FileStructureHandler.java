@@ -29,7 +29,7 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
     public FileHeaderFields readHeader(BitInput input) throws Exception {
         FileHeaderFields fields = new FileHeaderFields(DwgVersion.R2000);
 
-        // R2000 헤더 구조 (libredwg decode.c 참고)
+        // R2000 file header (spec §3.2)
         // 0x00-0x05: Version string (6 바이트) = "AC1015"
         // 0x06-0x0B: Reserved (6 바이트)
         // 0x0C 이후: Header fields
@@ -68,11 +68,11 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
         fields.setCodePage(codePage & 0xFFFF);
 
         // 8. RL (4 바이트): Number of sections
-        // LibreDWG header.spec: PRE(R_2004a) { FIELD_RL (sections, 0); }
+        // at 0x15, spec §3.2.6
         int sectionCount = input.readRawLong();
 
         // 9. 섹션 Locator 배열 읽기
-        // LibreDWG decode.c line 327-329: RC + RL + RL = 9 bytes per locator
+        // spec §3.2.6: record number (raw byte) | seeker (raw long) | size (raw long)
         // Format:
         // - record_number: RC (1 byte)
         // - seeker: RL (4 bytes) - byte offset in file

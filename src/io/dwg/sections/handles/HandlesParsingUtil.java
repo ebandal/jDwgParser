@@ -125,7 +125,7 @@ public class HandlesParsingUtil {
 
     /**
      * MC (signed modular char) 읽기
-     * Per libredwg bits.c bit_read_MC():
+     * Spec §2.6:
      *   - Non-last bytes: 7 bits (0x7F mask) contribute to value
      *   - Last byte (high bit=0): bit 6 (0x40) is sign flag, cleared before use (0xBF mask)
      */
