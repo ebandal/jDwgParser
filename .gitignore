@@ -17,3 +17,6 @@
 *~
 .DS_Store
 *.log
+
+# Sample drawings stay local (see test/io/dwg/Samples.java)
+/samples/

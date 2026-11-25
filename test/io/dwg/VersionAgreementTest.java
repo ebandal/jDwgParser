@@ -7,6 +7,7 @@ import java.io.File;
 import java.util.List;
 import java.util.Set;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import io.dwg.render.tool.VersionCompare;
@@ -16,7 +17,12 @@ import io.dwg.render.tool.VersionCompare;
  * reader, so a file of another version is right when it renders like its R2000 counterpart.
  */
 class VersionAgreementTest {
-    private static final File SAMPLES = new File("samples");
+    @BeforeAll
+    static void samplesArePresent() {
+        Samples.assumePresent();
+    }
+
+    private static final File SAMPLES = Samples.DIR;
 
     /** files whose content differs from the R2000 file, not only their version */
     private static final Set<String> DIFFERENT_CONTENT = Set.of(

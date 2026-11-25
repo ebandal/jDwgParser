@@ -159,11 +159,13 @@ With `-out`, both images of a pair that differs are written to that folder.
 
 ### Tests
 
-Both comparisons run as tests on the R2000 samples of the repository:
+Both comparisons run as tests on the sample drawings:
 
 ```bash
 mvn test
 ```
+
+The sample drawings are not part of the repository. Keep them in a local folder with the layout described above (`2000/`, `2004/`, ..., `example_<version>.dwg`) and either name it `samples` in the project folder or point to it with `-Ddwg.samples=<folder>` (for Maven: `mvn test -DargLine=-Ddwg.samples=<folder>`) or the environment variable `DWG_SAMPLES`. Without them the tests are skipped.
 
 - `test/io/dwg/ReaderAgreementTest.java` fails if any object is missing, is of the wrong class or differs.
 - `test/io/dwg/RenderAgreementTest.java` fails if any sample renders differently from the reference, or if `samples/example_2004.dwg` renders differently from `samples/example_2000.dwg` (the same drawing saved as R2004).

@@ -9,6 +9,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.List;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import io.dwg.api.DwgDocument;
@@ -25,9 +26,14 @@ import io.dwg.render.tool.RenderCompare;
  */
 class RenderAgreementTest {
 
+    @BeforeAll
+    static void samplesArePresent() {
+        Samples.assumePresent();
+    }
+
     @Test
     void r2000SamplesRenderIdentically() {
-        List<File> files = ReaderCheck.collect("samples/2000", "samples/example_2000.dwg", "samples/sample_2000.dwg");
+        List<File> files = ReaderCheck.collect(Samples.path("2000"), Samples.path("example_2000.dwg"), Samples.path("sample_2000.dwg"));
         assertTrue(files.size() >= 24, "R2000 samples are missing : found " + files.size());
 
         int images = 0;
@@ -47,8 +53,8 @@ class RenderAgreementTest {
     /** example_2004.dwg is the drawing of example_2000.dwg saved as R2004 : both must render the same. */
     @Test
     void r2004ExampleRendersLikeR2000() throws Exception {
-        BufferedImage r2000 = render("samples/example_2000.dwg");
-        BufferedImage r2004 = render("samples/example_2004.dwg");
+        BufferedImage r2000 = render(Samples.path("example_2000.dwg"));
+        BufferedImage r2004 = render(Samples.path("example_2004.dwg"));
 
         assertEquals(r2000.getWidth(), r2004.getWidth(), "image width");
         assertEquals(r2000.getHeight(), r2004.getHeight(), "image height");

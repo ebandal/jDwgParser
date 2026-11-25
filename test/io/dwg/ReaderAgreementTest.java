@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.File;
 import java.util.List;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import io.dwg.render.tool.ReaderCheck;
@@ -16,9 +17,14 @@ import io.dwg.render.tool.ReaderCheck;
  */
 class ReaderAgreementTest {
 
+    @BeforeAll
+    static void samplesArePresent() {
+        Samples.assumePresent();
+    }
+
     @Test
     void r2000SamplesAgree() {
-        List<File> files = ReaderCheck.collect("samples/2000", "samples/example_2000.dwg", "samples/sample_2000.dwg");
+        List<File> files = ReaderCheck.collect(Samples.path("2000"), Samples.path("example_2000.dwg"), Samples.path("sample_2000.dwg"));
         assertTrue(files.size() >= 24, "R2000 samples are missing : found " + files.size());
 
         ReaderCheck.Result result = ReaderCheck.check(files);
