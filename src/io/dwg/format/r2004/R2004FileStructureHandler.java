@@ -23,7 +23,6 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
 
     // readHeader → readSections 로 전달되는 값들
     private long sectionMapOffset;
-    private int sectionPageAmount;
     private int sectionMapId;
 
     @Override
@@ -41,184 +40,78 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
     }
 
     // -------------------------------------------------------------------------
-    // readHeader
+    // readHeader (spec §4.1)
     // -------------------------------------------------------------------------
+
+    private static final int META_DATA_SIZE = 0x80;
+    private static final int ENCRYPTED_SIZE = 0x6C;
+
+    /**
+     * Reads the R2004 file header (spec §4.1). Plain part:
+     * <pre>
+     *   0x00  6  version id      0x0B 1 maintenance version   0x0D 4 preview address
+     *   0x13  2  code page       0x18 4 security flags         0x20 4 summary info address
+     *   0x24  4  VBA project address
+     * </pre>
+     * The 0x6C bytes at 0x80 are encrypted; decrypted they hold, among others, the section page
+     * map address at 0x54 (add 0x100) and the section map id at 0x5C.
+     */
     @Override
     public FileHeaderFields readHeader(BitInput input) throws Exception {
+        byte[] plain = new byte[META_DATA_SIZE];
+        for (int i = 0; i < plain.length; i++) {
+            plain[i] = (byte) input.readRawChar();
+        }
+        String versionId = new String(plain, 0, 6, StandardCharsets.US_ASCII);
+        if (!versionId.equals("AC1018") && !versionId.equals("AC1024")
+                && !versionId.equals("AC1027") && !versionId.equals("AC1032")) {
+            throw new IllegalArgumentException("Invalid version string for R2004 family: " + versionId);
+        }
+
         FileHeaderFields fields = new FileHeaderFields(DwgVersion.R2004);
+        fields.setMaintenanceVersion(plain[0x0B] & 0xFF);
+        fields.setPreviewOffset(ByteUtils.readLE32(plain, 0x0D) & 0xFFFFFFFFL);
+        fields.setCodePage(ByteUtils.readLE16(plain, 0x13) & 0xFFFF);
+        fields.setSecurityFlags((int) ByteUtils.readLE32(plain, 0x18));
+        fields.setSummaryInfoOffset(ByteUtils.readLE32(plain, 0x20) & 0xFFFFFFFFL);
+        fields.setVbaProjectOffset(ByteUtils.readLE32(plain, 0x24) & 0xFFFFFFFFL);
 
-        // 파일 헤더 구조 (스펙 §4.1, DecoderR2004 기반):
-        // 0x00-0x05: 버전 문자열 (AC1018=R2004, AC1024=R2010, AC1027=R2013, AC1032=R2018)
-        // 0x06-0x79: 라이브 데이터 필드들 (미암호화)
-        // 0x7A-0xE5: 암호화된 헤더 (0x6C 바이트)
-        // 0xE6-0xFF: 패딩
-
-        // 1. 버전 문자열 (0x00-0x05) 검증
-        byte[] versionBytes = new byte[6];
-        for (int i = 0; i < 6; i++) {
-            versionBytes[i] = (byte) input.readRawChar();
+        byte[] encrypted = new byte[ENCRYPTED_SIZE];
+        for (int i = 0; i < encrypted.length; i++) {
+            encrypted[i] = (byte) input.readRawChar();
         }
-        String version = new String(versionBytes, StandardCharsets.US_ASCII);
-        if (!version.equals("AC1018")
-            && !version.equals("AC1024")
-            && !version.equals("AC1027")
-            && !version.equals("AC1032")) {
-            throw new IllegalArgumentException("Invalid version string for R2004 family: " + version);
-        }
-
-        // 2. 라이브 데이터 필드 파싱 (0x06-0x7F, 0x7A바이트)
-        byte[] liveDataFields = new byte[0x7A];
-        for (int i = 0; i < 0x7A; i++) {
-            liveDataFields[i] = (byte) input.readRawChar();
-        }
-
-        int liveOffset = 0;
-
-        liveOffset += 5;  // 0x06-0x0A: unknown
-
-        int maintenanceVersion = liveDataFields[liveOffset++] & 0xFF;
-        fields.setMaintenanceVersion(maintenanceVersion);
-
-        liveOffset += 1;  // 0x0C: Unknown
-
-        int previewOffset = (int) ByteUtils.readLE32(liveDataFields, liveOffset);
-        fields.setPreviewOffset(previewOffset & 0xFFFFFFFFL);
-        liveOffset += 4;
-
-        liveOffset += 1;  // 0x11: Application version
-        liveOffset += 1;  // 0x12: Application maintenance version
-
-        int codePage = ByteUtils.readLE16(liveDataFields, liveOffset) & 0xFFFF;
-        fields.setCodePage(codePage);
-        liveOffset += 2;
-
-        liveOffset += 3;  // 0x15-0x17: unknown
-
-        int securityFlags = (int) ByteUtils.readLE32(liveDataFields, liveOffset);
-        fields.setSecurityFlags(securityFlags);
-        liveOffset += 4;
-
-        liveOffset += 4;  // 0x1C-0x1F: Unknown
-
-        int summaryInfoOffset = (int) ByteUtils.readLE32(liveDataFields, liveOffset);
-        fields.setSummaryInfoOffset(summaryInfoOffset & 0xFFFFFFFFL);
-        liveOffset += 4;
-
-        int vbaOffset = (int) ByteUtils.readLE32(liveDataFields, liveOffset);
-        fields.setVbaProjectOffset(vbaOffset & 0xFFFFFFFFL);
-        liveOffset += 4;
-
-        liveOffset += 4;  // 0x28-0x2B: Unknown
-        liveOffset += 4;  // 0x2C-0x2F: Unknown
-
-        // 3. 파일의 0x7A-0xE5 (암호화된 헤더) 읽기
-        byte[] encryptedHeader = new byte[0x6C];
-        for (int i = 0; i < 0x6C; i++) {
-            encryptedHeader[i] = (byte) input.readRawChar();
-        }
-
-        // 4. 암호화된 헤더 복호화
-        byte[] decryptedHeader = decryptR2004Header(encryptedHeader);
-
-        // Parse encrypted header fields
-        int decOffset = 12;  // skip file ID string (0x00-0x0B)
-
-        decOffset += 12;  // 0x0C-0x17: unknown (3 * 4 bytes)
-        decOffset += 4;   // 0x18-0x1B: rootTreeNodeGap
-        decOffset += 4;   // 0x1C-0x1F: lowermostLeftTreeNodeGap
-        decOffset += 4;   // 0x20-0x23: lowermostRightTreeNodeGap
-        decOffset += 4;   // 0x24-0x27: unknown
-        decOffset += 4;   // 0x28-0x2B: lastSectionPageId
-        decOffset += 8;   // 0x2C-0x33: lastSectionPageEndAddress
-        decOffset += 8;   // 0x34-0x3B: secondHeaderDataAddress
-
-        decOffset += 4;   // 0x3C-0x3F: gapAmount
-
-        this.sectionPageAmount = (int) (ByteUtils.readLE32(decryptedHeader, decOffset) & 0xFFFFFFFF);
-        decOffset += 4;
-
-        decOffset += 4;  // 0x44-0x47
-        decOffset += 4;  // 0x48-0x4B
-        decOffset += 4;  // 0x4C-0x4F
-
-        // 5. Extract section map offset from encrypted header (0x54-0x5B)
-        sectionMapOffset = ByteUtils.readLE64(decryptedHeader, 0x54) & 0xFFFFFFFFFFFFFFFFL;
-        // 0x5C : id of the page that holds the section map
-        sectionMapId = (int) ByteUtils.readLE32(decryptedHeader, 0x5C);
-
-        // 6. 복호화된 헤더 CRC 검증
-        verifyCrc32(decryptedHeader);
-
+        byte[] header = xorWithMagicSequence(encrypted);
+        sectionMapOffset = ByteUtils.readLE64(header, 0x54);
+        sectionMapId = (int) ByteUtils.readLE32(header, 0x5C);
         return fields;
     }
 
     /**
-     * 암호화된 R2004 헤더를 복호화합니다.
-     * 스펙 §4.1: 0x6C 바이트를 randseed 수열(randseed = randseed * 0x343FD + 0x269EC3, 상위 16비트의 하위 바이트)과 XOR.
+     * Decrypts the encrypted file header (spec §4.1): each byte is XORed with the next value of
+     * the sequence {@code seed = seed * 0x343FD + 0x269EC3} (32-bit, starting at 1), taking
+     * bits 16–23 of the seed.
      */
-    private byte[] decryptR2004Header(byte[] encryptedData) {
-        byte[] decrypted = new byte[encryptedData.length];
-        int rseed = 1;
-
-        for (int i = 0; i < encryptedData.length; i++) {
-            rseed = (int)((rseed * 0x343fdL + 0x269ec3L) & 0xFFFFFFFFL);
-            decrypted[i] = (byte) (encryptedData[i] ^ ((rseed >> 16) & 0xFF));
+    static byte[] xorWithMagicSequence(byte[] data) {
+        byte[] out = new byte[data.length];
+        int seed = 1;
+        for (int i = 0; i < data.length; i++) {
+            seed = seed * 0x343FD + 0x269EC3;
+            out[i] = (byte) (data[i] ^ (seed >>> 16));
         }
-
-        return decrypted;
-    }
-
-    /**
-     * 복호화된 R2004 헤더의 CRC32를 검증합니다.
-     */
-    private void verifyCrc32(byte[] decryptedHeader) {
-        int storedCrc32 = (int) ByteUtils.readLE32(decryptedHeader, 0x68);
-
-        byte[] dataForCrc = decryptedHeader.clone();
-        dataForCrc[0x68] = 0;
-        dataForCrc[0x69] = 0;
-        dataForCrc[0x6A] = 0;
-        dataForCrc[0x6B] = 0;
-
-        int calculatedCrc32 = calculateCrc32(dataForCrc, 0, 0x6C);
-
-        if (storedCrc32 != calculatedCrc32) {
-            // CRC mismatch is non-fatal — continue parsing
-        }
-    }
-
-    /**
-     * CRC-32 계산 (R2004+ 헤더용)
-     */
-    private int calculateCrc32(byte[] data, int offset, int length) {
-        int crc = 0xFFFFFFFF;
-
-        for (int i = offset; i < offset + length; i++) {
-            int byte_val = data[i] & 0xFF;
-            crc = CrcLookupTables.CRC32_TABLE[(crc ^ byte_val) & 0xFF] ^ (crc >>> 8);
-        }
-
-        return crc ^ 0xFFFFFFFF;
+        return out;
     }
 
     // -------------------------------------------------------------------------
-    // readSections - Simplified using DecoderR2004 logic
+    // readSections
     // -------------------------------------------------------------------------
     @Override
     public Map<String, SectionInputStream> readSections(BitInput input, FileHeaderFields header)
             throws Exception {
-        // The section map of the file says which pages make up which section. If it cannot be read,
-        // fall back to scanning the pages in file order.
         try {
-            Map<String, SectionInputStream> sections = readSectionsFromMap(input);
-            if (sections.containsKey("AcDb:Handles")
-                    && (sections.containsKey("AcDb:AcDbObjects") || sections.containsKey("AcDb:Objects"))) {
-                return sections;
-            }
+            return readSectionsFromMap(input);
         } catch (Exception e) {
-            // fall through
+            return new HashMap<>();
         }
-        return readSectionsByScanning(input, header);
     }
 
     private static final int PAGE_MAP_TYPE = 0x41630e3b;
@@ -370,167 +263,6 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         return ByteBuffer.wrap(b, off, 8).order(ByteOrder.LITTLE_ENDIAN).getLong();
     }
 
-    /**
-     * Sections found by reading the pages in file order from 0x100 and assuming the usual section numbers.
-     * Used only when the section map cannot be read.
-     */
-    private Map<String, SectionInputStream> readSectionsByScanning(BitInput input, FileHeaderFields header)
-            throws Exception {
-        Map<String, SectionInputStream> sections = new HashMap<>();
-
-        if (sectionMapOffset == 0) return sections;
-
-        // STEP 1: Initialize default section names
-        Map<Integer, String> sectionNames = new HashMap<>();
-        sectionNames.put(1, "AcDb:Header");
-        sectionNames.put(2, "AcDb:AuxHeader");
-        sectionNames.put(3, "AcDb:Classes");
-        sectionNames.put(4, "AcDb:Handles");
-        sectionNames.put(5, "AcDb:Template");
-        sectionNames.put(6, "AcDb:AuxHeader2");
-        sectionNames.put(7, "AcDb:Objects");
-
-        // STEP 2: Read data pages from 0x100 onwards
-        long sectionDataStart = 0x100;
-        input.seek(sectionDataStart * 8);
-
-        long maxRead = sectionMapOffset - sectionDataStart;
-        if (maxRead > 1000000) maxRead = 1000000;
-
-        ByteArrayOutputStream sectionDataStream = new ByteArrayOutputStream();
-        try {
-            for (long i = 0; i < maxRead; i++) {
-                try {
-                    int b = input.readRawChar() & 0xFF;
-                    sectionDataStream.write(b);
-                } catch (Exception e) {
-                    break;
-                }
-            }
-        } catch (Exception e) {
-            // Reading error
-        }
-        byte[] allData = sectionDataStream.toByteArray();
-
-        // FIRST PASS: Read exactly sectionPageAmount pages from 0x100
-        Map<Integer, SectionInfo> dataPages = new HashMap<>();
-        int scanOffset = 0;
-        int pagesRead = 0;
-
-        while (scanOffset + 4 <= allData.length && pagesRead < sectionPageAmount) {
-            int rawPageType = ByteBuffer.wrap(allData, scanOffset, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
-            byte[] pageHeader;
-            int pageType;
-
-            if (rawPageType == 0x41630e3b || rawPageType == 0x4163003b) {
-                if (scanOffset + 32 > allData.length) break;
-                pageHeader = new byte[32];
-                System.arraycopy(allData, scanOffset, pageHeader, 0, 32);
-                pageType = rawPageType;
-            } else {
-                if (scanOffset + 32 > allData.length) break;
-                long actualFileOffset = sectionDataStart + scanOffset;
-                int secMask = (int)(0x4164536bL ^ (actualFileOffset & 0xFFFFFFFFL));
-                pageHeader = new byte[32];
-                for (int i = 0; i < 8; i++) {
-                    int hdr = ByteBuffer.wrap(allData, scanOffset + i*4, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
-                    hdr ^= secMask;
-                    byte[] decrypted = ByteBuffer.allocate(4).putInt(hdr).array();
-                    System.arraycopy(decrypted, 0, pageHeader, i*4, 4);
-                }
-                pageType = ByteBuffer.wrap(pageHeader, 0, 4).order(ByteOrder.BIG_ENDIAN).getInt();
-            }
-            int compSize = ByteBuffer.wrap(pageHeader, 8, 4).order(ByteOrder.BIG_ENDIAN).getInt();
-
-            if (compSize < 0 || compSize > 100000) {
-                break;
-            }
-
-            pagesRead++;
-
-            if (pageType == 0x4163043b) {
-                int sectionNum = ByteBuffer.wrap(pageHeader, 4, 4).order(ByteOrder.BIG_ENDIAN).getInt();
-                int decompSize = ByteBuffer.wrap(pageHeader, 12, 4).order(ByteOrder.BIG_ENDIAN).getInt();
-                int address = ByteBuffer.wrap(pageHeader, 16, 4).order(ByteOrder.BIG_ENDIAN).getInt();
-
-                if (sectionNum <= 28) {
-                    if (!dataPages.containsKey(sectionNum)) {
-                        dataPages.put(sectionNum, new SectionInfo());
-                    }
-                    dataPages.get(sectionNum).pages.add(new PageInfo(scanOffset + 32, compSize, decompSize, address));
-                }
-            }
-
-            scanOffset += 32 + compSize;
-
-            if (scanOffset % 0x20 != 0) {
-                int align = 0x20 - (scanOffset % 0x20);
-                scanOffset += align;
-            }
-
-            if (scanOffset >= allData.length) break;
-        }
-
-        // SECOND PASS: Assemble each section using address-based placement.
-        // Spec §4.5: the maximum decompressed size of a section page is normally 0x7400.
-        // Each page is decompressed into a fixed 0x7400-byte slot at page.address offset.
-        final int MAX_DECOMP_SIZE = 0x7400;
-
-        for (Integer sectionNum : dataPages.keySet()) {
-            SectionInfo info = dataPages.get(sectionNum);
-            String sectionName = sectionNames.getOrDefault(sectionNum, "Unknown(" + sectionNum + ")");
-
-            // Compute total output buffer size from page addresses
-            int totalSize = 0;
-            for (PageInfo page : info.pages) {
-                int end = page.address + MAX_DECOMP_SIZE;
-                if (end > totalSize) totalSize = end;
-            }
-            if (totalSize <= 0) continue;
-
-            byte[] outputBuffer = new byte[totalSize]; // zero-filled
-
-            for (PageInfo page : info.pages) {
-                int available = Math.min(page.compSize, allData.length - page.headerEnd);
-                if (available <= 0) continue;
-                byte[] compressedData = new byte[available];
-                System.arraycopy(allData, page.headerEnd, compressedData, 0, available);
-
-                try {
-                    io.dwg.core.util.R2004Lz77Decompressor lz77 = new io.dwg.core.util.R2004Lz77Decompressor();
-                    byte[] pageDecomp = lz77.decompress(compressedData, MAX_DECOMP_SIZE);
-                    int copyLen = Math.min(pageDecomp.length, MAX_DECOMP_SIZE);
-                    int destOff = page.address;
-                    if (destOff >= 0 && destOff + copyLen <= totalSize) {
-                        System.arraycopy(pageDecomp, 0, outputBuffer, destOff, copyLen);
-                    }
-                } catch (Exception e) {
-                    // Fallback: raw copy at address offset
-                    int destOff = page.address;
-                    if (destOff >= 0 && destOff + available <= totalSize) {
-                        System.arraycopy(compressedData, 0, outputBuffer, destOff, available);
-                    }
-                }
-            }
-
-            sections.put(sectionName, new SectionInputStream(outputBuffer, sectionName));
-        }
-
-        return sections;
-    }
-
-    // Helper classes for section tracking
-    private static class SectionInfo {
-        java.util.List<PageInfo> pages = new java.util.ArrayList<>();
-    }
-
-    private static class PageInfo {
-        int headerEnd, compSize, address;
-        PageInfo(int hEnd, int comp, int decomp, int addr) {
-            headerEnd = hEnd; compSize = comp; address = addr;
-        }
-    }
-
     // -------------------------------------------------------------------------
     // writeHeader / writeSections
     // -------------------------------------------------------------------------
@@ -600,6 +332,15 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
     /**
      * 암호화된 R2004 헤더를 생성합니다.
      */
+    /** Standard CRC-32 (reflected, initial value and final XOR 0xFFFFFFFF), used by the writer. */
+    private int calculateCrc32(byte[] data, int offset, int length) {
+        int crc = 0xFFFFFFFF;
+        for (int i = offset; i < offset + length; i++) {
+            crc = CrcLookupTables.CRC32_TABLE[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
+        }
+        return ~crc;
+    }
+
     private byte[] encryptR2004Header(byte[] plaintext) {
         byte[] encrypted = new byte[plaintext.length];
         int rseed = 1;
