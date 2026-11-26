@@ -44,7 +44,7 @@ public class DictionaryObjectReader implements ObjectReader {
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgDictionary dict = (DwgDictionary) target;
         for (String name : dict.names()) {
-            dict.addEntry(name, new DwgHandleRef(r.readHandleReference(target.handle())));
+            dict.addEntry(name, r.readRef(target.handle()));
         }
     }
 }

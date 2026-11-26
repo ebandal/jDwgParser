@@ -33,6 +33,6 @@ public class AppIdObjectReader implements ObjectReader {
 
     @Override
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
-        ((DwgAppId) target).setXrefBlockHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
+        ((DwgAppId) target).setXrefBlockHandle(r.readRef(target.handle()));
     }
 }

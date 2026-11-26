@@ -87,6 +87,6 @@ public class ViewportObjectReader implements ObjectReader {
     }
 
     private static DwgHandleRef handle(BitStreamReader r, long self) {
-        return new DwgHandleRef(r.readHandleReference(self));
+        return r.readRef(self);
     }
 }

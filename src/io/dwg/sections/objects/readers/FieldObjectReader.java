@@ -55,10 +55,10 @@ public class FieldObjectReader implements ObjectReader {
         DwgField field = (DwgField) target;
         long self = target.handle();
         for (int i = 0; i < (Integer) field.value("CHILDCOUNT"); i++) {
-            field.addChildFieldHandle(new DwgHandleRef(r.readHandleReference(self)));
+            field.addChildFieldHandle(r.readRef(self));
         }
         for (int i = 0; i < (Integer) field.value("OBJECTCOUNT"); i++) {
-            field.addObjectHandle(new DwgHandleRef(r.readHandleReference(self)));
+            field.addObjectHandle(r.readRef(self));
         }
     }
 }

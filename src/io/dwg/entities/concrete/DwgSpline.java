@@ -15,7 +15,7 @@ public class DwgSpline extends AbstractDwgEntity {
     private int degree;  // B-spline 차수 (1-3)
     private List<Point3D> controlPoints = new ArrayList<>();
     private List<Point3D> fitPoints = new ArrayList<>();
-    private double[] extrusion = {0.0, 0.0, 1.0};
+    private double[] extrusion = io.dwg.entities.Extrusions.shared();
     private int flags;
 
     @Override
@@ -24,13 +24,13 @@ public class DwgSpline extends AbstractDwgEntity {
     public int degree() { return degree; }
     public List<Point3D> controlPoints() { return controlPoints; }
     public List<Point3D> fitPoints() { return fitPoints; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
     public int flags() { return flags; }
 
     public void setDegree(int degree) { this.degree = degree; }
     public void setControlPoints(List<Point3D> controlPoints) { this.controlPoints = controlPoints; }
     public void setFitPoints(List<Point3D> fitPoints) { this.fitPoints = fitPoints; }
-    public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+    public void setExtrusion(double[] extrusion) { this.extrusion = io.dwg.entities.Extrusions.share(extrusion); }
     public void setFlags(int flags) { this.flags = flags; }
 
     public void addControlPoint(Point3D point) {

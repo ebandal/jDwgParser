@@ -63,6 +63,6 @@ public class MLineObjectReader implements ObjectReader {
 
     @Override
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
-        ((DwgMLine) target).setMlineStyleHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
+        ((DwgMLine) target).setMlineStyleHandle(r.readRef(target.handle()));
     }
 }

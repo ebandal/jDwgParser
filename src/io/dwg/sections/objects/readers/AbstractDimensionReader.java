@@ -73,7 +73,7 @@ abstract class AbstractDimensionReader implements ObjectReader {
     @Override
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         AbstractDwgDimension dim = (AbstractDwgDimension) target;
-        dim.setDimStyleHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
-        dim.setBlockHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
+        dim.setDimStyleHandle(r.readRef(target.handle()));
+        dim.setBlockHandle(r.readRef(target.handle()));
     }
 }

@@ -13,7 +13,7 @@ public class DwgViewport extends AbstractDwgEntity {
     private double width;
     private double height;
     private double viewHeight;
-    private double[] extrusion = {0.0, 0.0, 1.0};
+    private double[] extrusion = io.dwg.entities.Extrusions.shared();
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.VIEWPORT; }
@@ -22,13 +22,13 @@ public class DwgViewport extends AbstractDwgEntity {
     public double width() { return width; }
     public double height() { return height; }
     public double viewHeight() { return viewHeight; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
 
     public void setCenter(Point3D center) { this.center = center; }
     public void setWidth(double width) { this.width = width; }
     public void setHeight(double height) { this.height = height; }
     public void setViewHeight(double viewHeight) { this.viewHeight = viewHeight; }
-    public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+    public void setExtrusion(double[] extrusion) { this.extrusion = io.dwg.entities.Extrusions.share(extrusion); }
 
     private final java.util.List<io.dwg.core.type.DwgHandleRef> frozenLayerHandles = new java.util.ArrayList<>();
 

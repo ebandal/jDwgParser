@@ -35,7 +35,7 @@ public class UcsObjectReader implements ObjectReader {
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         AbstractDwgTableRecord record = (AbstractDwgTableRecord) target;
         long self = target.handle();
-        record.setXrefBlockHandle(new DwgHandleRef(r.readHandleReference(self)));
+        record.setXrefBlockHandle(r.readRef(self));
         if (v.from(DwgVersion.R2000)) {
             handle(record, "BASEUCS", r, self);
             handle(record, "NAMEDUCS", r, self);
@@ -43,6 +43,6 @@ public class UcsObjectReader implements ObjectReader {
     }
 
     private static void handle(AbstractDwgTableRecord record, String name, BitStreamReader r, long self) {
-        record.setValue(name, new DwgHandleRef(r.readHandleReference(self)));
+        record.setValue(name, r.readRef(self));
     }
 }

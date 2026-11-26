@@ -13,7 +13,7 @@ public class DwgText extends AbstractDwgEntity {
     private double elevation;
     private Point2D insertionPoint;
     private Point2D alignmentPoint;
-    private double[] extrusion = {0.0, 0.0, 1.0};
+    private double[] extrusion = io.dwg.entities.Extrusions.shared();
     private double thickness;
     private double obliquAngle;
     private double rotationAngle;
@@ -38,7 +38,7 @@ public class DwgText extends AbstractDwgEntity {
     public int verticalAlignment() { return verticalAlignment; }
     public double obliquAngle() { return obliquAngle; }
     public double thickness() { return thickness; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
     public int generation() { return generation; }
     public DwgHandleRef styleHandle() { return styleHandle; }
 
@@ -52,7 +52,7 @@ public class DwgText extends AbstractDwgEntity {
     public void setVerticalAlignment(int v) { this.verticalAlignment = v; }
     public void setObliquAngle(double obliquAngle) { this.obliquAngle = obliquAngle; }
     public void setThickness(double thickness) { this.thickness = thickness; }
-    public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+    public void setExtrusion(double[] extrusion) { this.extrusion = io.dwg.entities.Extrusions.share(extrusion); }
     public void setGeneration(int generation) { this.generation = generation; }
     public void setStyleHandle(DwgHandleRef styleHandle) { this.styleHandle = styleHandle; }
     public double dataFlags() { return dataFlags; }

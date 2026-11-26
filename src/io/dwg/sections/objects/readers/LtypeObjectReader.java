@@ -103,9 +103,9 @@ public class LtypeObjectReader implements ObjectReader {
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgLtype ltype = (DwgLtype) target;
         long self = target.handle();
-        ltype.setXrefBlockHandle(new DwgHandleRef(r.readHandleReference(self)));
+        ltype.setXrefBlockHandle(r.readRef(self));
         for (int i = 0; i < ltype.numDashes(); i++) {
-            ltype.setDash(i, ltype.dashes().get(i).withStyleHandle(new DwgHandleRef(r.readHandleReference(self))));
+            ltype.setDash(i, ltype.dashes().get(i).withStyleHandle(r.readRef(self)));
         }
     }
 }

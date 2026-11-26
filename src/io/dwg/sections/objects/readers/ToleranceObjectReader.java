@@ -38,6 +38,6 @@ public class ToleranceObjectReader implements ObjectReader {
 
     @Override
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
-        ((DwgTolerance) target).setValue("DIMSTYLE", new DwgHandleRef(r.readHandleReference(target.handle())));
+        ((DwgTolerance) target).setValue("DIMSTYLE", r.readRef(target.handle()));
     }
 }

@@ -14,7 +14,7 @@ public class DwgInsert extends AbstractDwgEntity {
     private double yScale = 1.0;
     private double zScale = 1.0;
     private double rotation;
-    private double[] extrusion = {0.0, 0.0, 1.0};
+    private double[] extrusion = io.dwg.entities.Extrusions.shared();
     private boolean hasAttribs;
     private DwgHandleRef blockHeaderHandle;
     private DwgHandleRef firstAttribHandle;
@@ -31,7 +31,7 @@ public class DwgInsert extends AbstractDwgEntity {
     public double yScale() { return yScale; }
     public double zScale() { return zScale; }
     public double rotation() { return rotation; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
     public boolean hasAttribs() { return hasAttribs; }
     public DwgHandleRef blockHeaderHandle() { return blockHeaderHandle; }
     public DwgHandleRef firstAttribHandle() { return firstAttribHandle; }
@@ -47,7 +47,7 @@ public class DwgInsert extends AbstractDwgEntity {
     public void setYScale(double v) { this.yScale = v; }
     public void setZScale(double v) { this.zScale = v; }
     public void setRotation(double v) { this.rotation = v; }
-    public void setExtrusion(double[] v) { this.extrusion = v; }
+    public void setExtrusion(double[] v) { this.extrusion = io.dwg.entities.Extrusions.share(v); }
     public void setHasAttribs(boolean v) { this.hasAttribs = v; }
     public void setBlockHeaderHandle(DwgHandleRef h) { this.blockHeaderHandle = h; }
     public void setFirstAttribHandle(DwgHandleRef h) { this.firstAttribHandle = h; }

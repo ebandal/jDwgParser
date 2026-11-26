@@ -18,7 +18,7 @@ public class DwgPolyline2D extends AbstractDwgPolyline {
     private double defaultStartWidth;
     private double defaultEndWidth;
     private double elevation;
-    private double[] extrusion = {0.0, 0.0, 1.0};
+    private double[] extrusion = io.dwg.entities.Extrusions.shared();
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.POLYLINE_2D; }
@@ -28,14 +28,14 @@ public class DwgPolyline2D extends AbstractDwgPolyline {
     public double defaultStartWidth() { return defaultStartWidth; }
     public double defaultEndWidth() { return defaultEndWidth; }
     public double elevation() { return elevation; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
 
     public void addVertex(Point3D vertex) { this.vertices.add(vertex); }
     public void setFlags(int flags) { this.flags = flags; }
     public void setDefaultStartWidth(double width) { this.defaultStartWidth = width; }
     public void setDefaultEndWidth(double width) { this.defaultEndWidth = width; }
     public void setElevation(double elevation) { this.elevation = elevation; }
-    public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+    public void setExtrusion(double[] extrusion) { this.extrusion = io.dwg.entities.Extrusions.share(extrusion); }
 
     // 플래그 헬퍼 메서드
     public boolean isClosed() { return (flags & 0x01) != 0; }

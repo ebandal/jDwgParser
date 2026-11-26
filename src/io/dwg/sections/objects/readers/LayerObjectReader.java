@@ -59,14 +59,14 @@ public class LayerObjectReader implements ObjectReader {
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgLayer layer = (DwgLayer) target;
         long self = target.handle();
-        layer.setXrefBlockHandle(new DwgHandleRef(r.readHandleReference(self)));
+        layer.setXrefBlockHandle(r.readRef(self));
         if (v.from(DwgVersion.R2000)) {
-            layer.setPlotStyleHandle(new DwgHandleRef(r.readHandleReference(self)));
+            layer.setPlotStyleHandle(r.readRef(self));
         }
         if (v.from(DwgVersion.R2007)) {
             r.readHandleReference(self);            // material
         }
-        layer.setLineTypeHandle(new DwgHandleRef(r.readHandleReference(self)));
+        layer.setLineTypeHandle(r.readRef(self));
         if (v.from(DwgVersion.R2013)) {
             // The specification lists an unknown handle that "always seems to be NULL" for all
             // versions. In the samples only R2013+ layers have it, and it is null in all 534.

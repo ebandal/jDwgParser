@@ -25,12 +25,12 @@ final class PolylineHandles {
         long self = polyline.handle();
         if (v.from(DwgVersion.R2004)) {
             for (int i = 0; i < polyline.ownedObjectCount(); i++) {
-                polyline.addVertexHandle(new DwgHandleRef(r.readHandleReference(self)));
+                polyline.addVertexHandle(r.readRef(self));
             }
         } else {
-            polyline.setFirstVertexHandle(new DwgHandleRef(r.readHandleReference(self)));
-            polyline.setLastVertexHandle(new DwgHandleRef(r.readHandleReference(self)));
+            polyline.setFirstVertexHandle(r.readRef(self));
+            polyline.setLastVertexHandle(r.readRef(self));
         }
-        polyline.setSeqendHandle(new DwgHandleRef(r.readHandleReference(self)));
+        polyline.setSeqendHandle(r.readRef(self));
     }
 }

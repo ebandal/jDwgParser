@@ -11,7 +11,7 @@ public class DwgCircle extends AbstractDwgEntity {
     private Point3D center;
     private double radius;
     private double thickness;
-    private double[] extrusion = {0.0, 0.0, 1.0};
+    private double[] extrusion = io.dwg.entities.Extrusions.shared();
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.CIRCLE; }
@@ -19,10 +19,10 @@ public class DwgCircle extends AbstractDwgEntity {
     public Point3D center() { return center; }
     public double radius() { return radius; }
     public double thickness() { return thickness; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
 
     public void setCenter(Point3D center) { this.center = center; }
     public void setRadius(double radius) { this.radius = radius; }
     public void setThickness(double thickness) { this.thickness = thickness; }
-    public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+    public void setExtrusion(double[] extrusion) { this.extrusion = io.dwg.entities.Extrusions.share(extrusion); }
 }

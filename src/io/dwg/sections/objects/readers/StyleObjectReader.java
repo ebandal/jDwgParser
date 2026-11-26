@@ -42,6 +42,6 @@ public class StyleObjectReader implements ObjectReader {
 
     @Override
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
-        ((DwgStyle) target).setXrefBlockHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
+        ((DwgStyle) target).setXrefBlockHandle(r.readRef(target.handle()));
     }
 }

@@ -25,14 +25,14 @@ public class DwgPolylineMesh extends AbstractDwgPolyline {
     public int nVertexCount() { return nVertexCount; }
     public int mDensity() { return mDensity; }
     public int nDensity() { return nDensity; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
 
     public void setFlags(int flags) { this.flags = flags; }
     public void setMVertexCount(int count) { this.mVertexCount = count; }
     public void setNVertexCount(int count) { this.nVertexCount = count; }
     public void setMDensity(int density) { this.mDensity = density; }
     public void setNDensity(int density) { this.nDensity = density; }
-    public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+    public void setExtrusion(double[] extrusion) { this.extrusion = io.dwg.entities.Extrusions.share(extrusion); }
     /** Curve and smooth surface type (DXF 75). */
     public int curveType() { return curveType; }
     public void setCurveType(int curveType) { this.curveType = curveType; }

@@ -11,7 +11,7 @@ import io.dwg.entities.DwgObjectType;
 public class DwgEllipse extends AbstractDwgEntity {
     private Point3D center;
     private Point3D majorAxisVec;
-    private double[] extrusion = {0.0, 0.0, 1.0};
+    private double[] extrusion = io.dwg.entities.Extrusions.shared();
     private double axisRatio;
     private double startParam;
     private double endParam;
@@ -21,7 +21,7 @@ public class DwgEllipse extends AbstractDwgEntity {
 
     public Point3D center() { return center; }
     public Point3D majorAxisVec() { return majorAxisVec; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
     public double axisRatio() { return axisRatio; }
     public double startParam() { return startParam; }
     public double endParam() { return endParam; }
@@ -39,7 +39,7 @@ public class DwgEllipse extends AbstractDwgEntity {
 
     public void setCenter(Point3D center) { this.center = center; }
     public void setMajorAxisVec(Point3D majorAxisVec) { this.majorAxisVec = majorAxisVec; }
-    public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+    public void setExtrusion(double[] extrusion) { this.extrusion = io.dwg.entities.Extrusions.share(extrusion); }
     public void setAxisRatio(double axisRatio) { this.axisRatio = axisRatio; }
     public void setStartParam(double startParam) { this.startParam = startParam; }
     public void setEndParam(double endParam) { this.endParam = endParam; }

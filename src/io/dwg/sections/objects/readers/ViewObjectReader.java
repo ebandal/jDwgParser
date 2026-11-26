@@ -58,7 +58,7 @@ public class ViewObjectReader implements ObjectReader {
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         AbstractDwgTableRecord record = (AbstractDwgTableRecord) target;
         long self = target.handle();
-        record.setXrefBlockHandle(new DwgHandleRef(r.readHandleReference(self)));
+        record.setXrefBlockHandle(r.readRef(self));
         if (v.from(DwgVersion.R2007)) {
             handle(record, "BACKGROUND", r, self);
             handle(record, "VISUALSTYLE", r, self);
@@ -74,6 +74,6 @@ public class ViewObjectReader implements ObjectReader {
     }
 
     private static void handle(AbstractDwgTableRecord record, String name, BitStreamReader r, long self) {
-        record.setValue(name, new DwgHandleRef(r.readHandleReference(self)));
+        record.setValue(name, r.readRef(self));
     }
 }

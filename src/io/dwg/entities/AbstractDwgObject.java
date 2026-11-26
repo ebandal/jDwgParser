@@ -14,9 +14,9 @@ import java.util.Optional;
 public abstract class AbstractDwgObject implements DwgObject, ValueHolder {
     protected long handle;
     protected DwgHandleRef ownerHandle;
-    protected List<DwgHandleRef> reactorHandles = new ArrayList<>();
+    protected List<DwgHandleRef> reactorHandles;        // null until the first one
     protected DwgHandleRef xDicHandle;
-    protected List<XDataRecord> xData = new ArrayList<>();
+    protected List<XDataRecord> xData;                   // null until the first record
     protected int rawTypeCode;
     private Map<String, Object> values;
     private byte[] rawData;
@@ -24,16 +24,16 @@ public abstract class AbstractDwgObject implements DwgObject, ValueHolder {
     @Override public long handle() { return handle; }
     @Override public int rawTypeCode() { return rawTypeCode; }
     @Override public DwgHandleRef ownerHandle() { return ownerHandle; }
-    @Override public List<DwgHandleRef> reactorHandles() { return Collections.unmodifiableList(reactorHandles); }
+    @Override public List<DwgHandleRef> reactorHandles() { return reactorHandles == null ? Collections.emptyList() : Collections.unmodifiableList(reactorHandles); }
     @Override public Optional<DwgHandleRef> xDicHandle() { return Optional.ofNullable(xDicHandle); }
-    @Override public List<XDataRecord> xData() { return Collections.unmodifiableList(xData); }
+    @Override public List<XDataRecord> xData() { return xData == null ? Collections.emptyList() : Collections.unmodifiableList(xData); }
 
     public void setHandle(long handle) { this.handle = handle; }
     public void setOwnerHandle(DwgHandleRef ownerHandle) { this.ownerHandle = ownerHandle; }
     public void setRawTypeCode(int rawTypeCode) { this.rawTypeCode = rawTypeCode; }
-    public void addReactorHandle(DwgHandleRef h) { this.reactorHandles.add(h); }
+    public void addReactorHandle(DwgHandleRef h) { if (reactorHandles == null) reactorHandles = new ArrayList<>(2); reactorHandles.add(h); }
     public void setXDicHandle(DwgHandleRef xDicHandle) { this.xDicHandle = xDicHandle; }
-    public void addXData(XDataRecord record) { this.xData.add(record); }
+    public void addXData(XDataRecord record) { if (xData == null) xData = new ArrayList<>(4); xData.add(record); }
 
     /**
      * The object's data as stored, from the type code to the end, for objects whose data this
@@ -57,5 +57,5 @@ public abstract class AbstractDwgObject implements DwgObject, ValueHolder {
         values.put(name, value);
     }
     /** Replaces each XData record by what {@code change} returns for it. */
-    public void replaceXData(java.util.function.UnaryOperator<XDataRecord> change) { this.xData.replaceAll(change); }
+    public void replaceXData(java.util.function.UnaryOperator<XDataRecord> change) { if (xData != null) xData.replaceAll(change); }
 }

@@ -118,7 +118,7 @@ public class MTextObjectReader implements ObjectReader {
     @Override
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgMText mtext = (DwgMText) target;
-        mtext.setStyleHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
+        mtext.setStyleHandle(r.readRef(target.handle()));
         if (v.from(DwgVersion.R2018) && mtext.isNotAnnotative()) {
             r.readHandleReference(target.handle());     // registered application
         }

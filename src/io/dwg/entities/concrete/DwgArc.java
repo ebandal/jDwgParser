@@ -13,7 +13,7 @@ public class DwgArc extends AbstractDwgEntity {
     private double startAngle;
     private double endAngle;
     private double thickness;
-    private double[] extrusion = {0.0, 0.0, 1.0};
+    private double[] extrusion = io.dwg.entities.Extrusions.shared();
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.ARC; }
@@ -23,12 +23,12 @@ public class DwgArc extends AbstractDwgEntity {
     public double startAngle() { return startAngle; }
     public double endAngle() { return endAngle; }
     public double thickness() { return thickness; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
 
     public void setCenter(Point3D center) { this.center = center; }
     public void setRadius(double radius) { this.radius = radius; }
     public void setStartAngle(double startAngle) { this.startAngle = startAngle; }
     public void setEndAngle(double endAngle) { this.endAngle = endAngle; }
     public void setThickness(double thickness) { this.thickness = thickness; }
-    public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+    public void setExtrusion(double[] extrusion) { this.extrusion = io.dwg.entities.Extrusions.share(extrusion); }
 }

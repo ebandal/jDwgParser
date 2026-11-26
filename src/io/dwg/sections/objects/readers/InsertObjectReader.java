@@ -77,18 +77,18 @@ public class InsertObjectReader implements ObjectReader {
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgInsert ins = (DwgInsert) target;
         long self = target.handle();
-        ins.setBlockHeaderHandle(new DwgHandleRef(r.readHandleReference(self)));
+        ins.setBlockHeaderHandle(r.readRef(self));
         if (!ins.hasAttribs()) {
             return;
         }
         if (v.from(DwgVersion.R2004)) {
             for (int i = 0; i < ins.ownedObjectCount(); i++) {
-                ins.addAttribHandle(new DwgHandleRef(r.readHandleReference(self)));
+                ins.addAttribHandle(r.readRef(self));
             }
         } else {
-            ins.setFirstAttribHandle(new DwgHandleRef(r.readHandleReference(self)));
-            ins.setLastAttribHandle(new DwgHandleRef(r.readHandleReference(self)));
+            ins.setFirstAttribHandle(r.readRef(self));
+            ins.setLastAttribHandle(r.readRef(self));
         }
-        ins.setSeqendHandle(new DwgHandleRef(r.readHandleReference(self)));
+        ins.setSeqendHandle(r.readRef(self));
     }
 }

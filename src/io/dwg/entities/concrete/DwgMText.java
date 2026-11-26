@@ -16,7 +16,7 @@ public class DwgMText extends AbstractDwgEntity {
     private int attachmentPoint;  // 정렬 방식 (1-9)
     private String styleName;
     private double angle;
-    private double[] extrusion = {0.0, 0.0, 1.0};
+    private double[] extrusion = io.dwg.entities.Extrusions.shared();
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.MTEXT; }
@@ -28,7 +28,7 @@ public class DwgMText extends AbstractDwgEntity {
     public int attachmentPoint() { return attachmentPoint; }
     public String styleName() { return styleName; }
     public double angle() { return angle; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
 
     public void setLocation(Point3D location) { this.location = location; }
     public void setWidth(double width) { this.width = width; }
@@ -37,7 +37,7 @@ public class DwgMText extends AbstractDwgEntity {
     public void setAttachmentPoint(int attachmentPoint) { this.attachmentPoint = attachmentPoint; }
     public void setStyleName(String styleName) { this.styleName = styleName; }
     public void setAngle(double angle) { this.angle = angle; }
-    public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+    public void setExtrusion(double[] extrusion) { this.extrusion = io.dwg.entities.Extrusions.share(extrusion); }
 
     private Point3D xAxisDirection;     // 문자 진행 방향 (WCS)
 

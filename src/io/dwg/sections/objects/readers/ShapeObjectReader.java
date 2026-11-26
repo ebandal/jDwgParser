@@ -36,6 +36,6 @@ public class ShapeObjectReader implements ObjectReader {
 
     @Override
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
-        ((DwgShape) target).setValue("STYLE", new DwgHandleRef(r.readHandleReference(target.handle())));
+        ((DwgShape) target).setValue("STYLE", r.readRef(target.handle()));
     }
 }

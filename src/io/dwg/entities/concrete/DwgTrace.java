@@ -10,13 +10,13 @@ import io.dwg.entities.DwgObjectType;
  */
 public class DwgTrace extends AbstractDwgEntity {
     private Point3D[] points = new Point3D[4];
-    private double[] extrusion = {0.0, 0.0, 1.0};
+    private double[] extrusion = io.dwg.entities.Extrusions.shared();
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.TRACE; }
 
     public Point3D[] points() { return points; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
 
     public void setPoints(Point3D[] points) {
         this.points = points;
@@ -29,6 +29,6 @@ public class DwgTrace extends AbstractDwgEntity {
     }
 
     public void setExtrusion(double[] extrusion) {
-        this.extrusion = extrusion;
+        this.extrusion = io.dwg.entities.Extrusions.share(extrusion);
     }
 }

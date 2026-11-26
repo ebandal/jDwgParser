@@ -30,7 +30,7 @@ public class DwgHatch extends AbstractDwgEntity {
     public void setNumBoundaryPaths(int numBoundaryPaths) { this.numBoundaryPaths = numBoundaryPaths; }
 
     private double elevation;
-    private double[] extrusion = {0.0, 0.0, 1.0};
+    private double[] extrusion = io.dwg.entities.Extrusions.shared();
     private boolean solidFill;
     private boolean associative;
     private int patternType;
@@ -40,7 +40,7 @@ public class DwgHatch extends AbstractDwgEntity {
     private final java.util.List<PatternLine> patternLines = new java.util.ArrayList<>();
 
     public double elevation() { return elevation; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
     public boolean isSolidFill() { return solidFill; }
     public boolean isAssociative() { return associative; }
     public int patternType() { return patternType; }
@@ -53,7 +53,7 @@ public class DwgHatch extends AbstractDwgEntity {
     public java.util.List<PatternLine> patternLines() { return patternLines; }
 
     public void setElevation(double elevation) { this.elevation = elevation; }
-    public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+    public void setExtrusion(double[] extrusion) { this.extrusion = io.dwg.entities.Extrusions.share(extrusion); }
     public void setSolidFill(boolean solidFill) { this.solidFill = solidFill; }
     public void setAssociative(boolean associative) { this.associative = associative; }
     public void setPatternType(int patternType) { this.patternType = patternType; }

@@ -68,7 +68,7 @@ public class MLineStyleObjectReader implements ObjectReader {
         }
         DwgMLineStyle style = (DwgMLineStyle) target;
         for (int i = 0; i < style.lines().size(); i++) {
-            DwgHandleRef linetype = new DwgHandleRef(r.readHandleReference(target.handle()));
+            DwgHandleRef linetype = r.readRef(target.handle());
             style.setLine(i, style.lines().get(i).withLinetypeHandle(linetype));
         }
     }

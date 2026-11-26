@@ -43,8 +43,8 @@ final class RasterImageFields {
     }
 
     static void readHandles(AbstractDwgEntity e, BitStreamReader r) {
-        e.setValue("IMAGEDEF", new DwgHandleRef(r.readHandleReference(e.handle())));
-        e.setValue("IMAGEDEFREACTOR", new DwgHandleRef(r.readHandleReference(e.handle())));
+        e.setValue("IMAGEDEF", r.readRef(e.handle()));
+        e.setValue("IMAGEDEFREACTOR", r.readRef(e.handle()));
     }
 
     static Point3D point(AbstractDwgEntity e, String name) {

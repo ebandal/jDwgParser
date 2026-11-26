@@ -13,7 +13,7 @@ public class DwgShape extends AbstractDwgEntity {
     private String shapeName;
     private double scale;
     private double angle;
-    private double[] extrusion = {0.0, 0.0, 1.0};
+    private double[] extrusion = io.dwg.entities.Extrusions.shared();
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.SHAPE; }
@@ -22,11 +22,11 @@ public class DwgShape extends AbstractDwgEntity {
     public String shapeName() { return shapeName; }
     public double scale() { return scale; }
     public double angle() { return angle; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
 
     public void setInsertionPoint(Point3D insertionPoint) { this.insertionPoint = insertionPoint; }
     public void setShapeName(String shapeName) { this.shapeName = shapeName; }
     public void setScale(double scale) { this.scale = scale; }
     public void setAngle(double angle) { this.angle = angle; }
-    public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+    public void setExtrusion(double[] extrusion) { this.extrusion = io.dwg.entities.Extrusions.share(extrusion); }
 }

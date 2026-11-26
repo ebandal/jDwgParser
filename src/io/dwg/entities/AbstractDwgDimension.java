@@ -11,7 +11,7 @@ import io.dwg.core.type.Point3D;
  */
 public abstract class AbstractDwgDimension extends AbstractDwgEntity implements DwgDimension {
     private int dimensionVersion;
-    private double[] extrusion = {0, 0, 1};
+    private double[] extrusion = io.dwg.entities.Extrusions.shared();
     private Point3D textMidpoint;
     private int flags1;
     private String text = "";
@@ -42,7 +42,7 @@ public abstract class AbstractDwgDimension extends AbstractDwgEntity implements 
 
     /** R2010+: the dimension's version (DXF 280, 0 = R2010). */
     public int dimensionVersion() { return dimensionVersion; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
     /** The middle of the text (DXF 11); its Z is the dimension's elevation. */
     public Point3D textMidpoint() { return textMidpoint; }
     /** Flags 1: bit 0 is the opposite of bit 128 of DXF 70, bit 1 is bit 32 of DXF 70. */
@@ -102,7 +102,7 @@ public abstract class AbstractDwgDimension extends AbstractDwgEntity implements 
     public String dimensionStyleName() { return ""; }
 
     public void setDimensionVersion(int v) { this.dimensionVersion = v; }
-    public void setExtrusion(double[] e) { this.extrusion = e; }
+    public void setExtrusion(double[] e) { this.extrusion = io.dwg.entities.Extrusions.share(e); }
     public void setTextMidpoint(Point3D p) { this.textMidpoint = p; }
     public void setFlags1(int f) { this.flags1 = f; }
     public void setText(String t) { this.text = t == null ? "" : t; }

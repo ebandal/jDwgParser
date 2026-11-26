@@ -18,9 +18,9 @@ public class DwgPolylinePface extends AbstractDwgPolyline {
 
     public int numVertices() { return numVertices; }
     public int numFaces() { return numFaces; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
 
     public void setNumVertices(int count) { this.numVertices = count; }
     public void setNumFaces(int count) { this.numFaces = count; }
-    public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+    public void setExtrusion(double[] extrusion) { this.extrusion = io.dwg.entities.Extrusions.share(extrusion); }
 }

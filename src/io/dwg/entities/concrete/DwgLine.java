@@ -11,7 +11,7 @@ public class DwgLine extends AbstractDwgEntity {
     private Point3D start;
     private Point3D end;
     private double thickness;
-    private double[] extrusion = {0.0, 0.0, 1.0};
+    private double[] extrusion = io.dwg.entities.Extrusions.shared();
 
     @Override
     public DwgObjectType objectType() { return DwgObjectType.LINE; }
@@ -19,10 +19,10 @@ public class DwgLine extends AbstractDwgEntity {
     public Point3D start() { return start; }
     public Point3D end() { return end; }
     public double thickness() { return thickness; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
 
     public void setStart(Point3D start) { this.start = start; }
     public void setEnd(Point3D end) { this.end = end; }
     public void setThickness(double thickness) { this.thickness = thickness; }
-    public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+    public void setExtrusion(double[] extrusion) { this.extrusion = io.dwg.entities.Extrusions.share(extrusion); }
 }

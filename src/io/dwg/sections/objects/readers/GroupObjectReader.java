@@ -32,7 +32,7 @@ public class GroupObjectReader implements ObjectReader {
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgGroup group = (DwgGroup) target;
         for (int i = 0; i < group.memberCount(); i++) {
-            group.addMember(new DwgHandleRef(r.readHandleReference(target.handle())));
+            group.addMember(r.readRef(target.handle()));
         }
     }
 }

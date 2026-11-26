@@ -90,6 +90,6 @@ public class TextObjectReader implements ObjectReader {
 
     @Override
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
-        ((DwgText) target).setStyleHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
+        ((DwgText) target).setStyleHandle(r.readRef(target.handle()));
     }
 }

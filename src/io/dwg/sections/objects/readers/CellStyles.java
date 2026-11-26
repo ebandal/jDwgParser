@@ -94,7 +94,7 @@ final class CellStyles {
     /** Fills the registered slots from the handle stream, in order. */
     static void readHandleSlots(BitStreamReader r, long self) {
         for (java.util.function.Consumer<DwgHandleRef> slot : ObjectHeaderData.of(r).handleSlots) {
-            slot.accept(new DwgHandleRef(r.readHandleReference(self)));
+            slot.accept(r.readRef(self));
         }
     }
 }

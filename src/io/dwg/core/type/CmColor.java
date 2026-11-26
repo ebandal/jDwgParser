@@ -1,14 +1,20 @@
 package io.dwg.core.type;
 
 /**
- * DWG 색상 표현. §2.11 CMC 구조 대응.
+ * DWG 색상 표현. §2.11 CMC 구조 대응. Immutable, so that equal colors can be shared: the
+ * index colors 0 to 256 of {@link #fromIndex} are one instance each.
  */
-public class CmColor {
-    private int colorIndex;       // ACI 색상 인덱스 (0~256)
-    private int rgb;              // R2004+ RGB 값 (0xRRGGBB)
-    private byte colorType;        // 색상 타입 바이트
-    private String colorName;      // 색상 이름 (옵션)
-    private String bookName;       // 색상 책 이름 (옵션)
+public final class CmColor {
+    private static final CmColor[] INDEX_COLORS = new CmColor[257];
+    static {
+        for (int i = 0; i < INDEX_COLORS.length; i++) {
+            INDEX_COLORS[i] = new CmColor(i);
+        }
+    }
+
+    private final int colorIndex;       // ACI 색상 인덱스 (0~256)
+    private final int rgb;              // R2004+ RGB 값 (0xRRGGBB)
+    private final byte colorType;        // 색상 타입 바이트
 
     public CmColor(int colorIndex) {
         this.colorIndex = colorIndex;
@@ -23,10 +29,10 @@ public class CmColor {
     }
 
     /**
-     * ACI 인덱스 기반 생성
+     * ACI 인덱스 기반 생성 (0~256 are shared instances)
      */
     public static CmColor fromIndex(int index) {
-        return new CmColor(index);
+        return index >= 0 && index < INDEX_COLORS.length ? INDEX_COLORS[index] : new CmColor(index);
     }
 
     /**
@@ -61,40 +67,12 @@ public class CmColor {
         return colorIndex;
     }
 
-    public void setColorIndex(int colorIndex) {
-        this.colorIndex = colorIndex;
-    }
-
     public int getRgb() {
         return rgb;
     }
 
-    public void setRgb(int rgb) {
-        this.rgb = rgb;
-    }
-
     public byte getColorType() {
         return colorType;
-    }
-
-    public void setColorType(byte colorType) {
-        this.colorType = colorType;
-    }
-
-    public String getColorName() {
-        return colorName;
-    }
-
-    public void setColorName(String colorName) {
-        this.colorName = colorName;
-    }
-
-    public String getBookName() {
-        return bookName;
-    }
-
-    public void setBookName(String bookName) {
-        this.bookName = bookName;
     }
 
     @Override

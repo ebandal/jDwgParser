@@ -15,7 +15,7 @@ public class DwgLwPolyline extends AbstractDwgEntity {
     private double constantWidth;
     private double elevation;
     private double thickness;
-    private double[] extrusion = {0.0, 0.0, 1.0};
+    private double[] extrusion = io.dwg.entities.Extrusions.shared();
     private List<Point2D> vertices = new ArrayList<>();
     private List<Double> bulges = new ArrayList<>();
     private List<double[]> widths = new ArrayList<>();
@@ -27,7 +27,7 @@ public class DwgLwPolyline extends AbstractDwgEntity {
     public double constantWidth() { return constantWidth; }
     public double elevation() { return elevation; }
     public double thickness() { return thickness; }
-    public double[] extrusion() { return extrusion; }
+    public double[] extrusion() { return io.dwg.entities.Extrusions.copy(extrusion); }
     public List<Point2D> vertices() { return vertices; }
     public List<Double> bulges() { return bulges; }
     public List<double[]> widths() { return widths; }
@@ -39,7 +39,7 @@ public class DwgLwPolyline extends AbstractDwgEntity {
     public void setConstantWidth(double constantWidth) { this.constantWidth = constantWidth; }
     public void setElevation(double elevation) { this.elevation = elevation; }
     public void setThickness(double thickness) { this.thickness = thickness; }
-    public void setExtrusion(double[] extrusion) { this.extrusion = extrusion; }
+    public void setExtrusion(double[] extrusion) { this.extrusion = io.dwg.entities.Extrusions.share(extrusion); }
     public void setVertices(List<Point2D> vertices) { this.vertices = vertices; }
     public void setBulges(List<Double> bulges) { this.bulges = bulges; }
     public void setWidths(List<double[]> widths) { this.widths = widths; }

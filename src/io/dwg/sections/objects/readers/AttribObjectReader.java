@@ -77,6 +77,6 @@ public class AttribObjectReader implements ObjectReader {
 
     @Override
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
-        ((DwgAttrib) target).textData().setStyleHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
+        ((DwgAttrib) target).textData().setStyleHandle(r.readRef(target.handle()));
     }
 }
