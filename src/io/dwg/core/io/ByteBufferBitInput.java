@@ -38,6 +38,14 @@ public class ByteBufferBitInput implements BitInput {
         return limitBit;
     }
 
+    /** The whole array this input reads, when it reads all of one array from its start; else null. */
+    public byte[] backingArray() {
+        if (buffer.hasArray() && buffer.arrayOffset() == 0 && buffer.limit() == buffer.array().length) {
+            return buffer.array();
+        }
+        return null;
+    }
+
     /** The bits that can still be read: up to the limit, or to the end of the buffer. */
     public long bitsLeft() {
         return Math.max(0, Math.min(limitBit, (long) buffer.limit() * 8) - bitOffset);

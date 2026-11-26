@@ -33,6 +33,8 @@ public class AuxHeaderParser extends AbstractSectionParser<byte[]> {
 
             // Read remaining data as-is for now
             return new byte[0]; // Placeholder - full parsing TBD
+        } catch (io.dwg.core.io.ReadLimits.LimitExceededException limit) {
+            throw limit;
         } catch (Exception e) {
             logUnknown("AuxHeader parsing error: " + e.getMessage(), r.position());
             return new byte[0];

@@ -48,9 +48,22 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
      * into the objects data: absolute file addresses for R13–R2000, offsets into AcDb:AcDbObjects
      * for R2004+ (spec §23).
      */
+    /** Where each object goes when it is read, instead of the returned map (null: into the map). */
+    private java.util.function.Consumer<DwgObject> sink;
+
+    /**
+     * Gives each object to {@code sink} as it is read, in handle order, instead of keeping it:
+     * {@link #parse} then returns an empty map. The applications of the extended data are named
+     * from the APPID objects read before (they come first in practice).
+     */
+    public void setObjectSink(java.util.function.Consumer<DwgObject> sink) {
+        this.sink = sink;
+    }
+
     @Override
     public Map<Long, DwgObject> parse(SectionInputStream stream, DwgVersion version) throws Exception {
         Map<Long, DwgObject> result = new HashMap<>();
+        Map<Long, String> appNames = new HashMap<>();
         if (handles == null) {
             return result;
         }
@@ -63,7 +76,13 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             io.dwg.core.io.ReadLimits.checkTime();
             try {
                 DwgObject obj = parseObjectAt(raw, (int) offset, version, entry.handle());
-                if (obj != null) {
+                if (obj != null && sink != null) {
+                    if (obj instanceof DwgAppId) {
+                        appNames.put(obj.handle(), ((DwgAppId) obj).name());
+                    }
+                    nameApplications(obj, appNames);
+                    sink.accept(obj);
+                } else if (obj != null) {
                     result.put(entry.handle(), obj);
                 }
             } catch (io.dwg.core.io.ReadLimits.LimitExceededException e) {
@@ -74,18 +93,15 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             }
         }
         nameExtendedDataApplications(result);
-        refs.clear();
         return result;
     }
 
     /**
      * The common handles (owners, layers, line types, ...) point at few objects many times; one
-     * DwgHandleRef per handle value is shared while the section is read.
+     * DwgHandleRef per handle value is shared through the fixed-size cache of DwgHandleRef.of.
      */
-    private final Map<Long, DwgHandleRef> refs = new HashMap<>();
-
-    private DwgHandleRef ref(long handle) {
-        return handle == 0 ? DwgHandleRef.NULL : refs.computeIfAbsent(handle, DwgHandleRef::new);
+    private static DwgHandleRef ref(long handle) {
+        return DwgHandleRef.of(handle);
     }
 
     /**
@@ -101,17 +117,21 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             }
         }
         for (DwgObject obj : objects.values()) {
-            if (!obj.xData().isEmpty()) {
-                ((AbstractDwgObject) obj).replaceXData(record -> {
-                    if (record.groupCode() == 1001 && record.value() instanceof DwgHandleRef) {
-                        String name = names.get(((DwgHandleRef) record.value()).rawHandle());
-                        if (name != null) {
-                            return new XDataRecord(1001, name);
-                        }
+            nameApplications(obj, names);
+        }
+    }
+
+    private static void nameApplications(DwgObject obj, Map<Long, String> names) {
+        if (!obj.xData().isEmpty()) {
+            ((AbstractDwgObject) obj).replaceXData(record -> {
+                if (record.groupCode() == 1001 && record.value() instanceof DwgHandleRef) {
+                    String name = names.get(((DwgHandleRef) record.value()).rawHandle());
+                    if (name != null) {
+                        return new XDataRecord(1001, name);
                     }
-                    return record;
-                });
-            }
+                }
+                return record;
+            });
         }
     }
 
@@ -125,7 +145,6 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         ByteBufferBitInput buf = new ByteBufferBitInput(raw);
         buf.seek((long) byteOffset * 8L);
         BitStreamReader r = new BitStreamReader(buf, version);
-        r.shareRefs(refs);
         r.setTextCharset(textCharset);
 
         int objSize = r.readModularShort();

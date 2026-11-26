@@ -79,6 +79,8 @@ public class R2007FileHeader {
             System.arraycopy(decoded, DATA_OFFSET, compressed, 0, length);
             try {
                 fields = new Lz77Decompressor().decompress(compressed, DECOMPRESSED_SIZE);
+            } catch (io.dwg.core.io.ReadLimits.LimitExceededException limit) {
+                throw limit;
             } catch (Exception e) {
                 throw new Exception("Failed to decompress R2007 header: " + e.getMessage());
             }

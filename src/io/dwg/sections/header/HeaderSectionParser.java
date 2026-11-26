@@ -125,6 +125,8 @@ public class HeaderSectionParser extends AbstractSectionParser<HeaderVariables> 
             }
             field = null;
             checkEnds(version, in.position(), dataLimit, handles.position(), dataEnd, strings, stringEnd);
+        } catch (io.dwg.core.io.ReadLimits.LimitExceededException limit) {
+            throw limit;
         } catch (RuntimeException ex) {
             issues.accept(io.dwg.api.ReadIssue.section("AcDb:Header: cannot read " + field + ": " + ex.getMessage()));
         }

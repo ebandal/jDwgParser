@@ -9,6 +9,6 @@ public class Polyline extends Entity {
     public boolean closed;
     public double elevation;
     public double[] extrusion = { 0.0, 0.0, 1.0 };
-    public final List<double[]> points = new ArrayList<>();     // { x, y, z }
-    public final List<Double> bulges = new ArrayList<>();       // per point, 2D only
+    public final List<double[]> points = new io.dwg.entities.CompactLists.Triples();     // { x, y, z }
+    public final List<Double> bulges = new io.dwg.entities.CompactLists.Doubles();       // per point, 2D only
 }

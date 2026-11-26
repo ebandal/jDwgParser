@@ -66,9 +66,17 @@ public class Renderer {
 
     public Color background = Color.BLACK;
     public Color foreground = Color.WHITE;
-    /** length of the longer image side in pixels */
+    /** length of the longer image side in pixels (when neither {@link #scale} nor a fit box is set) */
     public int imageSize = 2000;
     public int margin = 20;
+    /** pixels per drawing unit; 0 to size the image by {@link #fitWidth} or {@link #imageSize} instead */
+    public double scale;
+    /**
+     * A box in pixels (a sheet of paper at some resolution) the drawing is fitted into, turned to
+     * the drawing's orientation; 0 for none.
+     */
+    public int fitWidth;
+    public int fitHeight;
 
     /** results of the last call of render() */
     public int drawn;               // primitives drawn, after block expansion
@@ -86,13 +94,95 @@ public class Renderer {
     }
 
     private Drawing drawing;
-    private List<Item> items;
     private Rectangle2D bounds;
+    /**
+     * The items are not kept: the entities are walked once to size the picture, then once per
+     * pass, drawing the items of that pass as they are made (a large drawing has hundreds of
+     * thousands of them). While laying out, {@code sink} is null.
+     */
+    private Canvas sink;
+    private int sinkPass;
+    private int itemCount;
+    /** The colors of the color indexes 0-256 of this render (the foreground can change between renders). */
+    private final Color[] colors = new Color[257];
 
     /** The size of the output and the world to output transform of the last layout. */
     private int imgW;
     private int imgH;
     private AffineTransform view;
+
+    /**
+     * The size in pixels the picture of {@code d} gets with the current settings, as
+     * {width, height}; null if there is nothing to draw. (It walks the drawing once.)
+     */
+    public int[] imageSizeOf(Drawing d) {
+        return layout(d) ? new int[] {imgW, imgH} : null;
+    }
+
+    /** Where {@link #renderTiles} writes each tile. */
+    public interface TileFiles {
+        java.io.OutputStream open(int row, int column) throws java.io.IOException;
+    }
+
+    /**
+     * Draws the picture as PNG tiles of {@code tileSize} pixels (the last row and column are
+     * smaller), for pictures too large to hold: it draws a band of the full width at a time,
+     * {@code bandBytes} of pixels at most, and writes its rows into the tiles it covers. Each
+     * band walks the whole drawing again, so this takes longer the more bands there are. The
+     * tiles together are the image {@link #render} makes.
+     *
+     * @return {width, height, rows, columns}, or null if there is nothing to draw
+     */
+    public int[] renderTiles(Drawing d, int tileSize, long bandBytes, TileFiles files) throws java.io.IOException {
+        if (!layout(d)) {
+            return null;
+        }
+        int columns = (imgW + tileSize - 1) / tileSize;
+        int rows = (imgH + tileSize - 1) / tileSize;
+        int band = (int) Math.max(1, Math.min(tileSize, bandBytes / (4L * imgW)));
+        BufferedImage image = new BufferedImage(imgW, band, BufferedImage.TYPE_INT_RGB);
+        int[] pixels = ((java.awt.image.DataBufferInt) image.getRaster().getDataBuffer()).getData();
+        for (int row = 0; row < rows; row++) {
+            int top = row * tileSize;
+            int tileHeight = Math.min(tileSize, imgH - top);
+            java.io.OutputStream[] streams = new java.io.OutputStream[columns];
+            PngWriter[] writers = new PngWriter[columns];
+            try {
+                for (int c = 0; c < columns; c++) {
+                    streams[c] = files.open(row, c);
+                    writers[c] = new PngWriter(streams[c], Math.min(tileSize, imgW - c * tileSize), tileHeight);
+                }
+                for (int y = top; y < top + tileHeight; y += band) {
+                    int bandHeight = Math.min(band, top + tileHeight - y);
+                    Graphics2D g = image.createGraphics();
+                    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+                    g.setColor(background);
+                    g.fillRect(0, 0, imgW, band);
+                    g.setStroke(new BasicStroke(1f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                    g.translate(0, -y);                 // the band is rows y .. y + band of the picture
+                    g.clipRect(0, y, imgW, bandHeight);
+                    paint(new GraphicsCanvas(g));
+                    g.dispose();
+                    for (int r = 0; r < bandHeight; r++) {
+                        for (int c = 0; c < columns; c++) {
+                            writers[c].writeRow(pixels, r * imgW + c * tileSize);
+                        }
+                    }
+                }
+                for (PngWriter w : writers) {
+                    w.close();
+                }
+            } finally {
+                for (java.io.OutputStream s : streams) {
+                    if (s != null) {
+                        s.close();
+                    }
+                }
+            }
+        }
+        return new int[] {imgW, imgH, rows, columns};
+    }
 
     /** @return the image, or null if there is nothing to draw */
     public BufferedImage render(Drawing d) {
@@ -144,21 +234,38 @@ public class Renderer {
     /** Collects the items of the model space and sizes the output; false if there is nothing to draw. */
     private boolean layout(Drawing d) {
         drawing = d;
-        items = new ArrayList<>();
         bounds = null;
+        sink = null;
+        itemCount = 0;
+        java.util.Arrays.fill(colors, null);
         drawn = insertsExpanded = hidden = missingBlocks = 0;
 
         addEntities(d.modelSpace, new AffineTransform(), null, COLOR_FOREGROUND, new HashSet<>());
-        drawn = items.size();
+        drawn = itemCount;
         if (bounds == null) {
             return false;
         }
 
         double w = Math.max(bounds.getWidth(), 1e-9);
         double h = Math.max(bounds.getHeight(), 1e-9);
-        double scale = (imageSize - 2.0 * margin) / Math.max(w, h);
-        imgW = (int) Math.ceil(w * scale) + 2 * margin;
-        imgH = (int) Math.ceil(h * scale) + 2 * margin;
+        double scale;
+        if (this.scale > 0) {
+            scale = this.scale;
+        } else if (fitWidth > 0 && fitHeight > 0) {
+            // the paper is turned to the drawing: the longer side along the longer extent
+            double longer = Math.max(fitWidth, fitHeight), shorter = Math.min(fitWidth, fitHeight);
+            double boxW = w >= h ? longer : shorter, boxH = w >= h ? shorter : longer;
+            scale = Math.min((boxW - 2.0 * margin) / w, (boxH - 2.0 * margin) / h);
+        } else {
+            scale = (imageSize - 2.0 * margin) / Math.max(w, h);
+        }
+        double width = Math.ceil(w * scale) + 2.0 * margin;
+        double height = Math.ceil(h * scale) + 2.0 * margin;
+        if (!(width < Integer.MAX_VALUE && height < Integer.MAX_VALUE)) {
+            throw new IllegalArgumentException(String.format("the image would be %.0f x %.0f pixels", width, height));
+        }
+        imgW = (int) width;
+        imgH = (int) height;
 
         // world -> image : move the lower-left corner to the origin, scale, flip Y
         view = new AffineTransform();
@@ -170,19 +277,29 @@ public class Renderer {
 
     /** Draws the items in their passes: fills, hatch patterns, lines, text. */
     private void paint(Canvas c) {
-        for (int pass = PASS_FILL; pass <= PASS_TEXT; pass++) {
-            for (Item item : items) {
-                if (item.pass != pass) {
-                    continue;
-                }
-                if (pass == PASS_PATTERN) {
-                    drawPattern(c, view, item);
-                } else if (pass == PASS_STROKE) {
-                    c.draw(view.createTransformedShape(item.shape), item.color);
-                } else {
-                    c.fill(view.createTransformedShape(item.shape), item.color);
-                }
+        int keepHidden = hidden, keepExpanded = insertsExpanded, keepMissing = missingBlocks;
+        try {
+            for (int pass = PASS_FILL; pass <= PASS_TEXT; pass++) {
+                sink = c;
+                sinkPass = pass;
+                addEntities(drawing.modelSpace, new AffineTransform(), null, COLOR_FOREGROUND, new HashSet<>());
             }
+        } finally {
+            sink = null;
+            hidden = keepHidden;                // the counts are those of the layout
+            insertsExpanded = keepExpanded;
+            missingBlocks = keepMissing;
+        }
+    }
+
+    /** Draws one item on the canvas of the current pass. */
+    private void emit(Item item) {
+        if (item.pass == PASS_PATTERN) {
+            drawPattern(sink, view, item);
+        } else if (item.pass == PASS_STROKE) {
+            sink.draw(view.createTransformedShape(item.shape), item.color);
+        } else {
+            sink.fill(view.createTransformedShape(item.shape), item.color);
         }
     }
 
@@ -299,6 +416,14 @@ public class Renderer {
     }
 
     private void addPrimitive(Entity e, AffineTransform transform, Color color) {
+        if (sink != null) {
+            // while drawing a pass, skip making the items of the other passes
+            int only = e instanceof Text || e instanceof MText ? PASS_TEXT : e instanceof Solid ? PASS_FILL
+                    : e instanceof Hatch ? -1 : PASS_STROKE;
+            if (only >= 0 ? only != sinkPass : sinkPass == PASS_TEXT) {
+                return;
+            }
+        }
         if (e instanceof Hatch) {
             addHatch((Hatch) e, transform, color);
             return;
@@ -374,11 +499,15 @@ public class Renderer {
         item.pass = pass;
         item.shape = shape;
         item.color = color;
-        items.add(item);
-        if (bounds == null) {
-            bounds = (Rectangle2D) b.clone();
-        } else {
-            bounds.add(b);
+        if (sink == null) {
+            itemCount++;
+            if (bounds == null) {
+                bounds = (Rectangle2D) b.clone();
+            } else {
+                bounds.add(b);
+            }
+        } else if (pass == sinkPass && pass != PASS_PATTERN) {
+            emit(item);                         // a pattern item is drawn once its hatch is set
         }
         return item;
     }
@@ -577,6 +706,9 @@ public class Renderer {
                 item.hatch = h;
                 item.area = area;
                 item.toWorld = toWorld;
+                if (sink != null && sinkPass == PASS_PATTERN) {
+                    emit(item);
+                }
             }
         }
     }
@@ -714,6 +846,17 @@ public class Renderer {
 
     /** AutoCAD color index to RGB. Indexes 10-249 are approximated from the hue/shade pattern of the table. */
     private Color colorOf(int aci) {
+        if (aci >= 0 && aci < colors.length) {
+            Color c = colors[aci];
+            if (c == null) {
+                c = colors[aci] = newColorOf(aci);
+            }
+            return c;
+        }
+        return newColorOf(aci);
+    }
+
+    private Color newColorOf(int aci) {
         switch (aci) {
         case 1: return new Color(255, 0, 0);
         case 2: return new Color(255, 255, 0);

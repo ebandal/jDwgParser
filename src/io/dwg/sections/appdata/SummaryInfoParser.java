@@ -50,6 +50,8 @@ public class SummaryInfoParser extends AbstractSectionParser<Map<String, String>
             if (comments != null && !comments.isEmpty()) {
                 summary.put("Comments", comments);
             }
+        } catch (io.dwg.core.io.ReadLimits.LimitExceededException limit) {
+            throw limit;
         } catch (Exception e) {
             logUnknown("SummaryInfo parsing error: " + e.getMessage(), r.position());
         }

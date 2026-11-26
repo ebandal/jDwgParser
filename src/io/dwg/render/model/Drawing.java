@@ -22,6 +22,10 @@ public class Drawing {
     public int decodedCount;        // entities of supported types decoded
     public int failedCount;         // entities or table records that failed to decode
 
+    /** The paper of the model space layout in millimetres, 0 when the drawing does not say. */
+    public double paperWidth;
+    public double paperHeight;
+
     public List<Entity> entitiesOf(long blockHandle) {
         List<Entity> list = blockEntities.get(blockHandle);
         return list == null ? Collections.emptyList() : list;

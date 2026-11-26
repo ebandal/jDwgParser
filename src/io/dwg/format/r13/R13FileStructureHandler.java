@@ -78,6 +78,8 @@ public class R13FileStructureHandler extends AbstractFileStructureHandler {
 
                 sections.put(sectionName, new SectionInputStream(sectionData, sectionName));
 
+            } catch (io.dwg.core.io.ReadLimits.LimitExceededException limit) {
+                throw limit;
             } catch (Exception e) {
                 // Skip sections that fail to read
             }

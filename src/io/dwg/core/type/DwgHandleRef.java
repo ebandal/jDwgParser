@@ -10,6 +10,29 @@ public final class DwgHandleRef {
 
     private final long rawHandle;
 
+    /** Recently made references, by handle; a slot holds the last one that fell in it. */
+    private static final DwgHandleRef[] RECENT = new DwgHandleRef[4096];
+
+    /**
+     * A reference to {@code handle}: the same instance as one made recently for the same handle
+     * (layers, owners and line types are referred to over and over), or a new one. The cache has
+     * a fixed size, so it does not grow with the drawing; the reader makes its references with
+     * this.
+     */
+    public static DwgHandleRef of(long handle) {
+        if (handle == 0) {
+            return NULL;
+        }
+        int slot = (int) (handle ^ (handle >>> 32)) & (RECENT.length - 1);
+        DwgHandleRef r = RECENT[slot];
+        if (r != null && r.rawHandle == handle) {
+            return r;
+        }
+        r = new DwgHandleRef(handle);
+        RECENT[slot] = r;                       // a race only costs sharing: the reference is immutable
+        return r;
+    }
+
     public DwgHandleRef(long rawHandle) {
         this.rawHandle = rawHandle;
     }

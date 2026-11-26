@@ -27,6 +27,8 @@ public class PreviewSectionParser extends AbstractSectionParser<byte[]> {
 
             // For now, read remaining data as-is
             return new byte[0]; // Placeholder - full parsing TBD
+        } catch (io.dwg.core.io.ReadLimits.LimitExceededException limit) {
+            throw limit;
         } catch (Exception e) {
             logUnknown("Preview parsing error: " + e.getMessage(), r.position());
             return new byte[0];

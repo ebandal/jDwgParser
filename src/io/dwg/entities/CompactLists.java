@@ -120,6 +120,44 @@ public final class CompactLists {
         }
     }
 
+    /** Coordinate triples as {@code double[3]}, kept in one array; an element is a new array each time it is read. */
+    public static final class Triples extends AbstractList<double[]> implements RandomAccess {
+        private double[] values = new double[12];
+        private int size;
+
+        @Override
+        public double[] get(int index) {
+            check(index, size);
+            return new double[] {values[3 * index], values[3 * index + 1], values[3 * index + 2]};
+        }
+
+        @Override
+        public double[] set(int index, double[] p) {
+            double[] old = get(index);
+            put(index, p);
+            return old;
+        }
+
+        @Override
+        public boolean add(double[] p) {
+            if (3 * size == values.length) values = Arrays.copyOf(values, values.length * 2);
+            put(size++, p);
+            modCount++;
+            return true;
+        }
+
+        private void put(int index, double[] p) {
+            values[3 * index] = p.length > 0 ? p[0] : 0.0;
+            values[3 * index + 1] = p.length > 1 ? p[1] : 0.0;
+            values[3 * index + 2] = p.length > 2 ? p[2] : 0.0;
+        }
+
+        @Override
+        public int size() {
+            return size;
+        }
+    }
+
     private static void check(int index, int size) {
         if (index < 0 || index >= size) {
             throw new IndexOutOfBoundsException("index " + index + ", size " + size);

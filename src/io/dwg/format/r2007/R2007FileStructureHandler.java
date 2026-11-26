@@ -96,6 +96,8 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
                     try {
                         sectionData = extractObjectsData(fileData, section, pageMap,
                             r2007Header.pageMapOffset());
+                    } catch (io.dwg.core.io.ReadLimits.LimitExceededException limit) {
+                        throw limit;
                     } catch (Exception e) {
                         continue;                   // one section that cannot be read does not take the others
                     }
@@ -106,6 +108,8 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
                     }
                 }
             }
+        } catch (io.dwg.core.io.ReadLimits.LimitExceededException limit) {
+            throw limit;
         } catch (Exception e) {
             // R2007 parsing failure is non-fatal — return empty sections
         }
@@ -183,6 +187,11 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
     }
 
     private byte[] readAllData(BitInput input) throws Exception {
+        // the reader gives the whole file from its start: use it, not a copy of it
+        if (input instanceof ByteBufferBitInput && input.position() == 0
+                && ((ByteBufferBitInput) input).backingArray() != null) {
+            return ((ByteBufferBitInput) input).backingArray();
+        }
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         while (!input.isEof()) {
             baos.write(input.readRawChar());

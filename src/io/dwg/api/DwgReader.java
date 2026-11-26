@@ -39,7 +39,7 @@ public class DwgReader {
     static final int MAX_KEPT_ISSUES = 10_000;
 
     private Consumer<ReadIssue> issueListener;
-    private long maxBytes = Runtime.getRuntime().maxMemory() / 2;
+    private long maxBytes = Runtime.getRuntime().maxMemory();
     private long timeoutMillis;
 
     private DwgReader() {}
@@ -59,7 +59,7 @@ public class DwgReader {
 
     /**
      * The most bytes one read may allocate for the sections of the file (decompressed data and
-     * the like), in all. The default is half of the JVM's maximum heap. A file that would need
+     * the like), in all (counting what is freed again). The default is the JVM's maximum heap. A file that would need
      * more fails with a {@link DwgReadException}, instead of exhausting the memory.
      */
     public DwgReader maxBytes(long bytes) {
@@ -81,14 +81,26 @@ public class DwgReader {
 
     /** 파일 경로에서 DWG 파일 읽기 */
     public DwgDocument open(Path filePath) throws IOException {
-        byte[] bytes = Files.readAllBytes(filePath);
-        return open(bytes);
+        return read(new byte[][] {Files.readAllBytes(filePath)}, null);
     }
 
     /** 스트림에서 DWG 파일 읽기 (전체 메모리 로드) */
     public DwgDocument open(InputStream stream) throws IOException {
-        byte[] bytes = stream.readAllBytes();
-        return open(bytes);
+        return read(new byte[][] {stream.readAllBytes()}, null);
+    }
+
+    /**
+     * Reads a DWG file without keeping its objects: each object is given to {@code each} as it is
+     * read, in handle order, and can be dropped there. For work that goes through the objects
+     * once (drawing, extracting text), this needs much less memory than {@link #open}: the
+     * returned document has the header, classes and issues but no objects. Two things need all
+     * objects and are left out: the R2013+ ACIS models of the data storage section, and the
+     * names of extended data applications whose APPID comes after the object.
+     *
+     * @throws DwgReadException as {@link #open(byte[])}
+     */
+    public DwgDocument stream(Path filePath, Consumer<DwgObject> each) throws IOException {
+        return read(new byte[][] {Files.readAllBytes(filePath)}, java.util.Objects.requireNonNull(each));
     }
 
     /**
@@ -100,9 +112,18 @@ public class DwgReader {
      *     ({@link #maxBytes}, {@link #timeout})
      */
     public DwgDocument open(byte[] data) throws DwgReadException {
+        return read(new byte[][] {data}, null);
+    }
+
+    /**
+     * @param file the file's bytes in a holder of one, which this method may empty once the bytes
+     *     are no longer needed (R2004+ files, after their sections are taken out)
+     * @param sink where the objects go, or null to keep them in the document
+     */
+    private DwgDocument read(byte[][] file, Consumer<DwgObject> sink) throws DwgReadException {
         ReadLimits.begin(maxBytes, timeoutMillis);
         try {
-            return read(data);
+            return readFile(file, sink);
         } catch (DwgReadException e) {
             throw e;
         } catch (ReadLimits.LimitExceededException e) {
@@ -114,7 +135,8 @@ public class DwgReader {
         }
     }
 
-    private DwgDocument read(byte[] data) throws Exception {
+    private DwgDocument readFile(byte[][] file, Consumer<DwgObject> sink) throws Exception {
+        byte[] data = file[0];
         // ① 버전 감지
         DwgVersion version;
         try {
@@ -159,6 +181,14 @@ public class DwgReader {
             throw new DwgReadException("cannot read the sections of the file: " + e, e);
         }
         ReadLimits.checkTime();
+        boolean isPreR2004 = version == DwgVersion.R13 || version == DwgVersion.R14
+                          || version == DwgVersion.R2000;
+        if (!isPreR2004) {
+            // the objects are in the sections now: the file itself is not needed any more
+            file[0] = null;
+            data = null;
+            input = null;
+        }
 
         // ⑤ Header 섹션 파싱
         SectionInputStream headerStream = sections.get("AcDb:Header");
@@ -221,8 +251,6 @@ public class DwgReader {
         // R13/R14/R2000: Objects are not a separate named section.
         // They are located via offsets in the Handles section.
         // Use the whole file as the pseudo-section so HandleRegistry offsets resolve correctly.
-        boolean isPreR2004 = version == DwgVersion.R13 || version == DwgVersion.R14
-                          || version == DwgVersion.R2000;
         if (objectsStream == null && isPreR2004 && !handleRegistry.allHandles().isEmpty()) {
             objectsStream = new SectionInputStream(data, "AcDb:AcDbObjects");
         }
@@ -233,6 +261,7 @@ public class DwgReader {
             objParser.setClassRegistry(classRegistry);
             objParser.setTextCharset(
                 io.dwg.core.util.DwgStringDecoder.charsetForDwgCodePage(headerFields.codePage()));
+            objParser.setObjectSink(sink);
             try {
                 Map<Long, DwgObject> objectMap = objParser.parse(objectsStream, version);
                 doc.setObjectMap(objectMap);
@@ -245,7 +274,7 @@ public class DwgReader {
 
         // R2013+: the data storage section holds the ACIS models of REGION and 3DSOLID
         SectionInputStream dataStorage = sections.get("AcDb:AcDsPrototype_1b");
-        if (dataStorage != null) {
+        if (dataStorage != null && sink == null) {
             try {
                 Map<Long, byte[]> records = DataStorageSectionParser.parse(dataStorage.rawBytes());
                 doc.setDataStorage(records);

@@ -40,6 +40,8 @@ public class R2004DataSectionDescriptor {
             desc.setCompressionType(compressionType);
             pages.forEach(desc::addPage);
             return desc;
+        } catch (io.dwg.core.io.ReadLimits.LimitExceededException limit) {
+            throw limit;
         } catch (Exception e) {
             return null;
         }

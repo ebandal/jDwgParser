@@ -74,16 +74,43 @@ public final class DocumentDrawing {
     }
 
     public static Drawing from(DwgDocument doc) {
-        Drawing d = new Drawing();
+        Builder builder = new Builder();
+        for (io.dwg.entities.DwgObject o : doc.objects(io.dwg.entities.DwgObject.class)) {   // handle order
+            builder.accept(o);
+        }
+        return builder.build();
+    }
 
-        // objects in handle order : sub-entities follow the entity they belong to
-        List<io.dwg.entities.DwgObject> objects = new ArrayList<>(doc.objectMap().values());
-        objects.sort((a, b) -> Long.compare(a.handle(), b.handle()));
+    /**
+     * Builds the drawing from objects given one at a time, in the order of their handles (as
+     * {@link io.dwg.api.DwgReader#stream} gives them), so a file can be drawn without keeping its
+     * document.
+     */
+    public static final class Builder implements java.util.function.Consumer<io.dwg.entities.DwgObject> {
+        private final Drawing d = new Drawing();
+        private List<Entity> entities = new ArrayList<>();
+        /** The entities sub-entities can belong to (block references, polylines, polyface meshes), by handle. */
+        private Map<Long, Entity> parents = new HashMap<>();
+        private boolean keepObjects = true;
 
-        List<Entity> entities = new ArrayList<>();
-        Map<Long, Entity> byHandle = new HashMap<>();
-        for (io.dwg.entities.DwgObject o : objects) {
-            if (o instanceof DwgLayer) {
+        /**
+         * Whether each entity keeps its object header ({@code Entity.object}: handle, type name),
+         * which the comparison tools use and drawing does not. Default true.
+         */
+        public Builder keepObjects(boolean keep) {
+            this.keepObjects = keep;
+            return this;
+        }
+
+        @Override
+        public void accept(io.dwg.entities.DwgObject o) {
+            if (o instanceof io.dwg.entities.concrete.DwgLayout) {
+                io.dwg.entities.concrete.DwgLayout layout = (io.dwg.entities.concrete.DwgLayout) o;
+                if (layout.name().equalsIgnoreCase("Model") && layout.paperSize().x() > 0 && layout.paperSize().y() > 0) {
+                    d.paperWidth = layout.paperSize().x();
+                    d.paperHeight = layout.paperSize().y();
+                }
+            } else if (o instanceof DwgLayer) {
                 d.layers.put(o.handle(), layer((DwgLayer) o));
             } else if (o instanceof DwgBlockHeader) {
                 BlockHeader b = block((DwgBlockHeader) o);
@@ -102,64 +129,72 @@ public final class DocumentDrawing {
                 } catch (RuntimeException ex) {
                     // a drawable type whose data is missing or unusable
                     d.failedCount++;
-                    continue;
+                    return;
                 }
                 if (e == null) {
-                    continue;
+                    return;
                 }
-                common(e, a);
+                common(e, a, keepObjects);
                 d.decodedCount++;
                 entities.add(e);
-                byHandle.put(o.handle(), e);
+                if (e instanceof Insert || e instanceof PolyfaceMesh || e instanceof Polyline) {
+                    parents.put(o.handle(), e);
+                }
             }
         }
 
-        // Sub-entities belong to the entity that precedes them : attributes to their block reference,
-        // vertices to their polyline. When the owner handle names that entity, it is used instead.
-        Entity parent = null;
-        for (Entity e : entities) {
-            boolean attrib = e instanceof Text && ((Text) e).attribute;
-            if (attrib || e instanceof PolyfaceVertex || e instanceof PolylineVertex) {
-                Entity owner = e.entMode == Entity.MODE_OWNED ? byHandle.get(e.ownerHandle) : null;
-                if (!(owner instanceof Insert) && !(owner instanceof PolyfaceMesh) && !(owner instanceof Polyline)) {
-                    owner = parent;
-                }
-                if (attrib && owner instanceof Insert) {
-                    ((Insert) owner).attribs.add((Text) e);
-                } else if (e instanceof PolyfaceVertex && owner instanceof PolyfaceMesh) {
-                    PolyfaceVertex v = (PolyfaceVertex) e;
-                    if (v.point != null) {
-                        ((PolyfaceMesh) owner).vertices.add(v.point);
-                    } else {
-                        ((PolyfaceMesh) owner).faces.add(v.indexes);
+        /** The drawing of the objects given so far. */
+        public Drawing build() {
+            // Sub-entities belong to the entity that precedes them : attributes to their block reference,
+            // vertices to their polyline. When the owner handle names that entity, it is used instead.
+            Entity parent = null;
+            for (Entity e : entities) {
+                boolean attrib = e instanceof Text && ((Text) e).attribute;
+                if (attrib || e instanceof PolyfaceVertex || e instanceof PolylineVertex) {
+                    Entity owner = e.entMode == Entity.MODE_OWNED ? parents.get(e.ownerHandle) : null;
+                    if (!(owner instanceof Insert) && !(owner instanceof PolyfaceMesh) && !(owner instanceof Polyline)) {
+                        owner = parent;
                     }
-                } else if (e instanceof PolylineVertex && owner instanceof Polyline) {
-                    PolylineVertex v = (PolylineVertex) e;
-                    // spline frame control points are not on the drawn curve
-                    if ((v.flags & PolylineVertex.FLAG_SPLINE_FRAME) == 0) {
-                        ((Polyline) owner).points.add(v.point);
-                        ((Polyline) owner).bulges.add(v.bulge);
+                    if (attrib && owner instanceof Insert) {
+                        ((Insert) owner).attribs.add((Text) e);
+                    } else if (e instanceof PolyfaceVertex && owner instanceof PolyfaceMesh) {
+                        PolyfaceVertex v = (PolyfaceVertex) e;
+                        if (v.point != null) {
+                            ((PolyfaceMesh) owner).vertices.add(v.point);
+                        } else {
+                            ((PolyfaceMesh) owner).faces.add(v.indexes);
+                        }
+                    } else if (e instanceof PolylineVertex && owner instanceof Polyline) {
+                        PolylineVertex v = (PolylineVertex) e;
+                        // spline frame control points are not on the drawn curve
+                        if ((v.flags & PolylineVertex.FLAG_SPLINE_FRAME) == 0) {
+                            ((Polyline) owner).points.add(v.point);
+                            ((Polyline) owner).bulges.add(v.bulge);
+                        }
                     }
+                    continue;
                 }
-                continue;
+                if (e instanceof Insert || e instanceof PolyfaceMesh || e instanceof Polyline) {
+                    parent = e;
+                }
+                if (e.entMode == Entity.MODE_MODEL_SPACE) {
+                    d.modelSpace.add(e);
+                } else if (e.entMode == Entity.MODE_OWNED) {
+                    d.blockEntities.computeIfAbsent(e.ownerHandle, k -> new ArrayList<>()).add(e);
+                }
             }
-            if (e instanceof Insert || e instanceof PolyfaceMesh || e instanceof Polyline) {
-                parent = e;
-            }
-            if (e.entMode == Entity.MODE_MODEL_SPACE) {
-                d.modelSpace.add(e);
-            } else if (e.entMode == Entity.MODE_OWNED) {
-                d.blockEntities.computeIfAbsent(e.ownerHandle, k -> new ArrayList<>()).add(e);
-            }
-        }
 
-        // entities that name the model space block as their owner belong to the model space too
-        for (BlockHeader b : d.blocks.values()) {
-            if (b.isModelSpace() && d.blockEntities.containsKey(b.handle)) {
-                d.modelSpace.addAll(d.blockEntities.remove(b.handle));
+            // entities that name the model space block as their owner belong to the model space too
+            for (BlockHeader b : d.blocks.values()) {
+                if (b.isModelSpace() && d.blockEntities.containsKey(b.handle)) {
+                    d.modelSpace.addAll(d.blockEntities.remove(b.handle));
+                }
             }
+            // the sub-entities are in their owners now: let go of the list and the index
+            entities = new ArrayList<>();
+            parents = new HashMap<>();
+            return d;
         }
-        return d;
     }
 
     private static Layer layer(DwgLayer o) {
@@ -186,13 +221,15 @@ public final class DocumentDrawing {
     }
 
     // values every entity has
-    private static void common(Entity e, AbstractDwgEntity a) {
-        DwgObject object = new DwgObject();
-        object.handle = a.handle();
-        object.type = a.rawTypeCode();
-        object.typeName = a.objectType().name();
-        object.entity = true;
-        e.object = object;
+    private static void common(Entity e, AbstractDwgEntity a, boolean keepObject) {
+        if (keepObject) {
+            DwgObject object = new DwgObject();
+            object.handle = a.handle();
+            object.type = a.rawTypeCode();
+            object.typeName = a.objectType().name();
+            object.entity = true;
+            e.object = object;
+        }
         e.entMode = a.entityMode();
         e.color = a.color() == null ? Entity.COLOR_BYLAYER : a.color().getColorIndex();
         e.ltypeScale = a.lineTypeScale();
@@ -210,7 +247,7 @@ public final class DocumentDrawing {
             e.start = xyz(s.start());
             e.end = xyz(s.end());
             e.thickness = s.thickness();
-            e.extrusion = s.extrusion();
+            e.extrusion = io.dwg.entities.Extrusions.share(s.extrusion());
             return e;
         }
         if (o instanceof DwgArc) {
@@ -219,7 +256,7 @@ public final class DocumentDrawing {
             e.center = xyz(s.center());
             e.radius = s.radius();
             e.thickness = s.thickness();
-            e.extrusion = s.extrusion();
+            e.extrusion = io.dwg.entities.Extrusions.share(s.extrusion());
             e.startAngle = s.startAngle();
             e.endAngle = s.endAngle();
             return e;
@@ -230,7 +267,7 @@ public final class DocumentDrawing {
             e.center = xyz(s.center());
             e.radius = s.radius();
             e.thickness = s.thickness();
-            e.extrusion = s.extrusion();
+            e.extrusion = io.dwg.entities.Extrusions.share(s.extrusion());
             return e;
         }
         if (o instanceof DwgEllipse) {
@@ -238,7 +275,7 @@ public final class DocumentDrawing {
             Ellipse e = new Ellipse();
             e.center = xyz(s.center());
             e.majorAxis = xyz(s.majorAxisVec());
-            e.extrusion = required(s.extrusion());
+            e.extrusion = required(io.dwg.entities.Extrusions.share(s.extrusion()));
             e.ratio = s.axisRatio();
             e.startParam = s.startParam();
             e.endParam = s.endParam();
@@ -251,7 +288,7 @@ public final class DocumentDrawing {
             e.constWidth = s.constantWidth();
             e.elevation = s.elevation();
             e.thickness = s.thickness();
-            e.extrusion = required(s.extrusion());
+            e.extrusion = required(io.dwg.entities.Extrusions.share(s.extrusion()));
             e.points = new double[s.vertices().size()][];
             for (int i = 0; i < e.points.length; i++) {
                 e.points[i] = xy(s.vertices().get(i));
@@ -291,7 +328,7 @@ public final class DocumentDrawing {
             DwgMText s = (DwgMText) o;
             MText e = new MText();
             e.insertion = xyz(s.location());
-            e.extrusion = s.extrusion();
+            e.extrusion = io.dwg.entities.Extrusions.share(s.extrusion());
             e.xAxis = s.xAxisDirection() == null ? new double[] { 1.0, 0.0, 0.0 } : xyz(s.xAxisDirection());
             e.rectWidth = s.width();
             e.height = s.height();
@@ -314,10 +351,10 @@ public final class DocumentDrawing {
             return e;
         }
         if (o instanceof DwgSolid) {
-            return solid(((DwgSolid) o).points(), ((DwgSolid) o).extrusion());
+            return solid(((DwgSolid) o).points(), io.dwg.entities.Extrusions.share(((DwgSolid) o).extrusion()));
         }
         if (o instanceof DwgTrace) {
-            return solid(((DwgTrace) o).points(), ((DwgTrace) o).extrusion());
+            return solid(((DwgTrace) o).points(), io.dwg.entities.Extrusions.share(((DwgTrace) o).extrusion()));
         }
         if (o instanceof DwgLeader) {
             DwgLeader s = (DwgLeader) o;
@@ -336,7 +373,7 @@ public final class DocumentDrawing {
             e.insertion = xyz(s.insertionPoint());
             e.scale = new double[] { s.xScale(), s.yScale(), s.zScale() };
             e.rotation = s.rotation();
-            e.extrusion = s.extrusion();
+            e.extrusion = io.dwg.entities.Extrusions.share(s.extrusion());
             e.hasAttribs = s.hasAttribs();
             e.blockHandle = handle(s.blockHeaderHandle());
             return e;
@@ -363,7 +400,7 @@ public final class DocumentDrawing {
             Polyline e = new Polyline();
             e.closed = s.isClosed();
             e.elevation = s.elevation();
-            e.extrusion = required(s.extrusion());
+            e.extrusion = required(io.dwg.entities.Extrusions.share(s.extrusion()));
             return e;
         }
         if (o instanceof DwgPolyline3D) {
@@ -408,7 +445,7 @@ public final class DocumentDrawing {
         // versions do not store it and older versions store zeros, so the insertion point stands in for it.
         boolean aligned = s.horizontalAlignment() != 0 || s.verticalAlignment() != 0;
         e.alignment = !aligned || s.alignmentPoint() == null ? e.insertion.clone() : xy(s.alignmentPoint());
-        e.extrusion = s.extrusion();
+        e.extrusion = io.dwg.entities.Extrusions.share(s.extrusion());
         e.thickness = s.thickness();
         e.oblique = s.obliquAngle();
         e.rotation = s.rotationAngle();
@@ -435,7 +472,7 @@ public final class DocumentDrawing {
     private static Hatch hatch(DwgHatch s) {
         Hatch e = new Hatch();
         e.elevation = s.elevation();
-        e.extrusion = required(s.extrusion());
+        e.extrusion = required(io.dwg.entities.Extrusions.share(s.extrusion()));
         e.name = s.patternName();
         e.solidFill = s.isSolidFill();
         for (DwgHatch.Loop sl : s.loops()) {

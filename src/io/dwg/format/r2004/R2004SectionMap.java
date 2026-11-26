@@ -59,6 +59,8 @@ public class R2004SectionMap {
         try {
             io.dwg.core.util.R2004Lz77Decompressor decompressor = new io.dwg.core.util.R2004Lz77Decompressor();
             sectionMapData = decompressor.decompress(compressedData, (int)decomp_data_size);
+        } catch (io.dwg.core.io.ReadLimits.LimitExceededException limit) {
+            throw limit;
         } catch (Exception e) {
             return map;
         }
@@ -107,6 +109,8 @@ public class R2004SectionMap {
                     map.descriptors.add(desc);
                 }
 
+            } catch (io.dwg.core.io.ReadLimits.LimitExceededException limit) {
+                throw limit;
             } catch (Exception e) {
                 break;
             }

@@ -85,6 +85,8 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
                     sectionData[i] = (byte) input.readRawChar();
                 }
                 sections.put(sectionName, new SectionInputStream(sectionData, sectionName));
+            } catch (io.dwg.core.io.ReadLimits.LimitExceededException limit) {
+                throw limit;
             } catch (RuntimeException e) {
                 // left out, as above
             }

@@ -9,7 +9,7 @@
          (mvn install in the repository root), then this project. -->
     <groupId>com.jdwgparser</groupId>
     <artifactId>jdwgparser-tika</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
     <packaging>jar</packaging>
     <name>jDwgParser Tika parser</name>
 
@@ -24,7 +24,7 @@
         <dependency>
             <groupId>com.jdwgparser</groupId>
             <artifactId>jdwgparser</artifactId>
-            <version>0.1.0-SNAPSHOT</version>
+            <version>0.1.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.tika</groupId>

@@ -109,6 +109,8 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
             throws Exception {
         try {
             return readSectionsFromMap(input);
+        } catch (io.dwg.core.io.ReadLimits.LimitExceededException limit) {
+            throw limit;
         } catch (Exception e) {
             return new HashMap<>();
         }
@@ -253,6 +255,8 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
             while (!input.isEof()) {
                 bytes.write(input.readRawChar() & 0xFF);
             }
+        } catch (io.dwg.core.io.ReadLimits.LimitExceededException limit) {
+            throw limit;
         } catch (RuntimeException e) {
             // end of the input
         }

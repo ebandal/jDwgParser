@@ -21,7 +21,7 @@
 ```sh
 mvn install            # 저장소 루트
 cd examples/tika-parser
-mvn package            # target/jdwgparser-tika-0.1.0-SNAPSHOT.jar
+mvn package            # target/jdwgparser-tika-0.1.0.jar
 ```
 
 Tika가 `META-INF/services`로 파서를 찾으므로, 두 jar(`jdwgparser`, `jdwgparser-tika`)를 클래스패스에 넣으면 됩니다.

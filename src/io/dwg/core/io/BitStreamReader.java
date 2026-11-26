@@ -20,7 +20,6 @@ public class BitStreamReader {
     private boolean stringStreamMode;
     private BitStreamReader stringStream;
     private long emptyStringBudget = Long.MAX_VALUE;
-    private java.util.Map<Long, io.dwg.core.type.DwgHandleRef> refCache;
 
     public BitStreamReader(BitInput input, DwgVersion version) {
         this.input = input;
@@ -420,21 +419,11 @@ public class BitStreamReader {
     }
 
     /**
-     * {@link #readHandleReference} as a {@link io.dwg.core.type.DwgHandleRef}. With a cache set
-     * ({@link #shareRefs}), equal references are one instance.
+     * {@link #readHandleReference} as a {@link io.dwg.core.type.DwgHandleRef}; references to
+     * the same handle made recently are one instance ({@link io.dwg.core.type.DwgHandleRef#of}).
      */
     public io.dwg.core.type.DwgHandleRef readRef(long containingHandle) {
-        long handle = readHandleReference(containingHandle);
-        if (handle == 0) {
-            return io.dwg.core.type.DwgHandleRef.NULL;
-        }
-        return refCache == null ? new io.dwg.core.type.DwgHandleRef(handle)
-                : refCache.computeIfAbsent(handle, io.dwg.core.type.DwgHandleRef::new);
-    }
-
-    /** Shares the handle references this reader makes through {@code cache} (null: no sharing). */
-    public void shareRefs(java.util.Map<Long, io.dwg.core.type.DwgHandleRef> cache) {
-        this.refCache = cache;
+        return io.dwg.core.type.DwgHandleRef.of(readHandleReference(containingHandle));
     }
 
     /**
