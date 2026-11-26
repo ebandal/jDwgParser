@@ -14,7 +14,7 @@ import io.dwg.sections.objects.ObjectReader;
  * BLOCK_HEADER (type 49), spec §20.4.52.
  * <pre>
  *   name TV, table record flags, anonymous B, has attdefs B, is xref B, overlaid xref B,
- *   R2000+ loaded B (0 means loaded), R2004+ owned object count BL,
+ *   R2000+ loaded B (0 means loaded), R2004+ unless xref or overlaid: owned object count BL,
  *   base point 3BD, xref path TV,
  *   R2000+ insert count: non-zero RCs ended by a 0 RC, description TV,
  *          preview data size BL and that many bytes,
@@ -23,6 +23,11 @@ import io.dwg.sections.objects.ObjectReader;
  *     R13–R2000 unless xref or overlaid: first and last entity,
  *     R2004+ the owned entities, ENDBLK, R2000+ the inserts and the layout
  * </pre>
+ * The specification has the owned object count in every R2004+ block. The 2 xref blocks of the
+ * samples (R2013, gh44-error.dwg) do not have it: without it their data ends exactly (one
+ * insert, no preview, insert units 4, explodable) and their handles too; with it the insert
+ * count is read from the base point. This is the same condition as the first and last entity
+ * handles of R13–R2000.
  */
 public class BlockHeaderObjectReader implements ObjectReader {
 
@@ -46,7 +51,7 @@ public class BlockHeaderObjectReader implements ObjectReader {
         if (v.from(DwgVersion.R2000)) {
             block.setLoaded(!r.getInput().readBit());
         }
-        if (v.from(DwgVersion.R2004)) {
+        if (v.from(DwgVersion.R2004) && (flags & 0x0C) == 0) {
             block.setOwnedObjectCount(r.readBitLong());
         }
         double[] base = r.read3BitDouble();
@@ -60,7 +65,7 @@ public class BlockHeaderObjectReader implements ObjectReader {
             }
             block.setInsertCount(inserts);
             block.setDescription(r.readVariableText());
-            int size = r.readBitLong();
+            int size = r.count(r.readBitLong(), 8);
             if (size > 0) {
                 byte[] preview = new byte[size];
                 for (int i = 0; i < size; i++) {
@@ -101,6 +106,6 @@ public class BlockHeaderObjectReader implements ObjectReader {
     }
 
     private static DwgHandleRef handle(BitStreamReader r, long self) {
-        return new DwgHandleRef(r.readHandleReference(self));
+        return r.readRef(self);
     }
 }
