@@ -59,10 +59,13 @@ public class DwgDocument {
     public List<DwgClassDefinition> customClasses() { return customClasses; }
     public void setCustomClasses(List<DwgClassDefinition> list) { this.customClasses = list; }
 
-    /** 전체 엔티티 목록 */
+    /**
+     * 전체 엔티티 목록. 종류를 지원하지 않아 {@code DwgGenericObject}로 남은 엔티티는 빠진다
+     * ({@code objects()}에는 있다).
+     */
     public List<DwgEntity> entities() {
         return objectMap.values().stream()
-            .filter(DwgObject::isEntity)
+            .filter(o -> o instanceof DwgEntity)
             .map(o -> (DwgEntity) o)
             .collect(Collectors.toList());
     }
