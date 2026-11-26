@@ -73,6 +73,32 @@ class ConvertTest {
         assertEquals(500, Math.max(ImageIO.read(half.toFile()).getWidth(), ImageIO.read(half.toFile()).getHeight()));
     }
 
+    /** --json: one JSON document on the standard output, with the result of each file. */
+    @Test
+    void json(@TempDir Path dir) throws Exception {
+        Path bad = dir.resolve("bad.dwg");
+        Files.write(bad, "not a drawing".getBytes());
+        java.io.ByteArrayOutputStream captured = new java.io.ByteArrayOutputStream();
+        java.io.PrintStream old = System.out;
+        int status;
+        System.setOut(new java.io.PrintStream(captured, true, "UTF-8"));
+        try {
+            status = Convert.run(new String[] {Samples.path("2018/Dynblocks.dwg"), dir.resolve("a.png").toString(), "--json", "--scale", "1/8"});
+            assertEquals(0, status);
+            assertEquals(1, Convert.run(new String[] {bad.toString(), dir.resolve("b.png").toString(), "--json"}));
+            assertEquals(2, Convert.run(new String[] {"a.dwg", "--size", "--json"}));
+        } finally {
+            System.setOut(old);
+        }
+        String out = captured.toString("UTF-8");
+        String[] docs = out.split("(?m)^\\}\\R");
+        assertEquals(3, docs.length, out);
+        assertTrue(docs[0].startsWith("{") && docs[0].contains("\"status\": 0") && docs[0].contains("\"ok\": true")
+                && docs[0].contains("\"width\": 413") && docs[0].contains("\"decoded\": "), docs[0]);
+        assertTrue(docs[1].contains("\"status\": 1") && docs[1].contains("\"ok\": false") && docs[1].contains("\"bugReport\": \"jDwgParser "), docs[1]);
+        assertTrue(docs[2].contains("\"status\": 2") && docs[2].contains("\"error\": \"a number was expected"), docs[2]);
+    }
+
     @Test
     void version() {
         assertTrue(io.dwg.api.Version.number().matches("\\d+\\.\\d+\\.\\d+(-SNAPSHOT)?"), io.dwg.api.Version.number());

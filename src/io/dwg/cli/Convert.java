@@ -14,8 +14,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -51,10 +54,13 @@ import io.dwg.render.model.Drawing;
  * tiles into one PNG a row at a time, also in little memory.
  * <p>Each file is reported on one line; the exit status is 0 when all were converted, 1 when
  * some were not, 2 for wrong arguments. {@code --version} prints the version line that a bug
- * report should carry; it is printed too when a file fails.
+ * report should carry; it is printed too when a file fails. With {@code --json} the standard
+ * output is one JSON document instead, for programs (and AI agents) to read.
  */
 public final class Convert {
 
+    static final String LICENSE_LINE =
+            "Free for noncommercial use; commercial use needs a license (LICENSE, LICENSING.md).";
     static final int DEFAULT_DPI = 300;
     static final int DEFAULT_TILE = 2048;
     /** Memory for the band of a split picture. */
@@ -79,19 +85,97 @@ public final class Convert {
         long maxBytes;
         boolean split;
         int tile = DEFAULT_TILE;
+        boolean json;
+    }
+
+    /** What one conversion made. */
+    static final class Result {
+        String format;
+        int width;
+        int height;
+        String sizing;
+        int tileColumns;
+        int tileRows;
+        Path tilesFile;
+        int entities;
+        int decoded;
+        int failedToDecode;
+
+        /** The text after "ok" on the result line. */
+        String text() {
+            if (tilesFile != null) {
+                return String.format("%d x %d px in %d x %d tiles, %s, %s", width, height, tileColumns, tileRows,
+                        tilesFile.getFileName(), sizing);
+            }
+            return format.equals("png") ? width + "x" + height + " px, " + sizing : sizing;
+        }
+
+        Map<String, Object> json() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("format", format);
+            m.put("width", width);
+            m.put("height", height);
+            m.put("sizing", sizing);
+            if (tilesFile != null) {
+                Map<String, Object> t = new LinkedHashMap<>();
+                t.put("columns", tileColumns);
+                t.put("rows", tileRows);
+                t.put("file", tilesFile.toString());
+                t.put("names", tileName(tilesFile.getFileName().toString().replaceAll("\\.tiles$", ""), 0, 0)
+                        .replace("[1x1]", "[<column>x<row>]"));
+                m.put("tiles", t);
+            }
+            Map<String, Object> e = new LinkedHashMap<>();
+            e.put("total", entities);
+            e.put("decoded", decoded);
+            e.put("failedToDecode", failedToDecode);
+            e.put("unsupportedType", Math.max(0, entities - decoded - failedToDecode));
+            m.put("entities", e);
+            return m;
+        }
+    }
+
+    /** The start of every JSON document: what made it. */
+    private static Map<String, Object> header(int status) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("tool", "jDwgParser");
+        m.put("version", Version.number());
+        m.put("status", status);
+        return m;
+    }
+
+    private static int printJson(Map<String, Object> doc, int status) {
+        doc.put("status", status);
+        if (status == 1) {
+            doc.put("bugReport", Version.describe());
+        }
+        doc.put("license", LICENSE_LINE);
+        System.out.println(Json.write(doc));
+        return status;
     }
 
     /** Runs the command with {@code args} and returns its exit status, without exiting. */
     public static int run(String[] args) {
+        boolean json = Arrays.asList(args).contains("--json");
         if (args.length > 0 && args[0].equals("merge")) {
-            return reported(merge(args));
+            return reported(merge(args, json));
         }
-        if (args.length == 1 && (args[0].equals("--version") || args[0].equals("-V"))) {
+        if (args.length == (json ? 2 : 1) && (Arrays.asList(args).contains("--version") || Arrays.asList(args).contains("-V"))) {
+            if (json) {
+                Map<String, Object> doc = header(0);
+                doc.put("built", Version.built());
+                doc.put("java", System.getProperty("java.version"));
+                doc.put("os", System.getProperty("os.name") + " " + System.getProperty("os.version") + " " + System.getProperty("os.arch"));
+                doc.put("bugReport", Version.describe());
+                return printJson(doc, 0);
+            }
             System.out.println(Version.describe());
+            System.out.println(LICENSE_LINE);
             return 0;
         }
         List<String> files = new ArrayList<>();
         Options o = new Options();
+        o.json = json;
         try {
             for (int i = 0; i < args.length; i++) {
                 switch (args[i]) {
@@ -104,6 +188,7 @@ public final class Convert {
                     case "--max-mb": o.maxBytes = Long.parseLong(args[++i]) << 20; break;
                     case "--split": o.split = true; break;
                     case "--tile": o.tile = Integer.parseInt(args[++i]); break;
+                    case "--json": break;
                     case "-h":
                     case "--help":
                         usage();
@@ -131,8 +216,16 @@ public final class Convert {
                 throw new IllegalArgumentException("sizes must be positive (--size and --tile at least 16)");
             }
         } catch (RuntimeException e) {
-            System.err.println("error: " + e.getMessage());
+            String message = e instanceof ArrayIndexOutOfBoundsException ? "an option is missing its value"
+                    : e instanceof NumberFormatException ? "a number was expected: " + e.getMessage().replaceFirst("^For input string: ", "")
+                    : e.getMessage();
+            System.err.println("error: " + message);
             usage();
+            if (json) {
+                Map<String, Object> doc = header(2);
+                doc.put("error", message);
+                printJson(doc, 2);
+            }
             return 2;
         }
 
@@ -145,6 +238,11 @@ public final class Convert {
                           .sorted().collect(Collectors.toList());
             } catch (IOException e) {
                 System.err.println("error: " + e.getMessage());
+                if (json) {
+                    Map<String, Object> doc = header(2);
+                    doc.put("error", e.getMessage());
+                    printJson(doc, 2);
+                }
                 return 2;
             }
         } else {
@@ -152,19 +250,45 @@ public final class Convert {
         }
 
         int failed = 0;
+        List<Object> results = new ArrayList<>();
         for (Path in : inputs) {
             Path out = target(in, input, output, o.format);
             String fmt = o.format != null ? o.format : extension(out).isEmpty() ? "png" : extension(out);
             long start = System.nanoTime();
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("input", in.toString());
             try {
-                String done = convert(in, out, fmt, o);
-                System.out.printf("ok      %s -> %s (%s, %d ms)%n", in, out, done, (System.nanoTime() - start) / 1_000_000);
+                Result done = convert(in, out, fmt, o);
+                long ms = (System.nanoTime() - start) / 1_000_000;
+                if (json) {
+                    r.put("output", out.toString());
+                    r.put("ok", true);
+                    r.putAll(done.json());
+                    r.put("ms", ms);
+                } else {
+                    System.out.printf("ok      %s -> %s (%s, %d ms)%n", in, out, done.text(), ms);
+                }
             } catch (Exception | OutOfMemoryError e) {
                 failed++;
-                System.out.printf("failed  %s: %s%n", in, message(e));
+                if (json) {
+                    r.put("output", out.toString());
+                    r.put("ok", false);
+                    r.put("error", message(e));
+                } else {
+                    System.out.printf("failed  %s: %s%n", in, message(e));
+                }
             }
+            results.add(r);
         }
-        return reported(failed == 0 ? 0 : 1);
+        int status = failed == 0 ? 0 : 1;
+        if (json) {
+            Map<String, Object> doc = header(status);
+            doc.put("converted", inputs.size() - failed);
+            doc.put("failed", failed);
+            doc.put("files", results);
+            return reported(printJson(doc, status));
+        }
+        return reported(status);
     }
 
     /** After a failure, the line to put in a bug report. */
@@ -175,8 +299,8 @@ public final class Convert {
         return status;
     }
 
-    /** Converts one file; returns a short description of what was made. */
-    static String convert(Path in, Path out, String format, Options o) throws IOException {
+    /** Converts one file; returns what was made. */
+    static Result convert(Path in, Path out, String format, Options o) throws IOException {
         DwgReader reader = DwgReader.defaultReader();
         if (o.maxBytes > 0) {
             reader.maxBytes(o.maxBytes);
@@ -187,7 +311,12 @@ public final class Convert {
         Drawing drawing = builder.build();
 
         Renderer renderer = new Renderer();
-        String sizing = size(renderer, drawing, o);
+        Result result = new Result();
+        result.format = format;
+        result.sizing = size(renderer, drawing, o);
+        result.entities = drawing.entityCount;
+        result.decoded = drawing.decodedCount;
+        result.failedToDecode = drawing.failedCount;
         if (o.white) {
             renderer.background = Color.WHITE;
             renderer.foreground = Color.BLACK;
@@ -195,23 +324,22 @@ public final class Convert {
         if (out.getParent() != null) {
             Files.createDirectories(out.getParent());
         }
-        if (format.equals("svg")) {
-            String svg = renderer.renderSvg(drawing);
-            if (svg == null) throw new DwgReadException("nothing to draw");
-            Files.write(out, svg.getBytes(StandardCharsets.UTF_8));
-            return sizing;
-        }
-        if (format.equals("pdf")) {
-            byte[] pdf = renderer.renderPdf(drawing);
-            if (pdf == null) throw new DwgReadException("nothing to draw");
-            Files.write(out, pdf);
-            return sizing;
-        }
-        if (o.split) {
-            return split(renderer, drawing, out, o.tile) + ", " + sizing;
+        if (o.split && format.equals("png")) {
+            split(renderer, drawing, out, o.tile, result);
+            return result;
         }
         int[] size = renderer.imageSizeOf(drawing);
         if (size == null) throw new DwgReadException("nothing to draw");
+        result.width = size[0];
+        result.height = size[1];
+        if (format.equals("svg")) {
+            Files.write(out, renderer.renderSvg(drawing).getBytes(StandardCharsets.UTF_8));
+            return result;
+        }
+        if (format.equals("pdf")) {
+            Files.write(out, renderer.renderPdf(drawing));
+            return result;
+        }
         long need = 4L * size[0] * size[1];
         Runtime rt = Runtime.getRuntime();
         long free = rt.maxMemory() - (rt.totalMemory() - rt.freeMemory());
@@ -221,7 +349,9 @@ public final class Convert {
         }
         BufferedImage image = renderer.render(drawing);
         ImageIO.write(image, "png", out.toFile());
-        return image.getWidth() + "x" + image.getHeight() + " px, " + sizing;
+        result.width = image.getWidth();
+        result.height = image.getHeight();
+        return result;
     }
 
     /** {@code 1/4}, {@code 0.25} or {@code 2} as a number. */
@@ -275,7 +405,7 @@ public final class Convert {
     }
 
     /** Draws the PNG as tiles next to {@code out}, with a .tiles file that {@code merge} reads. */
-    static String split(Renderer renderer, Drawing drawing, Path out, int tile) throws IOException {
+    static void split(Renderer renderer, Drawing drawing, Path out, int tile, Result result) throws IOException {
         String base = out.getFileName().toString().replaceAll("(?i)\\.png$", "");
         Path dir = out.toAbsolutePath().getParent();
         int[] r = renderer.renderTiles(drawing, tile, BAND_BYTES,
@@ -291,7 +421,11 @@ public final class Convert {
         try (Writer w = Files.newBufferedWriter(dir.resolve(base + ".tiles"), StandardCharsets.UTF_8)) {
             p.store(w, "tiles of " + base + ".png; join them with: java -jar jdwgparser.jar merge " + base + ".tiles");
         }
-        return String.format("%d x %d px in %d x %d tiles, %s", r[0], r[1], r[3], r[2], base + ".tiles");
+        result.width = r[0];
+        result.height = r[1];
+        result.tileRows = r[2];
+        result.tileColumns = r[3];
+        result.tilesFile = dir.resolve(base + ".tiles");
     }
 
     /** The tile in {@code column} (across) and {@code row} (down), both from 0, as {@code base[3x2].png} counted from 1. */
@@ -300,9 +434,15 @@ public final class Convert {
     }
 
     /** {@code merge <name>.tiles [out.png]}: the tiles as one PNG, a row of pixels at a time. */
-    static int merge(String[] args) {
+    static int merge(String[] all, boolean json) {
+        String[] args = Arrays.stream(all).filter(a -> !a.equals("--json")).toArray(String[]::new);
         if (args.length < 2 || args.length > 3) {
-            System.err.println("usage: java -jar jdwgparser.jar merge <name>.tiles [out.png]");
+            System.err.println("usage: java -jar jdwgparser.jar merge <name>.tiles [out.png] [--json]");
+            if (json) {
+                Map<String, Object> doc = header(2);
+                doc.put("error", "give a .tiles file, and an output if wanted");
+                printJson(doc, 2);
+            }
             return 2;
         }
         Path tiles = Paths.get(args[1]);
@@ -349,9 +489,32 @@ public final class Convert {
                     }
                 }
             }
-            System.out.printf("ok      %s -> %s (%d x %d px, %d ms)%n", tiles, out, width, height, (System.nanoTime() - start) / 1_000_000);
+            long ms = (System.nanoTime() - start) / 1_000_000;
+            if (json) {
+                Map<String, Object> r = new LinkedHashMap<>();
+                r.put("input", tiles.toString());
+                r.put("output", out.toString());
+                r.put("ok", true);
+                r.put("format", "png");
+                r.put("width", width);
+                r.put("height", height);
+                r.put("ms", ms);
+                Map<String, Object> doc = header(0);
+                doc.put("files", List.of(r));
+                return printJson(doc, 0);
+            }
+            System.out.printf("ok      %s -> %s (%d x %d px, %d ms)%n", tiles, out, width, height, ms);
             return 0;
         } catch (Exception | OutOfMemoryError e) {
+            if (json) {
+                Map<String, Object> r = new LinkedHashMap<>();
+                r.put("input", tiles.toString());
+                r.put("ok", false);
+                r.put("error", message(e));
+                Map<String, Object> doc = header(1);
+                doc.put("files", List.of(r));
+                return printJson(doc, 1);
+            }
             System.out.printf("failed  %s: %s%n", tiles, message(e));
             return 1;
         }
@@ -402,6 +565,8 @@ public final class Convert {
                 "  --split       tiles drawn a band at a time: little memory, slower (join them with merge)",
                 "  --tile N      tile size in pixels for --split (default 2048)",
                 "  --background  black (default) or white",
-                "  --max-mb N    memory one file may use for its sections, in MB"));
+                "  --max-mb N    memory one file may use for its sections, in MB",
+                "  --json        print one JSON document instead of the result lines (also for merge, --version)",
+                LICENSE_LINE));
     }
 }
