@@ -100,8 +100,8 @@
 - [x] 퍼징(`io.dwg.tools.ReadFuzz`, 회귀는 `RobustnessTest`): 메모리 부족 7건과 내부 예외를 고침. 6,000회에서 문서 또는 `DwgReadException`만 나옴
 - [x] 읽기 상한: `DwgReader.maxBytes(long)`(기본 최대 힙의 절반), `timeout(Duration)`. `open()`은 `DwgReadException` 하나만 던짐
 - [x] 벤치마크(JMH, `io.dwg.bench.ReadBenchmark`): 약 25 MB/s, 결과는 RELIABILITY.md
-  - [x] 메모리: 문서가 붙잡는 힙을 파일 크기의 약 14배에서 8배로 줄임(14MB 도면 198MB → 110MB), 속도는 그대로. 빈 목록을 만들지 않음, 핸들 참조·색 공유, 핸들 맵·객체 맵을 기본형 배열로, 기본 돌출 방향 공유
-    - [ ] 더 줄일 곳: 좌표 Point3D(14MB 도면에서 27MB), 공개 API의 `List<Double>`(SPLINE 매듭 등, API를 바꿔야 함)
+  - [x] 메모리: 문서가 붙잡는 힙을 파일 크기의 약 14배에서 6~7배로 줄임(14MB 도면 198MB → 91MB), 속도는 그대로. 빈 목록·드문 필드는 필요할 때만, 핸들 참조·색·최근 좌표 공유, 핸들 맵·객체 맵·블록 엔티티 목록·SPLINE 점과 매듭을 기본형 배열로, 작은 코드값은 byte
+    - [ ] 더 줄일 곳: 선·정점 객체 자체(14MB 도면에서 28MB), 필드의 서로 다른 좌표(약 13MB). 좌표를 객체 안에 풀면 좌표 공유의 이득을 잃어 효과가 작음
 - [x] `src/io/dwg/test`의 디버그용 main 클래스 79개 삭제: 모두 assert 없는 main이라 옮길 테스트가 없었음. `DwgParsingStageTest`(README·TESTING.md에 사용법이 있음)만 남김
 
 ## P3 — 도입하기 쉽게
