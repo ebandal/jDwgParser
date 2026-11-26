@@ -2,7 +2,22 @@
 
 Java로 구현한 AutoCAD DWG 파일 파서 라이브러리.
 
-OpenDesign Specification v5.4.1을 기반으로 R13부터 R2018까지의 DWG 파일 읽기 및 쓰기를 지원합니다.
+Open Design Specification for .dwg files v5.4.1을 기반으로 R13부터 R2018까지의 DWG 파일을 읽습니다. 외부 의존성이 없는 순수 Java 라이브러리이며 Java 11 이상에서 동작합니다. 쓰기(`DwgWriter`)는 아직 개발 중입니다.
+
+## 빠른 시작
+
+```java
+DwgDocument doc = DwgReader.defaultReader().open(Paths.get("drawing.dwg"));
+for (DwgLine line : doc.objects(DwgLine.class)) {
+    System.out.println(line.start() + " -> " + line.end() + " on " + doc.layerOf(line).map(DwgLayer::name).orElse("?"));
+}
+doc.issues().forEach(System.out::println);   // 읽지 못한 부분이 있으면 여기에 나옵니다
+```
+
+- `open()`은 문서를 돌려주거나 `DwgReadException`을 던집니다. 지원하지 않는 버전, 구조가 깨진 파일, 상한 초과일 때입니다.
+- 일부만 깨진 파일은 나머지를 읽고, 깨진 부분은 `issues()`로 알려 줍니다.
+- 상한은 `maxBytes(long)`와 `timeout(Duration)`으로 정합니다. 자세한 내용은 [RELIABILITY.md](RELIABILITY.md)에 있습니다.
+- 이 예제는 `QuickStartTest`가 그대로 실행해 확인합니다.
 
 ## 프로젝트 구조
 
@@ -36,8 +51,8 @@ src/
 │   │   ├── DwgWriter
 │   │   └── DwgDocument
 │   │
-│   └── test/          # 테스트
-│       └── DwgParsingStageTest
+│   └── test/          # DwgParsingStageTest (단계별 진단 도구)
+test/                  # JUnit 테스트, 측정 도구(tools), 벤치마크(bench)
 ```
 
 ## 아키텍처
@@ -104,13 +119,14 @@ dwg-core → dwg-format → dwg-sections → dwg-entities → dwg-api
 
 ### 📊 최종 성과
 
-| 메트릭 | 달성 |
+2026-11-26 측정 ([RELIABILITY.md](RELIABILITY.md)에 방법과 자세한 결과):
+
+| 메트릭 | 결과 |
 |--------|------|
-| 샘플 파일 통과율 | 130/141 (92.2%) |
-| 엔티티 타입 커버리지 | 74/74 (100%) |
-| 총 추출 엔티티 | 12,756개 |
-| R2007+ 파일 성공률 | 28/28 (100%) |
-| 누적 개선율 (Phase 1 대비) | **+165%** |
+| R13~R2018 샘플 도면 | 233/233 열림 |
+| 읽은 객체 | 2,244,417개, 읽기 점검에서 문제가 있는 객체 0개 |
+| 손상 파일 퍼징 | 6,000회: 문서를 돌려주거나 `DwgReadException`, 그 밖의 예외·시간 초과·메모리 부족 0 |
+| 읽기 속도 | 평균 약 25 MB/s |
 
 ### 🎯 Phase 10 (계획)
 
@@ -123,7 +139,7 @@ dwg-core → dwg-format → dwg-sections → dwg-entities → dwg-api
 
 ### 요구사항
 
-- Java 16+
+- Java 11+
 - Maven 3.6+
 
 ### 빌드
@@ -205,6 +221,7 @@ import io.dwg.api.DwgReader;
 import io.dwg.api.DwgDocument;
 import io.dwg.entities.DwgEntity;
 import java.nio.file.Paths;
+import java.util.List;
 
 // DWG 파일 읽기
 DwgDocument doc = DwgReader.defaultReader()
@@ -227,18 +244,18 @@ for (DwgEntity e : entities) {
 
 ## v0.1.0 버전 지원 현황
 
-| 버전 | 읽기 | 엔티티 추출 | 파일 성공률 | 최대 엔티티/파일 |
-|------|------|-----------|-----------|-----------------|
-| R13 | 🟡 기본 | 🟡 폴백 | 일부 | - |
-| R14 | 🟡 기본 | 🟡 폴백 | 일부 | - |
-| R2000 | 🟢 완성 | 🟢 완성 | 100% | 500+ |
-| **R2004** | 🟢 완성 | 🟢 완성 | 100% | 2,500+ |
-| **R2007** | 🟢 완성 | 🟢 완성 | 100% | 600+ |
-| **R2010** | 🟢 완성 | 🟢 완성 | 100% | 300+ |
-| **R2013** | 🟢 완성 | 🟢 완성 | 100% | 500+ |
-| **R2018** | 🟢 완성 | 🟢 완성 | 100% | 400+ |
+| 버전 | 샘플 | 열림 | 객체 | 문제가 있는 객체 |
+|------|------|------|------|-----------------|
+| R13 | 1 | 1 | 5,785 | 0 |
+| R14 | 4 | 4 | 1,550 | 0 |
+| R2000 | 34 | 34 | 54,016 | 0 |
+| R2004 | 29 | 29 | 163,136 | 0 |
+| R2007 | 98 | 98 | 1,611,090 | 0 |
+| R2010 | 19 | 19 | 4,294 | 0 |
+| R2013 | 27 | 27 | 353,156 | 0 |
+| R2018 | 21 | 21 | 51,390 | 0 |
 
-**범례:** 🟢 완성 / 🟡 기본/폴백 / ❌ 미구현
+2026-11-26 측정. R12 이하는 지원하지 않습니다. 자세한 내용은 [RELIABILITY.md](RELIABILITY.md)를 보세요.
 
 ### 지원 엔티티 타입 (74개)
 
