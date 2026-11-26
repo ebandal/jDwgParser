@@ -43,7 +43,8 @@ class ReadCompletenessTest {
             "VIEW", "UCS", "VPORT", "LAYOUT", "VIEWPORT", "GROUP", "SCALE", "ACAD_DICTIONARYVAR",
             "VERTEX_MESH",
             "SHAPE", "TOLERANCE", "MLINE", "IMAGE", "WIPEOUT", "HATCH", "OLE2FRAME", "ACAD_FIELD",
-            "ACAD_TABLESTYLE", "ACAD_CELLSTYLE", "MULTILEADER",
+            "ACAD_TABLESTYLE", "ACAD_CELLSTYLE", "MULTILEADER", "ACAD_TABLE", "BLOCK_HEADER",
+            "REGION", "SOLID3D", "BODY", "ACAD_PROXY_ENTITY",
             "VISUALSTYLE", "ACAD_MATERIAL", "ACAD_PERSSUBENTMANAGER", "SURFACE", "MESH", "UNDERLAY");
 
     @BeforeAll
@@ -70,7 +71,7 @@ class ReadCompletenessTest {
                 objects.merge(o.objectType().name(), 1, Integer::sum);
             }
             for (ReadIssue issue : doc.issues()) {
-                if (CHECKED.contains(issue.objectType())) {
+                if (issue.objectType() != null && CHECKED.contains(issue.objectType())) {
                     problems.add(file.getFileName() + " " + issue);
                 }
             }

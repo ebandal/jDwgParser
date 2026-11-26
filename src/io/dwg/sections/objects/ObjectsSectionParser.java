@@ -55,23 +55,37 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             return result;
         }
         byte[] raw = stream.rawBytes();
-        for (Map.Entry<Long, Long> entry : sortedHandleOffsets()) {
-            long offset = entry.getValue();
+        for (io.dwg.sections.handles.HandleEntry entry : handles.sortedEntries()) {
+            long offset = entry.offset();
             if (offset < 0 || offset >= raw.length) {
                 continue;
             }
+            io.dwg.core.io.ReadLimits.checkTime();
             try {
-                DwgObject obj = parseObjectAt(raw, (int) offset, version, entry.getKey());
+                DwgObject obj = parseObjectAt(raw, (int) offset, version, entry.handle());
                 if (obj != null) {
-                    result.put(entry.getKey(), obj);
+                    result.put(entry.handle(), obj);
                 }
+            } catch (io.dwg.core.io.ReadLimits.LimitExceededException e) {
+                throw e;
             } catch (Exception e) {
-                issues.accept(new ReadIssue(ReadIssue.Kind.OBJECT_SKIPPED, entry.getKey(), null,
+                issues.accept(new ReadIssue(ReadIssue.Kind.OBJECT_SKIPPED, entry.handle(), null,
                         "cannot read the object at offset " + offset + ": " + describe(e)));
             }
         }
         nameExtendedDataApplications(result);
+        refs.clear();
         return result;
+    }
+
+    /**
+     * The common handles (owners, layers, line types, ...) point at few objects many times; one
+     * DwgHandleRef per handle value is shared while the section is read.
+     */
+    private final Map<Long, DwgHandleRef> refs = new HashMap<>();
+
+    private DwgHandleRef ref(long handle) {
+        return handle == 0 ? DwgHandleRef.NULL : refs.computeIfAbsent(handle, DwgHandleRef::new);
     }
 
     /**
@@ -101,14 +115,6 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         }
     }
 
-    private Iterable<Map.Entry<Long, Long>> sortedHandleOffsets() {
-        Map<Long, Long> map = new HashMap<>();
-        for (long h : handles.allHandles()) {
-            handles.offsetFor(h).ifPresent(o -> map.put(h, o));
-        }
-        return map.entrySet();
-    }
-
     /**
      * Reads the object at {@code byteOffset} (spec §20.1, §20.2): MS object size in bytes
      * (without the CRC), for R2010+ an unsigned modular char with the size of the handle stream
@@ -119,6 +125,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         ByteBufferBitInput buf = new ByteBufferBitInput(raw);
         buf.seek((long) byteOffset * 8L);
         BitStreamReader r = new BitStreamReader(buf, version);
+        r.shareRefs(refs);
         r.setTextCharset(textCharset);
 
         int objSize = r.readModularShort();
@@ -129,6 +136,9 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             handleStreamBits = r.readUMC();
         }
         long dataStartBit = r.position();
+        if (dataStartBit / 8 + objSize > raw.length) {
+            throw new IllegalStateException("the object size " + objSize + " runs past the end of the section");
+        }
 
         int typeCode = version.from(DwgVersion.R2010) ? r.readBOT() : r.readBitShort();
 
@@ -161,9 +171,10 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         return e.getClass().getSimpleName() + (e.getMessage() != null ? ": " + e.getMessage() : "");
     }
 
-    /** Objects of these types are kept with their bytes, as nothing reads their data. */
+    /** Objects of these types are kept with their bytes, as nothing interprets their data. */
     private static boolean keepsRawData(DwgObjectType type) {
-        return type == DwgObjectType.UNKNOWN || type == DwgObjectType.ACAD_PROXY_OBJECT;
+        return type == DwgObjectType.UNKNOWN || type == DwgObjectType.ACAD_PROXY_OBJECT
+                || type == DwgObjectType.ACAD_PROXY_ENTITY;
     }
 
     /**
@@ -210,9 +221,15 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
     private void readObjectContent(DwgObject obj, ObjectReader reader, BitStreamReader r, DwgVersion version,
                                    byte[] raw, long dataStartBit, int objSizeBytes, long handleStreamBits) {
+        ObjectHeaderData position = ObjectHeaderData.of(r);
+        position.dataStart = dataStartBit;
+        position.objectEnd = dataStartBit + (long) objSizeBytes * 8L;
+        position.handleStreamBits = handleStreamBits;
         if (version.from(DwgVersion.R2007)) {
             try {
                 attachStringStream(r, version, raw, dataStartBit, objSizeBytes, handleStreamBits);
+            } catch (io.dwg.core.io.ReadLimits.LimitExceededException e) {
+                throw e;
             } catch (Exception e) {
                 r.setStringStream(null);
             }
@@ -235,12 +252,16 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                     ObjectHeaderData.of(r).dataEnd = r.position();
                 }
             }
+        } catch (io.dwg.core.io.ReadLimits.LimitExceededException e) {
+            throw e;
         } catch (Exception e) {
             issues.accept(new ReadIssue(ReadIssue.Kind.OBJECT_DATA, obj.handle(), obj.objectType().name(), describe(e)));
         }
         addExtendedData(obj, r, version);
         try {
             readHandleStream(obj, reader, r, version, dataStartBit, objSizeBytes, handleStreamBits);
+        } catch (io.dwg.core.io.ReadLimits.LimitExceededException e) {
+            throw e;
         } catch (Exception e) {
             issues.accept(new ReadIssue(ReadIssue.Kind.OBJECT_HANDLES, obj.handle(), obj.objectType().name(), describe(e)));
         }
@@ -306,7 +327,10 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             return;
         }
         s.seek(start);
+        s.setLimitBit(pos);                         // the strings end where their size is stored
         ObjectHeaderData.of(r).stringStreamStart = start;
+        ObjectHeaderData.of(r).stringStreamEnd = pos;
+        ObjectHeaderData.of(r).stringInput = s;
         r.setStringStream(s);
     }
 
@@ -345,7 +369,7 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
         if (header.entity && obj instanceof AbstractDwgEntity) {
             AbstractDwgEntity ae = (AbstractDwgEntity) obj;
             ae.setEntityMode(header.entMode);
-            ae.setColor(new CmColor(header.colorIndex));
+            ae.setColor(CmColor.fromIndex(header.colorIndex));
             ae.setLineTypeScale(header.linetypeScale);
             ae.setInvisibility(header.invisible);
             ae.setLineWeight(header.lineWeight);
@@ -353,19 +377,19 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
 
             // entmode 0 : 소유자(블록 헤더 또는 상위 엔티티)가 핸들로 기록된다
             if (header.entMode == 0) {
-                ao.setOwnerHandle(new DwgHandleRef(r.readHandleReference(self)));
+                ao.setOwnerHandle(ref(r.readHandleReference(self)));
             }
             for (int i = 0; i < header.numReactors; i++) {
-                ao.addReactorHandle(new DwgHandleRef(r.readHandleReference(self)));
+                ao.addReactorHandle(ref(r.readHandleReference(self)));
             }
             if (!version.from(DwgVersion.R2004) || !header.xdicMissing) {
-                ao.setXDicHandle(new DwgHandleRef(r.readHandleReference(self)));
+                ao.setXDicHandle(ref(r.readHandleReference(self)));
             }
             if (!version.from(DwgVersion.R2000)) {
                 // R13/R14
-                ae.setLayerHandle(new DwgHandleRef(r.readHandleReference(self)));
+                ae.setLayerHandle(ref(r.readHandleReference(self)));
                 if (!header.isByLayerLinetype) {
-                    ae.setLineTypeHandle(new DwgHandleRef(r.readHandleReference(self)));
+                    ae.setLineTypeHandle(ref(r.readHandleReference(self)));
                 }
             }
             if (!version.from(DwgVersion.R2004) && !header.noLinks) {
@@ -376,9 +400,9 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
                 r.readHandleReference(self);        // color
             }
             if (version.from(DwgVersion.R2000)) {
-                ae.setLayerHandle(new DwgHandleRef(r.readHandleReference(self)));
+                ae.setLayerHandle(ref(r.readHandleReference(self)));
                 if (header.linetypeFlags == 3) {
-                    ae.setLineTypeHandle(new DwgHandleRef(r.readHandleReference(self)));
+                    ae.setLineTypeHandle(ref(r.readHandleReference(self)));
                 }
                 if (version.from(DwgVersion.R2007)) {
                     if (header.materialFlags == 3) {
@@ -399,12 +423,12 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             }
         } else if (!header.entity) {
             // 비엔티티 : 소유자(테이블 레코드는 제어 객체), 리액터, 확장 사전
-            ao.setOwnerHandle(new DwgHandleRef(r.readHandleReference(self)));
+            ao.setOwnerHandle(ref(r.readHandleReference(self)));
             for (int i = 0; i < header.numReactors; i++) {
-                ao.addReactorHandle(new DwgHandleRef(r.readHandleReference(self)));
+                ao.addReactorHandle(ref(r.readHandleReference(self)));
             }
             if (!version.from(DwgVersion.R2004) || !header.xdicMissing) {
-                ao.setXDicHandle(new DwgHandleRef(r.readHandleReference(self)));
+                ao.setXDicHandle(ref(r.readHandleReference(self)));
             }
         } else {
             return;
@@ -435,101 +459,205 @@ public class ObjectsSectionParser extends AbstractSectionParser<Map<Long, DwgObj
             issues.accept(new ReadIssue(ReadIssue.Kind.OBJECT_DATA, obj.handle(), obj.objectType().name(),
                     difference > 0 ? "the data has " + difference + " bits after the fields that were read"
                                    : "the fields that were read run " + (-difference) + " bits past the data"));
+        } else if (header.stringInput != null && header.stringInput.position() != header.stringStreamEnd) {
+            // the string stream must be read exactly too (reading past it fails on its limit)
+            issues.accept(new ReadIssue(ReadIssue.Kind.OBJECT_DATA, obj.handle(), obj.objectType().name(),
+                    "the string stream has " + (header.stringStreamEnd - header.stringInput.position())
+                    + " bits after the strings that were read"));
         }
     }
 
     private DwgObject createObject(DwgObjectType type) {
-        return switch (type) {
-            case TEXT                -> new DwgText();
-            case ATTDEF              -> new DwgAttdef();
-            case ATTRIB              -> new DwgAttrib();
-            case BLOCK               -> new DwgBlock();
-            case ENDBLK              -> new DwgBlockEnd();
-            case SEQEND              -> new DwgSeqEnd();
-            case INSERT              -> new DwgInsert();
-            case MINSERT             -> new DwgMinsert();
-            case VERTEX_2D           -> new DwgVertex2D();
-            case VERTEX_3D           -> new DwgVertex3D();
-            case VERTEX_MESH         -> new DwgVertexMesh();
-            case VERTEX_PFACE        -> new DwgVertexPface();
-            case VERTEX_PFACE_FACE   -> new DwgVertexPfaceFace();
-            case POLYLINE_2D         -> new DwgPolyline2D();
-            case POLYLINE_3D         -> new DwgPolyline3D();
-            case ARC                 -> new DwgArc();
-            case CIRCLE              -> new DwgCircle();
-            case LINE                -> new DwgLine();
-            case DIMENSION_ORDINATE  -> new DwgDimensionOrdinate();
-            case DIMENSION_LINEAR    -> new DwgDimensionLinear();
-            case DIMENSION_ALIGNED   -> new DwgDimensionAligned();
-            case DIMENSION_ANG_3PT   -> new DwgDimensionAng3pt();
-            case DIMENSION_ANG_2LN   -> new DwgDimensionAng2ln();
-            case DIMENSION_RADIUS    -> new DwgDimensionRadius();
-            case DIMENSION_DIAMETER  -> new DwgDimensionDiameter();
-            case POINT               -> new DwgPoint();
-            case FACE3D              -> new DwgFace3D();
-            case POLYLINE_PFACE      -> new DwgPolylinePface();
-            case POLYLINE_MESH       -> new DwgPolylineMesh();
-            case SOLID               -> new DwgSolid();
-            case TRACE               -> new DwgTrace();
-            case SHAPE               -> new DwgShape();
-            case VIEWPORT            -> new DwgViewport();
-            case ELLIPSE             -> new DwgEllipse();
-            case SPLINE              -> new DwgSpline();
-            case REGION              -> new DwgRegion();
-            case SOLID3D             -> new DwgSolid3d();
-            case BODY                -> new DwgBody();
-            case RAY                 -> new DwgRay();
-            case XLINE               -> new DwgXLine();
-            case DICTIONARY          -> new DwgDictionary();
-            case MTEXT               -> new DwgMText();
-            case LEADER              -> new DwgLeader();
-            case TOLERANCE           -> new DwgTolerance();
-            case MLINE               -> new DwgMLine();
-            case BLOCK_HEADER        -> new DwgBlockHeader();
-            case LAYER               -> new DwgLayer();
-            case GROUP               -> new DwgGroup();
-            case OLE2FRAME           -> new DwgOle2frame();
-            case LWPLINE             -> new DwgLwPolyline();
-            case HATCH               -> new DwgHatch();
-            case XRECORD             -> new DwgXrecord();
-            case LTYPE               -> new DwgLtype();
-            case STYLE               -> new DwgStyle();
-            case VIEW                -> new DwgView();
-            case UCS                 -> new DwgUcs();
-            case VPORT               -> new DwgVport();
-            case APPID               -> new DwgAppId();
-            case DIMSTYLE            -> new DwgDimStyle();
-            case MLINESTYLE          -> new DwgMLineStyle();
-            case LONG_TRANSACTION    -> new DwgLongTransaction();
-            case LAYOUT              -> new DwgLayout();
-            case PLACEHOLDER         -> new DwgPlaceholder();
-            case VBA_PROJECT         -> new DwgVbaProject();
-            case UNUSED              -> null;
-            case IMAGE               -> new DwgImage();
-            case WIPEOUT             -> new DwgWipeout();
-            case XREF                -> new DwgXref();
-            case UNDERLAY            -> new DwgUnderlay();
-            case SURFACE             -> new DwgSurface();
-            case MESH                -> new DwgMesh();
-            case SCALE               -> new DwgScale();
-            case VISUALSTYLE         -> new DwgVisualStyle();
-            case ACAD_FIELD          -> new DwgField();
-            case ACAD_PROXY_ENTITY   -> new DwgProxyEntity();
-            case ACAD_DICTIONARYVAR  -> new DwgDictionaryVar();
-            case ACAD_TABLE          -> new DwgTable();
-            case ACAD_SCALE_LIST     -> new DwgScaleList();
-            case ACAD_TABLESTYLE     -> new DwgTableStyle();
-            case ACAD_CELLSTYLE      -> new DwgCellStyle();
-            case ACAD_PLOTSTYLE      -> new DwgPlotStyle();
-            case ACAD_MATERIAL       -> new DwgMaterial();
-            case ACAD_DATASOURCE     -> new DwgDataSource();
-            case ACAD_PERSSUBENTMANAGER -> new DwgPersSubentManager();
-            case MULTILEADER         -> new DwgMLeader();
+        switch (type) {
+            case TEXT:
+                return new DwgText();
+            case ATTDEF:
+                return new DwgAttdef();
+            case ATTRIB:
+                return new DwgAttrib();
+            case BLOCK:
+                return new DwgBlock();
+            case ENDBLK:
+                return new DwgBlockEnd();
+            case SEQEND:
+                return new DwgSeqEnd();
+            case INSERT:
+                return new DwgInsert();
+            case MINSERT:
+                return new DwgMinsert();
+            case VERTEX_2D:
+                return new DwgVertex2D();
+            case VERTEX_3D:
+                return new DwgVertex3D();
+            case VERTEX_MESH:
+                return new DwgVertexMesh();
+            case VERTEX_PFACE:
+                return new DwgVertexPface();
+            case VERTEX_PFACE_FACE:
+                return new DwgVertexPfaceFace();
+            case POLYLINE_2D:
+                return new DwgPolyline2D();
+            case POLYLINE_3D:
+                return new DwgPolyline3D();
+            case ARC:
+                return new DwgArc();
+            case CIRCLE:
+                return new DwgCircle();
+            case LINE:
+                return new DwgLine();
+            case DIMENSION_ORDINATE:
+                return new DwgDimensionOrdinate();
+            case DIMENSION_LINEAR:
+                return new DwgDimensionLinear();
+            case DIMENSION_ALIGNED:
+                return new DwgDimensionAligned();
+            case DIMENSION_ANG_3PT:
+                return new DwgDimensionAng3pt();
+            case DIMENSION_ANG_2LN:
+                return new DwgDimensionAng2ln();
+            case DIMENSION_RADIUS:
+                return new DwgDimensionRadius();
+            case DIMENSION_DIAMETER:
+                return new DwgDimensionDiameter();
+            case POINT:
+                return new DwgPoint();
+            case FACE3D:
+                return new DwgFace3D();
+            case POLYLINE_PFACE:
+                return new DwgPolylinePface();
+            case POLYLINE_MESH:
+                return new DwgPolylineMesh();
+            case SOLID:
+                return new DwgSolid();
+            case TRACE:
+                return new DwgTrace();
+            case SHAPE:
+                return new DwgShape();
+            case VIEWPORT:
+                return new DwgViewport();
+            case ELLIPSE:
+                return new DwgEllipse();
+            case SPLINE:
+                return new DwgSpline();
+            case REGION:
+                return new DwgRegion();
+            case SOLID3D:
+                return new DwgSolid3d();
+            case BODY:
+                return new DwgBody();
+            case RAY:
+                return new DwgRay();
+            case XLINE:
+                return new DwgXLine();
+            case DICTIONARY:
+                return new DwgDictionary();
+            case MTEXT:
+                return new DwgMText();
+            case LEADER:
+                return new DwgLeader();
+            case TOLERANCE:
+                return new DwgTolerance();
+            case MLINE:
+                return new DwgMLine();
+            case BLOCK_HEADER:
+                return new DwgBlockHeader();
+            case LAYER:
+                return new DwgLayer();
+            case GROUP:
+                return new DwgGroup();
+            case OLE2FRAME:
+                return new DwgOle2frame();
+            case LWPLINE:
+                return new DwgLwPolyline();
+            case HATCH:
+                return new DwgHatch();
+            case XRECORD:
+                return new DwgXrecord();
+            case LTYPE:
+                return new DwgLtype();
+            case STYLE:
+                return new DwgStyle();
+            case VIEW:
+                return new DwgView();
+            case UCS:
+                return new DwgUcs();
+            case VPORT:
+                return new DwgVport();
+            case APPID:
+                return new DwgAppId();
+            case DIMSTYLE:
+                return new DwgDimStyle();
+            case MLINESTYLE:
+                return new DwgMLineStyle();
+            case LONG_TRANSACTION:
+                return new DwgLongTransaction();
+            case LAYOUT:
+                return new DwgLayout();
+            case PLACEHOLDER:
+                return new DwgPlaceholder();
+            case VBA_PROJECT:
+                return new DwgVbaProject();
+            case UNUSED:
+                return null;
+            case IMAGE:
+                return new DwgImage();
+            case WIPEOUT:
+                return new DwgWipeout();
+            case XREF:
+                return new DwgXref();
+            case UNDERLAY:
+                return new DwgUnderlay();
+            case SURFACE:
+                return new DwgSurface();
+            case MESH:
+                return new DwgMesh();
+            case SCALE:
+                return new DwgScale();
+            case VISUALSTYLE:
+                return new DwgVisualStyle();
+            case ACAD_FIELD:
+                return new DwgField();
+            case ACAD_PROXY_ENTITY:
+                return new DwgProxyEntity();
+            case ACAD_DICTIONARYVAR:
+                return new DwgDictionaryVar();
+            case ACAD_TABLE:
+                return new DwgTable();
+            case ACAD_SCALE_LIST:
+                return new DwgScaleList();
+            case ACAD_TABLESTYLE:
+                return new DwgTableStyle();
+            case ACAD_CELLSTYLE:
+                return new DwgCellStyle();
+            case ACAD_PLOTSTYLE:
+                return new DwgPlotStyle();
+            case ACAD_MATERIAL:
+                return new DwgMaterial();
+            case ACAD_DATASOURCE:
+                return new DwgDataSource();
+            case ACAD_PERSSUBENTMANAGER:
+                return new DwgPersSubentManager();
+            case MULTILEADER:
+                return new DwgMLeader();
             // 전용 클래스가 없는 타입 : 테이블 제어 객체, 프록시 객체, 알 수 없는 클래스
-            case OLEFRAME, BLOCK_CONTROL, LAYER_CONTROL, STYLE_CONTROL, LTYPE_CONTROL, VIEW_CONTROL,
-                 UCS_CONTROL, VPORT_CONTROL, APPID_CONTROL, DIMSTYLE_CONTROL, VP_ENT_HDR_CONTROL,
-                 VP_ENT_HDR, DUMMY, ACAD_PROXY_OBJECT, UNKNOWN -> new DwgGenericObject(type);
-        };
+            case OLEFRAME:
+            case BLOCK_CONTROL:
+            case LAYER_CONTROL:
+            case STYLE_CONTROL:
+            case LTYPE_CONTROL:
+            case VIEW_CONTROL:
+            case UCS_CONTROL:
+            case VPORT_CONTROL:
+            case APPID_CONTROL:
+            case DIMSTYLE_CONTROL:
+            case VP_ENT_HDR_CONTROL:
+            case VP_ENT_HDR:
+            case DUMMY:
+            case ACAD_PROXY_OBJECT:
+            case UNKNOWN:
+                return new DwgGenericObject(type);
+        }
+        throw new IllegalStateException("unexpected " + type);
     }
 
     @Override
