@@ -3,7 +3,7 @@ package io.dwg.sections.objects.readers;
 import io.dwg.core.type.CmColor;
 
 /** Turns the values of a CMC (§2.11, as {@link io.dwg.core.io.BitStreamReader#readCmColor}) into a color. */
-final class Colors {
+public final class Colors {
 
     /** Color methods in the high byte of the R2004+ RGB value. */
     private static final int BY_LAYER = 0xC0;
@@ -23,9 +23,9 @@ final class Colors {
      * color index. Other methods (true colors; none in the samples) keep the index field. The
      * method and RGB value are kept in the color.
      */
-    static CmColor of(int[] cmc) {
+    public static CmColor of(int[] cmc) {
         if (cmc.length == 1) {
-            return new CmColor(cmc[0]);
+            return CmColor.fromIndex(cmc[0]);
         }
         int method = (cmc[1] >>> 24) & 0xFF;
         int index;
