@@ -176,7 +176,7 @@ public class HeaderSectionParser extends AbstractSectionParser<HeaderVariables> 
             }
             case "3BD": {
                 double[] p = r.read3BitDouble();
-                return new Point3D(p[0], p[1], p[2]);
+                return Point3D.of(p[0], p[1], p[2]);
             }
             case "H":
             case "HD":  return r.readRef(0);

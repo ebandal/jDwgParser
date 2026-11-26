@@ -85,6 +85,6 @@ public class SplineObjectReader implements ObjectReader {
     }
 
     private static Point3D point(double[] p) {
-        return new Point3D(p[0], p[1], p[2]);
+        return Point3D.of(p[0], p[1], p[2]);
     }
 }

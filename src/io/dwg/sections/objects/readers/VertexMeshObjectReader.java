@@ -24,6 +24,6 @@ public class VertexMeshObjectReader implements ObjectReader {
 
         vertex.setFlags(r.getInput().readBits(8));          // flags (EC)
         double[] loc = r.read3BitDouble();                  // point (3BD)
-        vertex.setLocation(new Point3D(loc[0], loc[1], loc[2]));
+        vertex.setLocation(Point3D.of(loc[0], loc[1], loc[2]));
     }
 }

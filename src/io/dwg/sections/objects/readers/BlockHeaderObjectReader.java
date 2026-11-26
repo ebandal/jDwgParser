@@ -55,7 +55,7 @@ public class BlockHeaderObjectReader implements ObjectReader {
             block.setOwnedObjectCount(r.readBitLong());
         }
         double[] base = r.read3BitDouble();
-        block.setBasePoint(new Point3D(base[0], base[1], base[2]));
+        block.setBasePoint(Point3D.of(base[0], base[1], base[2]));
         block.setXrefPath(r.readVariableText());
 
         if (v.from(DwgVersion.R2000)) {

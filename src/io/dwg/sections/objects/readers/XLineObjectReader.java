@@ -25,8 +25,8 @@ public class XLineObjectReader implements ObjectReader {
 
         DwgXLine xline = (DwgXLine) target;
         double[] point = r.read3BitDouble();
-        xline.setStart(new Point3D(point[0], point[1], point[2]));
+        xline.setStart(Point3D.of(point[0], point[1], point[2]));
         double[] vector = r.read3BitDouble();
-        xline.setDirection(new Point3D(vector[0], vector[1], vector[2]));
+        xline.setDirection(Point3D.of(vector[0], vector[1], vector[2]));
     }
 }

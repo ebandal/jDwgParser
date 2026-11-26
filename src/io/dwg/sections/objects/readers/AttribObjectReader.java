@@ -34,7 +34,7 @@ public class AttribObjectReader implements ObjectReader {
         DwgText text = attrib.textData();
         TextObjectReader.readTextData(text, r, v);
         if (text.insertionPoint() != null) {
-            attrib.setLocation(new Point3D(text.insertionPoint().x(), text.insertionPoint().y(), text.elevation()));
+            attrib.setLocation(Point3D.of(text.insertionPoint().x(), text.insertionPoint().y(), text.elevation()));
         }
         attrib.setText(text.value());
         attrib.setHeight(text.height());

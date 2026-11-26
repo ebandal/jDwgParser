@@ -32,7 +32,7 @@ public class SolidObjectReader implements ObjectReader {
         double elevation = r.readBitDouble();
         for (int i = 0; i < 4; i++) {
             double[] p = r.read2RawDouble();
-            points[i] = new Point3D(p[0], p[1], elevation);
+            points[i] = Point3D.of(p[0], p[1], elevation);
         }
 
         solid.setPoints(points);

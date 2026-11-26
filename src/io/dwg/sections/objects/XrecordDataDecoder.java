@@ -110,7 +110,7 @@ public final class XrecordDataDecoder {
     private Object read(Form form) {
         switch (form) {
             case STRING: return readString();
-            case POINT:  return has(24) ? new Point3D(dbl(), dbl(), dbl()) : null;
+            case POINT:  return has(24) ? Point3D.of(dbl(), dbl(), dbl()) : null;
             case DOUBLE: return has(8) ? dbl() : null;
             case SHORT:  return has(2) ? (short) little(2) : null;
             case INT:    return has(4) ? (int) little(4) : null;

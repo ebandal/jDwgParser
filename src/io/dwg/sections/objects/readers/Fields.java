@@ -29,9 +29,9 @@ final class Fields {
             case "BD":  return r.readBitDouble();
             case "RD":  return r.readRawDouble();
             case "RL":  return r.getInput().readRawLong();
-            case "2BD": { double[] p = r.read2BitDouble(); return new Point3D(p[0], p[1], 0); }
-            case "2RD": { double[] p = r.read2RawDouble(); return new Point3D(p[0], p[1], 0); }
-            case "3BD": { double[] p = r.read3BitDouble(); return new Point3D(p[0], p[1], p[2]); }
+            case "2BD": { double[] p = r.read2BitDouble(); return Point3D.of(p[0], p[1], 0); }
+            case "2RD": { double[] p = r.read2RawDouble(); return Point3D.of(p[0], p[1], 0); }
+            case "3BD": { double[] p = r.read3BitDouble(); return Point3D.of(p[0], p[1], p[2]); }
             case "CMC": return Colors.of(r.readCmColor());
             case "TV":  return r.readVariableText();
             case "X2":  return r.getInput().readBits(2);

@@ -22,7 +22,7 @@ public class XrefObjectReader implements ObjectReader {
 
         // Insertion point
         double[] point = r.read3BitDouble();
-        xref.setInsertionPoint(new Point3D(point[0], point[1], point[2]));
+        xref.setInsertionPoint(Point3D.of(point[0], point[1], point[2]));
 
         // Scale factors
         double scaleX = r.readBitDouble();

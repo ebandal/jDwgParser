@@ -27,7 +27,7 @@ public class Vertex2DObjectReader implements ObjectReader {
         DwgVertex2D vertex = (DwgVertex2D) target;
         vertex.setFlags(r.getInput().readBits(8));          // flags (EC)
         double[] loc = r.read3BitDouble();                  // point (3BD), OCS
-        vertex.setLocation(new Point3D(loc[0], loc[1], loc[2]));
+        vertex.setLocation(Point3D.of(loc[0], loc[1], loc[2]));
         // a negative start width stands for both widths, and no end width follows
         double startWidth = r.readBitDouble();
         if (startWidth < 0) {

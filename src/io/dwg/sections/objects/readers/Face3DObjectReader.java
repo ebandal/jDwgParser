@@ -34,7 +34,7 @@ public class Face3DObjectReader implements ObjectReader {
         if (!v.from(DwgVersion.R2000)) {
             for (int i = 0; i < corners.length; i++) {
                 double[] p = r.read3BitDouble();
-                corners[i] = new Point3D(p[0], p[1], p[2]);
+                corners[i] = Point3D.of(p[0], p[1], p[2]);
             }
             face.setInvisibleEdges(r.readBitShort());
         } else {
@@ -43,11 +43,11 @@ public class Face3DObjectReader implements ObjectReader {
             double x = r.readRawDouble();
             double y = r.readRawDouble();
             double z = zIsZero ? 0.0 : r.readRawDouble();
-            corners[0] = new Point3D(x, y, z);
+            corners[0] = Point3D.of(x, y, z);
             for (int i = 1; i < corners.length; i++) {
                 Point3D previous = corners[i - 1];
                 double[] p = r.read3DD(previous.x(), previous.y(), previous.z());
-                corners[i] = new Point3D(p[0], p[1], p[2]);
+                corners[i] = Point3D.of(p[0], p[1], p[2]);
             }
             if (!noFlags) {
                 face.setInvisibleEdges(r.readBitShort());

@@ -37,7 +37,7 @@ final class RasterImageFields {
         List<Point3D> boundary = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             double[] p = r.read2RawDouble();
-            boundary.add(new Point3D(p[0], p[1], 0));
+            boundary.add(Point3D.of(p[0], p[1], 0));
         }
         e.setValue("CLIPBOUNDARY", boundary);
     }

@@ -27,6 +27,6 @@ public class Vertex3DObjectReader implements ObjectReader {
         DwgVertex3D vertex = (DwgVertex3D) target;
         vertex.setFlags(r.getInput().readBits(8));          // flags (EC)
         double[] loc = r.read3BitDouble();                  // point (3BD), WCS
-        vertex.setLocation(new Point3D(loc[0], loc[1], loc[2]));
+        vertex.setLocation(Point3D.of(loc[0], loc[1], loc[2]));
     }
 }

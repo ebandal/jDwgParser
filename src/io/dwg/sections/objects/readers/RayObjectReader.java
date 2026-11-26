@@ -25,8 +25,8 @@ public class RayObjectReader implements ObjectReader {
 
         DwgRay ray = (DwgRay) target;
         double[] point = r.read3BitDouble();
-        ray.setStart(new Point3D(point[0], point[1], point[2]));
+        ray.setStart(Point3D.of(point[0], point[1], point[2]));
         double[] vector = r.read3BitDouble();
-        ray.setDirection(new Point3D(vector[0], vector[1], vector[2]));
+        ray.setDirection(Point3D.of(vector[0], vector[1], vector[2]));
     }
 }

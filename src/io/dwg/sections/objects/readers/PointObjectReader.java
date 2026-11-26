@@ -27,7 +27,7 @@ public class PointObjectReader implements ObjectReader {
 
         // 1. position (3BD)
         double[] posData = r.read3BitDouble();
-        Point3D position = new Point3D(posData[0], posData[1], posData[2]);
+        Point3D position = Point3D.of(posData[0], posData[1], posData[2]);
         point.setPosition(position);
 
         // 2. thickness (BT)

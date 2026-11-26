@@ -27,12 +27,12 @@ public class EllipseObjectReader implements ObjectReader {
 
         // 1. center point (3BD)
         double[] centerData = r.read3BitDouble();
-        Point3D center = new Point3D(centerData[0], centerData[1], centerData[2]);
+        Point3D center = Point3D.of(centerData[0], centerData[1], centerData[2]);
         ellipse.setCenter(center);
 
         // 2. majorAxisVec (3BD)
         double[] majorData = r.read3BitDouble();
-        Point3D majorAxisVec = new Point3D(majorData[0], majorData[1], majorData[2]);
+        Point3D majorAxisVec = Point3D.of(majorData[0], majorData[1], majorData[2]);
         ellipse.setMajorAxisVec(majorAxisVec);
 
         // 3. extrusion (3BD)

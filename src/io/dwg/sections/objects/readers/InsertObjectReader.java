@@ -40,7 +40,7 @@ public class InsertObjectReader implements ObjectReader {
     /** The fields of INSERT after the common entity data. */
     protected static void readInsertFields(DwgInsert ins, BitStreamReader r, DwgVersion v) {
         double[] pt = r.read3BitDouble();
-        ins.setInsertionPoint(new Point3D(pt[0], pt[1], pt[2]));
+        ins.setInsertionPoint(Point3D.of(pt[0], pt[1], pt[2]));
 
         if (!v.from(DwgVersion.R2000)) {
             ins.setXScale(r.readBitDouble());

@@ -35,7 +35,7 @@ public class ViewportObjectReader implements ObjectReader {
         DwgViewport vp = (DwgViewport) target;
 
         double[] c = r.read3BitDouble();
-        vp.setCenter(new Point3D(c[0], c[1], c[2]));
+        vp.setCenter(Point3D.of(c[0], c[1], c[2]));
         vp.setWidth(r.readBitDouble());
         vp.setHeight(r.readBitDouble());
         if (!v.from(DwgVersion.R2000)) {

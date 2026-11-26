@@ -27,9 +27,9 @@ public class DwgBlockHeader extends AbstractDwgTableRecord {
     private DwgHandleRef blockEntityHandle;
     private DwgHandleRef firstEntityHandle;
     private DwgHandleRef lastEntityHandle;
-    private final List<DwgHandleRef> ownedEntityHandles = new ArrayList<>();
+    private final List<DwgHandleRef> ownedEntityHandles = new io.dwg.entities.CompactLists.Handles();
     private DwgHandleRef endBlockHandle;
-    private final List<DwgHandleRef> insertHandles = new ArrayList<>();
+    private final List<DwgHandleRef> insertHandles = new io.dwg.entities.CompactLists.Handles();
     private DwgHandleRef layoutHandle;
 
     // counts read from the data, for the handle stream

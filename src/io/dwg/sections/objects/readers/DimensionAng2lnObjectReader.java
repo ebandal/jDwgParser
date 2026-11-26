@@ -15,7 +15,7 @@ public class DimensionAng2lnObjectReader extends AbstractDimensionReader {
     @Override
     protected void readTypeFields(AbstractDwgDimension dim, BitStreamReader r, DwgVersion v, double elevation) {
         double[] p16 = r.read2RawDouble();
-        dim.setPoint16(new Point3D(p16[0], p16[1], elevation));
+        dim.setPoint16(Point3D.of(p16[0], p16[1], elevation));
         dim.setPoint13(point(r));
         dim.setPoint14(point(r));
         dim.setPoint15(point(r));

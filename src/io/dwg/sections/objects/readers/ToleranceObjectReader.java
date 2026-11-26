@@ -30,7 +30,7 @@ public class ToleranceObjectReader implements ObjectReader {
             Fields.read(tolerance, r, "HEIGHT BD", "DIMGAP BD");
         }
         double[] p = r.read3BitDouble();
-        tolerance.setInsertionPoint(new Point3D(p[0], p[1], p[2]));
+        tolerance.setInsertionPoint(Point3D.of(p[0], p[1], p[2]));
         tolerance.setDirection(r.read3BitDouble());
         Fields.read(tolerance, r, "EXTRUSION 3BD");
         tolerance.setToleranceText(r.readVariableText());

@@ -56,13 +56,13 @@ final class DwgValueReader {
                 case 16: {
                     r.readBitLong();
                     double[] p = r.read2RawDouble();
-                    value.put("DATA", new Point3D(p[0], p[1], 0));
+                    value.put("DATA", Point3D.of(p[0], p[1], 0));
                     break;
                 }
                 case 32: {
                     r.readBitLong();
                     double[] p = r.read3RawDouble();
-                    value.put("DATA", new Point3D(p[0], p[1], p[2]));
+                    value.put("DATA", Point3D.of(p[0], p[1], p[2]));
                     break;
                 }
                 case OBJECT_ID: CellStyles.slot(r, value, "DATA"); break;

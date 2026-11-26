@@ -27,7 +27,7 @@ public class ShapeObjectReader implements ObjectReader {
         EntityHeaderReader.readCommonEntityData(r, v);
         DwgShape shape = (DwgShape) target;
         double[] p = r.read3BitDouble();
-        shape.setInsertionPoint(new Point3D(p[0], p[1], p[2]));
+        shape.setInsertionPoint(Point3D.of(p[0], p[1], p[2]));
         shape.setScale(r.readBitDouble());
         shape.setAngle(r.readBitDouble());
         Fields.read(shape, r, "WIDTH BD", "OBLIQUE BD", "THICKNESS BD", "SHAPENO BS");

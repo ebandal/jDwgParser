@@ -23,8 +23,8 @@ public class LineObjectReader implements ObjectReader {
         if (v.until(DwgVersion.R14)) {
             double[] start = r.read3BitDouble();
             double[] end   = r.read3BitDouble();
-            line.setStart(new Point3D(start[0], start[1], start[2]));
-            line.setEnd(new Point3D(end[0], end[1], end[2]));
+            line.setStart(Point3D.of(start[0], start[1], start[2]));
+            line.setEnd(Point3D.of(end[0], end[1], end[2]));
         } else {
             boolean zAreZero = r.getInput().readBit();
             // 끝점은 시작점을 기본값으로 하는 DD로 저장된다
@@ -34,8 +34,8 @@ public class LineObjectReader implements ObjectReader {
             double ey = r.readDD(sy);
             double sz = zAreZero ? 0.0 : r.readRawDouble();
             double ez = zAreZero ? 0.0 : r.readDD(sz);
-            line.setStart(new Point3D(sx, sy, sz));
-            line.setEnd(new Point3D(ex, ey, ez));
+            line.setStart(Point3D.of(sx, sy, sz));
+            line.setEnd(Point3D.of(ex, ey, ez));
         }
         line.setThickness(r.readBitThickness());
         line.setExtrusion(r.readBitExtrusion());

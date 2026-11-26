@@ -21,7 +21,7 @@ public class ArcObjectReader implements ObjectReader {
 
         DwgArc arc = (DwgArc) target;
         double[] center = r.read3BitDouble();
-        arc.setCenter(new Point3D(center[0], center[1], center[2]));
+        arc.setCenter(Point3D.of(center[0], center[1], center[2]));
         arc.setRadius(r.readBitDouble());
         arc.setThickness(r.readBitThickness());
         arc.setExtrusion(r.readBitExtrusion());

@@ -36,7 +36,7 @@ public class LeaderObjectReader implements ObjectReader {
         }
         for (int i = 0; i < numPoints; i++) {
             double[] pt = r.read3BitDouble();
-            leader.addPoint(new Point3D(pt[0], pt[1], pt[2]));
+            leader.addPoint(Point3D.of(pt[0], pt[1], pt[2]));
         }
 
         r.read3BitDouble();                     // origin

@@ -38,12 +38,12 @@ abstract class AbstractDimensionReader implements ObjectReader {
         dim.setExtrusion(r.read3BitDouble());
         double[] textMid = r.read2RawDouble();
         double elevation = r.readBitDouble();
-        dim.setTextMidpoint(new Point3D(textMid[0], textMid[1], elevation));
+        dim.setTextMidpoint(Point3D.of(textMid[0], textMid[1], elevation));
         dim.setFlags1(r.readRawChar());
         dim.setText(r.readVariableText());
         dim.setTextRotation(r.readBitDouble());
         dim.setHorizontalDirection(r.readBitDouble());
-        dim.setInsertionScales(new Point3D(r.readBitDouble(), r.readBitDouble(), r.readBitDouble()));
+        dim.setInsertionScales(Point3D.of(r.readBitDouble(), r.readBitDouble(), r.readBitDouble()));
         dim.setInsertionRotation(r.readBitDouble());
         if (v.from(DwgVersion.R2000)) {
             dim.setAttachmentPoint(r.readBitShort());
@@ -57,7 +57,7 @@ abstract class AbstractDimensionReader implements ObjectReader {
             dim.setFlipArrow2(r.getInput().readBit());
         }
         double[] p12 = r.read2RawDouble();
-        dim.setPoint12(new Point3D(p12[0], p12[1], elevation));
+        dim.setPoint12(Point3D.of(p12[0], p12[1], elevation));
 
         readTypeFields(dim, r, v, elevation);
     }
@@ -67,7 +67,7 @@ abstract class AbstractDimensionReader implements ObjectReader {
 
     protected static Point3D point(BitStreamReader r) {
         double[] p = r.read3BitDouble();
-        return new Point3D(p[0], p[1], p[2]);
+        return Point3D.of(p[0], p[1], p[2]);
     }
 
     @Override

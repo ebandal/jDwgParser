@@ -13,8 +13,8 @@ import java.util.List;
  */
 public class DwgSpline extends AbstractDwgEntity {
     private int degree;  // B-spline 차수 (1-3)
-    private List<Point3D> controlPoints = new ArrayList<>();
-    private List<Point3D> fitPoints = new ArrayList<>();
+    private List<Point3D> controlPoints = new io.dwg.entities.CompactLists.Points();
+    private List<Point3D> fitPoints = new io.dwg.entities.CompactLists.Points();
     private double[] extrusion = io.dwg.entities.Extrusions.shared();
     private int flags;
 
@@ -44,8 +44,8 @@ public class DwgSpline extends AbstractDwgEntity {
     private boolean rational;
     private boolean closed;
     private boolean periodic;
-    private List<Double> knots = new ArrayList<>();
-    private List<Double> weights = new ArrayList<>();   // 제어점마다 하나, 가중치가 없으면 비어 있음
+    private List<Double> knots = new io.dwg.entities.CompactLists.Doubles();
+    private List<Double> weights = new io.dwg.entities.CompactLists.Doubles();   // 제어점마다 하나, 가중치가 없으면 비어 있음
 
     public boolean isRational() { return rational; }
     public boolean isClosed() { return closed; }

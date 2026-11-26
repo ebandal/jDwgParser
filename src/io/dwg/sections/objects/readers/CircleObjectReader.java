@@ -21,7 +21,7 @@ public class CircleObjectReader implements ObjectReader {
 
         DwgCircle circle = (DwgCircle) target;
         double[] center = r.read3BitDouble();
-        circle.setCenter(new Point3D(center[0], center[1], center[2]));
+        circle.setCenter(Point3D.of(center[0], center[1], center[2]));
         circle.setRadius(r.readBitDouble());
         circle.setThickness(r.readBitThickness());
         circle.setExtrusion(r.readBitExtrusion());

@@ -76,7 +76,7 @@ abstract class AcisReader implements ObjectReader {
         boolean stored = empty && v.from(DwgVersion.R2013);
         if (r.getInput().readBit()) {              // wireframe present
             boolean pointPresent = stored || r.getInput().readBit();
-            e.setWireframePoint(pointPresent ? point(r) : new Point3D(0, 0, 0));
+            e.setWireframePoint(pointPresent ? point(r) : Point3D.of(0, 0, 0));
             e.setIsolineCount(r.readBitLong());
             r.getInput().readBit();                // isolines present
             int wires = r.readBitLong();
@@ -193,7 +193,7 @@ abstract class AcisReader implements ObjectReader {
 
     private static Point3D point(BitStreamReader r) {
         double[] p = r.read3BitDouble();
-        return new Point3D(p[0], p[1], p[2]);
+        return Point3D.of(p[0], p[1], p[2]);
     }
 
     private static boolean startsWith(byte[] b, byte[] prefix) {

@@ -27,7 +27,7 @@ public class AttdefObjectReader implements ObjectReader {
         DwgAttdef attdef = (DwgAttdef) target;
         DwgText text = new DwgText();
         TextObjectReader.readTextData(text, r, v);
-        attdef.setInsertionPoint(new Point3D(text.insertionPoint().x(), text.insertionPoint().y(), 0.0));
+        attdef.setInsertionPoint(Point3D.of(text.insertionPoint().x(), text.insertionPoint().y(), 0.0));
         attdef.setDefaultValue(text.value());
 
         AttribObjectReader.AttributeFields fields = AttribObjectReader.readAttributeFields(r, v);

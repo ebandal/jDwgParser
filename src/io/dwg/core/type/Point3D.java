@@ -14,6 +14,30 @@ public final class Point3D {
         this.z = z;
     }
 
+    /** Recently made points, by hash; a slot holds the last point that fell in it. */
+    private static final Point3D[] RECENT = new Point3D[4096];
+
+    /**
+     * A point with these coordinates: the same instance as a point made shortly before with
+     * equal coordinates (the end of one line is often the start of the next), or a new one. The
+     * reader makes its points with this, so that drawings keep fewer of them. Equal as
+     * {@link #equals} is (bit for bit).
+     */
+    public static Point3D of(double x, double y, double z) {
+        long bx = Double.doubleToLongBits(x), by = Double.doubleToLongBits(y), bz = Double.doubleToLongBits(z);
+        long h = bx * 31 + by;
+        h = h * 31 + bz;
+        int slot = (int) (h ^ (h >>> 32)) & (RECENT.length - 1);
+        Point3D p = RECENT[slot];
+        if (p != null && Double.doubleToLongBits(p.x) == bx && Double.doubleToLongBits(p.y) == by
+                && Double.doubleToLongBits(p.z) == bz) {
+            return p;
+        }
+        p = new Point3D(x, y, z);
+        RECENT[slot] = p;                       // a race only costs sharing: the point is immutable
+        return p;
+    }
+
     public double x() {
         return x;
     }
