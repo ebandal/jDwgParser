@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeAll;
@@ -18,6 +19,9 @@ import io.dwg.entities.AbstractDwgAcisEntity;
 
 /** The ACIS models of REGION and 3DSOLID are kept as SAT text or SAB bytes. */
 class AcisTest {
+
+    /** The REGIONs and the 3DSOLID of example_*.dwg. */
+    private static final long[] EXAMPLE_HANDLES = {0x176, 0x2E1, 0x37D};
 
     @BeforeAll
     static void samplesArePresent() {
@@ -46,8 +50,44 @@ class AcisTest {
         }
     }
 
+    /** R13 lacks one count after the isolines; its SAT text is that of the R14 copy. */
+    @Test
+    void r13AndR14HoldSatText() throws Exception {
+        for (String file : new String[] {"example_r13.dwg", "example_r14.dwg"}) {
+            DwgDocument doc = open(file);
+            for (long h : EXAMPLE_HANDLES) {
+                AbstractDwgAcisEntity e = (AbstractDwgAcisEntity) doc.objectMap().get(h);
+                assertNotNull(e.satText(), file + " " + Long.toHexString(h));
+                assertTrue(e.satText().contains("body"), file + " " + Long.toHexString(h));
+                assertEquals(4, e.isolineCount(), file);
+            }
+        }
+    }
+
+    /** From R2013 the model is in the data storage section, under the entity's handle. */
+    @Test
+    void r2013ModelComesFromTheDataStorage() throws Exception {
+        for (String file : new String[] {"example_2013.dwg", "example_2018.dwg"}) {
+            DwgDocument doc = open(file);
+            for (long h : EXAMPLE_HANDLES) {
+                AbstractDwgAcisEntity e = (AbstractDwgAcisEntity) doc.objectMap().get(h);
+                assertTrue(e.isEmpty(), file);
+                assertNotNull(e.sabData(), file + " " + Long.toHexString(h));
+                String head = new String(e.sabData(), 0, 16, StandardCharsets.ISO_8859_1);
+                assertTrue(head.contains("BinaryFile"), file + " " + head);
+                assertNotNull(e.guid(), file);
+                assertEquals(4, e.isolineCount(), file);
+            }
+            assertEquals(new UUID(0, 0), ((AbstractDwgAcisEntity) doc.objectMap().get(0x176L)).guid());
+        }
+    }
+
+    private static DwgDocument open(String file) throws Exception {
+        return DwgReader.defaultReader().open(Paths.get(Samples.path(file)));
+    }
+
     private static List<AbstractDwgAcisEntity> acis(String file) throws Exception {
-        DwgDocument doc = DwgReader.defaultReader().open(Paths.get(Samples.path(file)));
+        DwgDocument doc = open(file);
         return doc.objectMap().values().stream().filter(o -> o instanceof AbstractDwgAcisEntity)
                 .map(o -> (AbstractDwgAcisEntity) o).collect(Collectors.toList());
     }
