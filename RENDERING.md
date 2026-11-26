@@ -178,3 +178,14 @@ DwgDocument doc = DwgReader.defaultReader().open(Path.of("samples/example_2000.d
 BufferedImage image = new Renderer().render(DocumentDrawing.from(doc));   // null if there is nothing to draw
 ImageIO.write(image, "png", new File("example_2000.png"));
 ```
+
+The same picture as vector graphics, with no other library (paths in output units, the longer side `imageSize`):
+
+```java
+Renderer renderer = new Renderer();
+Drawing drawing = DocumentDrawing.from(doc);
+Files.writeString(Path.of("example_2000.svg"), renderer.renderSvg(drawing));   // SVG 1.1
+Files.write(Path.of("example_2000.pdf"), renderer.renderPdf(drawing));         // PDF 1.4, one page
+```
+
+Both draw what the PNG output draws (`VectorOutputTest`): fills, hatch patterns clipped to their boundary, translucent fills of dense patterns, lines one unit wide, and text as outlines.

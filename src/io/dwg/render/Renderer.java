@@ -89,8 +89,60 @@ public class Renderer {
     private List<Item> items;
     private Rectangle2D bounds;
 
+    /** The size of the output and the world to output transform of the last layout. */
+    private int imgW;
+    private int imgH;
+    private AffineTransform view;
+
     /** @return the image, or null if there is nothing to draw */
     public BufferedImage render(Drawing d) {
+        if (!layout(d)) {
+            return null;
+        }
+        BufferedImage img = new BufferedImage(imgW, imgH, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+        g.setColor(background);
+        g.fillRect(0, 0, imgW, imgH);
+        g.setStroke(new BasicStroke(1f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        paint(new GraphicsCanvas(g));
+        g.dispose();
+        return img;
+    }
+
+    /**
+     * The same picture as {@link #render} as an SVG document: vector paths in output units
+     * ({@link #imageSize} for the longer side), lines one unit wide.
+     *
+     * @return the SVG text, or null if there is nothing to draw
+     */
+    public String renderSvg(Drawing d) {
+        if (!layout(d)) {
+            return null;
+        }
+        VectorCanvas.Svg svg = new VectorCanvas.Svg(imgW, imgH, background);
+        paint(svg);
+        return svg.finish();
+    }
+
+    /**
+     * The same picture as {@link #render} as a one-page PDF with vector paths; the page is
+     * {@link #imageSize} points on the longer side.
+     *
+     * @return the PDF bytes, or null if there is nothing to draw
+     */
+    public byte[] renderPdf(Drawing d) {
+        if (!layout(d)) {
+            return null;
+        }
+        VectorCanvas.Pdf pdf = new VectorCanvas.Pdf(imgW, imgH, background);
+        paint(pdf);
+        return pdf.finish();
+    }
+
+    /** Collects the items of the model space and sizes the output; false if there is nothing to draw. */
+    private boolean layout(Drawing d) {
         drawing = d;
         items = new ArrayList<>();
         bounds = null;
@@ -99,45 +151,79 @@ public class Renderer {
         addEntities(d.modelSpace, new AffineTransform(), null, COLOR_FOREGROUND, new HashSet<>());
         drawn = items.size();
         if (bounds == null) {
-            return null;
+            return false;
         }
 
         double w = Math.max(bounds.getWidth(), 1e-9);
         double h = Math.max(bounds.getHeight(), 1e-9);
         double scale = (imageSize - 2.0 * margin) / Math.max(w, h);
-        int imgW = (int) Math.ceil(w * scale) + 2 * margin;
-        int imgH = (int) Math.ceil(h * scale) + 2 * margin;
+        imgW = (int) Math.ceil(w * scale) + 2 * margin;
+        imgH = (int) Math.ceil(h * scale) + 2 * margin;
 
         // world -> image : move the lower-left corner to the origin, scale, flip Y
-        AffineTransform view = new AffineTransform();
+        view = new AffineTransform();
         view.translate(margin, imgH - margin);
         view.scale(scale, -scale);
         view.translate(-bounds.getMinX(), -bounds.getMinY());
+        return true;
+    }
 
-        BufferedImage img = new BufferedImage(imgW, imgH, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = img.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
-        g.setColor(background);
-        g.fillRect(0, 0, imgW, imgH);
-        g.setStroke(new BasicStroke(1f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+    /** Draws the items in their passes: fills, hatch patterns, lines, text. */
+    private void paint(Canvas c) {
         for (int pass = PASS_FILL; pass <= PASS_TEXT; pass++) {
             for (Item item : items) {
                 if (item.pass != pass) {
                     continue;
                 }
-                g.setColor(item.color);
                 if (pass == PASS_PATTERN) {
-                    drawPattern(g, view, item);
+                    drawPattern(c, view, item);
                 } else if (pass == PASS_STROKE) {
-                    g.draw(view.createTransformedShape(item.shape));
+                    c.draw(view.createTransformedShape(item.shape), item.color);
                 } else {
-                    g.fill(view.createTransformedShape(item.shape));
+                    c.fill(view.createTransformedShape(item.shape), item.color);
                 }
             }
         }
-        g.dispose();
-        return img;
+    }
+
+    /** Where the items are drawn, in output coordinates (y down). */
+    interface Canvas {
+        void fill(Shape s, Color c);
+
+        void draw(Shape s, Color c);
+
+        /** Draws {@code lines} clipped to {@code clip}. */
+        void drawClipped(Shape lines, Shape clip, Color c);
+    }
+
+    /** A canvas on a Graphics2D: the PNG output. */
+    private static final class GraphicsCanvas implements Canvas {
+        private final Graphics2D g;
+
+        GraphicsCanvas(Graphics2D g) {
+            this.g = g;
+        }
+
+        @Override
+        public void fill(Shape s, Color c) {
+            g.setColor(c);
+            g.fill(s);
+        }
+
+        @Override
+        public void draw(Shape s, Color c) {
+            g.setColor(c);
+            g.draw(s);
+        }
+
+        @Override
+        public void drawClipped(Shape lines, Shape clip, Color c) {
+            g.setColor(c);
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.clip(clip);
+            g2.draw(lines);
+            g2.dispose();
+        }
     }
 
     /**
@@ -546,7 +632,7 @@ public class Renderer {
     }
 
     // pattern lines of a hatch, clipped to its boundary
-    private void drawPattern(Graphics2D g, AffineTransform view, Item item) {
+    private void drawPattern(Canvas g, AffineTransform view, Item item) {
         AffineTransform full = new AffineTransform(view);
         full.concatenate(item.toWorld);
         double scale = Math.sqrt(Math.abs(full.getDeterminant()));      // pixels per OCS unit
@@ -620,14 +706,10 @@ public class Renderer {
 
         Shape device = view.createTransformedShape(item.shape);
         if (tooDense) {
-            g.setColor(new Color(item.color.getRed(), item.color.getGreen(), item.color.getBlue(), DENSE_PATTERN_ALPHA));
-            g.fill(device);
+            g.fill(device, new Color(item.color.getRed(), item.color.getGreen(), item.color.getBlue(), DENSE_PATTERN_ALPHA));
             return;
         }
-        Graphics2D g2 = (Graphics2D) g.create();
-        g2.clip(device);
-        g2.draw(full.createTransformedShape(lines));
-        g2.dispose();
+        g.drawClipped(full.createTransformedShape(lines), device, item.color);
     }
 
     /** AutoCAD color index to RGB. Indexes 10-249 are approximated from the hue/shade pattern of the table. */
