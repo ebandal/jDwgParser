@@ -19,6 +19,8 @@ public class BitStreamReader {
     private Object context;
     private boolean stringStreamMode;
     private BitStreamReader stringStream;
+    private long emptyStringBudget = Long.MAX_VALUE;
+    private java.util.Map<Long, io.dwg.core.type.DwgHandleRef> refCache;
 
     public BitStreamReader(BitInput input, DwgVersion version) {
         this.input = input;
@@ -39,6 +41,31 @@ public class BitStreamReader {
     public void setStringStream(BitInput stringInput) {
         this.stringStreamMode = true;
         this.stringStream = stringInput == null ? null : new BitStreamReader(stringInput, version);
+        // an object without a string stream has only empty strings; more of them than the object
+        // has bits cannot be real data (a corrupt count would otherwise loop without reading)
+        this.emptyStringBudget = bitsLeft();
+    }
+
+    /**
+     * The bits left in the input: up to its limit (the end of the object being read) or its
+     * end; {@link Long#MAX_VALUE} for inputs that do not tell.
+     */
+    public long bitsLeft() {
+        return input instanceof ByteBufferBitInput ? ((ByteBufferBitInput) input).bitsLeft() : Long.MAX_VALUE;
+    }
+
+    /**
+     * A count or size read from the data, checked against what is left to read: {@code n} items
+     * of at least {@code minBitsEach} bits each must fit in {@link #bitsLeft()}. A corrupt file
+     * then fails here instead of making the reader allocate or loop without end.
+     *
+     * @throws IllegalStateException if {@code n} is negative or too large
+     */
+    public int count(long n, int minBitsEach) {
+        if (n < 0 || n > Integer.MAX_VALUE || n * Math.max(1, minBitsEach) > bitsLeft()) {
+            throw new IllegalStateException("count " + n + " does not fit in the " + bitsLeft() + " bits left");
+        }
+        return (int) n;
     }
 
     /** State that the caller keeps while it reads one object. */
@@ -393,6 +420,24 @@ public class BitStreamReader {
     }
 
     /**
+     * {@link #readHandleReference} as a {@link io.dwg.core.type.DwgHandleRef}. With a cache set
+     * ({@link #shareRefs}), equal references are one instance.
+     */
+    public io.dwg.core.type.DwgHandleRef readRef(long containingHandle) {
+        long handle = readHandleReference(containingHandle);
+        if (handle == 0) {
+            return io.dwg.core.type.DwgHandleRef.NULL;
+        }
+        return refCache == null ? new io.dwg.core.type.DwgHandleRef(handle)
+                : refCache.computeIfAbsent(handle, io.dwg.core.type.DwgHandleRef::new);
+    }
+
+    /** Shares the handle references this reader makes through {@code cache} (null: no sharing). */
+    public void shareRefs(java.util.Map<Long, io.dwg.core.type.DwgHandleRef> cache) {
+        this.refCache = cache;
+    }
+
+    /**
      * Older form of {@link #readHandleReference}: interprets the packed value of
      * {@link #readHandle()}.
      */
@@ -460,7 +505,13 @@ public class BitStreamReader {
             return readText();
         }
         if (stringStreamMode) {
-            return stringStream == null ? "" : stringStream.readUnicodeText();
+            if (stringStream == null) {
+                if (--emptyStringBudget < 0) {
+                    throw new IllegalStateException("more strings than an object without a string stream can hold");
+                }
+                return "";
+            }
+            return stringStream.readUnicodeText();
         }
         return readUnicodeText();
     }

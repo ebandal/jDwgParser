@@ -4,8 +4,11 @@ package io.dwg.core.type;
  * Handle 참조를 나타내는 값 객체.
  * 지연 해석(lazy resolve)을 위해 실제 객체 대신 핸들만 보관.
  */
-public class DwgHandleRef {
-    private long rawHandle;
+public final class DwgHandleRef {
+    /** The null handle (0). */
+    public static final DwgHandleRef NULL = new DwgHandleRef(0);
+
+    private final long rawHandle;
 
     public DwgHandleRef(long rawHandle) {
         this.rawHandle = rawHandle;

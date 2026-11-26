@@ -38,6 +38,11 @@ public class ByteBufferBitInput implements BitInput {
         return limitBit;
     }
 
+    /** The bits that can still be read: up to the limit, or to the end of the buffer. */
+    public long bitsLeft() {
+        return Math.max(0, Math.min(limitBit, (long) buffer.limit() * 8) - bitOffset);
+    }
+
     @Override
     public boolean readBit() {
         if (bitOffset >= limitBit) {
