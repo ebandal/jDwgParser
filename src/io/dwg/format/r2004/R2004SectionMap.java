@@ -49,6 +49,7 @@ public class R2004SectionMap {
             return map;
         }
 
+        io.dwg.core.io.ReadLimits.reserve((long) (comp_data_size), "R2004SectionMap");
         byte[] compressedData = new byte[(int)comp_data_size];
         for (int i = 0; i < comp_data_size; i++) {
             compressedData[i] = (byte) input.readRawChar();

@@ -67,6 +67,10 @@ public class R13FileStructureHandler extends AbstractFileStructureHandler {
                 }
 
                 input.seek(offset * 8);
+                if (input instanceof io.dwg.core.io.ByteBufferBitInput
+                        && size * 8 > ((io.dwg.core.io.ByteBufferBitInput) input).bitsLeft()) {
+                    continue;                       // does not fit in the file
+                }
 
                 // Read full section bytes — Header/Classes parsers read their own sentinels
                 byte[] sectionData = new byte[(int) size];
@@ -119,8 +123,8 @@ public class R13FileStructureHandler extends AbstractFileStructureHandler {
         // 9. Section locator array
         if (locators != null) {
             for (Object locObj : locators) {
-                if (locObj instanceof R13SectionLocator loc) {
-                    loc.write(output);
+                if (locObj instanceof R13SectionLocator) {
+                    ((R13SectionLocator) locObj).write(output);
                 }
             }
         }

@@ -9,7 +9,7 @@ public class R2007SectionMapReader {
 
     /**
      * Read and decompress SectionMap from data page.
-     * Data pages are LZ77-compressed if sizeComp < sizeUncomp.
+     * Data pages are LZ77-compressed if {@code sizeComp < sizeUncomp}.
      * NOT RS-encoded (only system pages are RS-encoded).
      */
     public static byte[] readSectionMapFromPage(byte[] pageData, long sizeComp, long sizeUncomp) throws Exception {
@@ -23,12 +23,14 @@ public class R2007SectionMapReader {
         }
 
         if (sizeComp < sizeUncomp) {
+            io.dwg.core.io.ReadLimits.reserve((long) (sizeComp), "R2007SectionMapReader");
             byte[] compressed = new byte[(int)sizeComp];
             System.arraycopy(pageData, 0, compressed, 0, (int)sizeComp);
 
             Lz77Decompressor lz77 = new Lz77Decompressor();
             return lz77.decompress(compressed, (int)(Math.min(sizeUncomp, Integer.MAX_VALUE)));
         } else {
+            io.dwg.core.io.ReadLimits.reserve((long) (Math.min(sizeUncomp, Integer.MAX_VALUE)), "R2007SectionMapReader");
             byte[] result = new byte[(int)Math.min(sizeUncomp, Integer.MAX_VALUE)];
             System.arraycopy(pageData, 0, result, 0, result.length);
             return result;

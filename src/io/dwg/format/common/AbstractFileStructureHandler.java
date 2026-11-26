@@ -32,6 +32,7 @@ public abstract class AbstractFileStructureHandler implements DwgFileStructureHa
      * count 바이트 순차 읽기
      */
     protected byte[] readBytes(BitInput input, int count) {
+        io.dwg.core.io.ReadLimits.reserve((long) (count), "AbstractFileStructureHandler");
         byte[] result = new byte[count];
         for (int i = 0; i < count; i++) {
             result[i] = (byte)input.readRawChar();

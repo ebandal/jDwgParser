@@ -114,6 +114,7 @@ public class Lz77Decompressor {
     public byte[] decompress(byte[] compressed, int expectedSize) throws Exception {
         in = compressed;
         inPos = 0;
+        io.dwg.core.io.ReadLimits.reserve((long) (expectedSize), "Lz77Decompressor");
         out = new byte[expectedSize];
         outPos = 0;
 

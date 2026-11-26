@@ -173,6 +173,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
 
             // the section is as long as it says, or as far as its last page reaches
             long size = sectionSize;
+            io.dwg.core.io.ReadLimits.reserve((long) (pageCount) * 16L, "R2004FileStructureHandler");
             long[][] pages = new long[pageCount][];
             for (int k = 0; k < pageCount; k++) {
                 pages[k] = new long[] { le32(map, p), le32(map, p + 4), le64(map, p + 8) };
@@ -183,6 +184,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
                 continue;
             }
 
+            io.dwg.core.io.ReadLimits.reserve((long) (size), "R2004FileStructureHandler");
             byte[] out = new byte[(int) size];
             for (long[] page : pages) {
                 Long pageAt = pageAddress.get((int) page[0]);
@@ -204,6 +206,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
                 if (dataSize <= 0 || at + 32L + dataSize > file.length || startOffset < 0 || startOffset >= out.length) {
                     continue;
                 }
+                io.dwg.core.io.ReadLimits.reserve((long) (dataSize), "R2004FileStructureHandler");
                 byte[] data = new byte[dataSize];
                 System.arraycopy(file, at + 32, data, 0, dataSize);
                 byte[] plain = data;
@@ -233,6 +236,7 @@ public class R2004FileStructureHandler extends AbstractFileStructureHandler {
         if (decompressedSize < 0 || compressedSize < 0 || at + 20L + compressedSize > file.length) {
             throw new IllegalStateException("bad system page size");
         }
+        io.dwg.core.io.ReadLimits.reserve((long) (compressedSize), "R2004FileStructureHandler");
         byte[] data = new byte[compressedSize];
         System.arraycopy(file, at + 20, data, 0, compressedSize);
         if (compressionType != 2) {

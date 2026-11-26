@@ -43,6 +43,7 @@ public class R2004Lz77Decompressor {
     public byte[] decompress(byte[] compressed, int expectedSize) {
         in = compressed;
         inPos = 0;
+        io.dwg.core.io.ReadLimits.reserve((long) (Math.max(0, expectedSize)), "R2004Lz77Decompressor");
         out = new byte[Math.max(0, expectedSize)];
         outPos = 0;
 

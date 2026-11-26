@@ -32,10 +32,7 @@ public class XrecordObjectReader implements ObjectReader {
     @Override
     public void read(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgXrecord xrecord = (DwgXrecord) target;
-        int count = r.readBitLong();
-        if (count < 0) {
-            throw new IllegalStateException("negative XRECORD data length " + count);
-        }
+        int count = r.count(r.readBitLong(), 8);
         byte[] data = new byte[count];
         for (int i = 0; i < count; i++) {
             data[i] = (byte) r.readRawChar();
@@ -55,7 +52,7 @@ public class XrecordObjectReader implements ObjectReader {
         long end = ((ByteBufferBitInput) r.getInput()).limitBit();
         DwgXrecord xrecord = (DwgXrecord) target;
         while (r.position() + SMALLEST_HANDLE_BITS <= end) {
-            xrecord.addObjectHandle(new DwgHandleRef(r.readHandleReference(target.handle())));
+            xrecord.addObjectHandle(r.readRef(target.handle()));
         }
     }
 }

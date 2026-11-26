@@ -74,6 +74,7 @@ public class R2007FileHeader {
 
         byte[] fields;
         if (comprLen > 0) {
+            io.dwg.core.io.ReadLimits.reserve((long) (length), "R2007FileHeader");
             byte[] compressed = new byte[length];
             System.arraycopy(decoded, DATA_OFFSET, compressed, 0, length);
             try {
@@ -82,6 +83,7 @@ public class R2007FileHeader {
                 throw new Exception("Failed to decompress R2007 header: " + e.getMessage());
             }
         } else if (comprLen < 0) {
+            io.dwg.core.io.ReadLimits.reserve((long) (length), "R2007FileHeader");
             fields = new byte[length];
             System.arraycopy(decoded, DATA_OFFSET, fields, 0, length);
         } else {

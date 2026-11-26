@@ -2,6 +2,7 @@ package io.dwg.format.r2000;
 
 import io.dwg.core.io.BitInput;
 import io.dwg.core.io.BitOutput;
+import io.dwg.core.io.ByteBufferBitInput;
 import io.dwg.core.io.SectionInputStream;
 import io.dwg.core.version.DwgVersion;
 import io.dwg.format.common.AbstractFileStructureHandler;
@@ -73,15 +74,19 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
                 continue;
             }
 
-            if (offset >= 0 && size > 0) {
+            try {
                 input.seek(offset * 8); // Convert byte offset to bit offset
-
+                // a section that does not fit in the file is left out (the file is damaged)
+                if (input instanceof ByteBufferBitInput && size * 8 > ((ByteBufferBitInput) input).bitsLeft()) {
+                    continue;
+                }
                 byte[] sectionData = new byte[(int) size];
                 for (int i = 0; i < size; i++) {
                     sectionData[i] = (byte) input.readRawChar();
                 }
-
                 sections.put(sectionName, new SectionInputStream(sectionData, sectionName));
+            } catch (RuntimeException e) {
+                // left out, as above
             }
         }
 
@@ -139,8 +144,8 @@ public class R2000FileStructureHandler extends AbstractFileStructureHandler {
 
         if (header.sectionLocators() != null) {
             for (Object locObj : header.sectionLocators()) {
-                if (locObj instanceof io.dwg.format.r13.R13SectionLocator loc) {
-                    loc.write(output);
+                if (locObj instanceof io.dwg.format.r13.R13SectionLocator) {
+                    ((io.dwg.format.r13.R13SectionLocator) locObj).write(output);
                 }
             }
         }

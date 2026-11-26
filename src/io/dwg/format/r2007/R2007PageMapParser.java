@@ -68,6 +68,7 @@ public class R2007PageMapParser {
             throw new Exception("PageMap data extends beyond file");
         }
 
+        io.dwg.core.io.ReadLimits.reserve((long) (pageMapSizeComp), "R2007PageMapParser");
         byte[] pageMapBytes = new byte[pageMapSizeComp];
         System.arraycopy(fileData, (int)pageMapFileOffset, pageMapBytes, 0, pageMapSizeComp);
 

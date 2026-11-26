@@ -45,6 +45,7 @@ public class R2007SystemPageReader {
                 sizeComp, sizeUncomp, repeatCount));
         }
 
+        io.dwg.core.io.ReadLimits.reserve((long) ((blockCount * ReedSolomonDecoder.CODEWORD_SIZE)), "R2007SystemPageReader");
         byte[] encoded = new byte[(int) (blockCount * ReedSolomonDecoder.CODEWORD_SIZE)];
         input.seek(fileOffset * 8);
         for (int i = 0; i < encoded.length && !input.isEof(); i++) {
@@ -57,6 +58,7 @@ public class R2007SystemPageReader {
         if (sizeComp < sizeUncomp) {
             return new Lz77Decompressor().decompress(data, (int) sizeUncomp);
         }
+        io.dwg.core.io.ReadLimits.reserve((long) (sizeUncomp), "R2007SystemPageReader");
         byte[] page = new byte[(int) sizeUncomp];
         System.arraycopy(data, 0, page, 0, Math.min(page.length, data.length));
         return page;

@@ -41,6 +41,7 @@ public final class ReedSolomonDecoder {
      * @return {@code blockCount * dataSize} bytes: the data of code word 0, then of code word 1, ...
      */
     public static byte[] deinterleave(byte[] encoded, int blockCount, int dataSize) {
+        io.dwg.core.io.ReadLimits.reserve((long) (blockCount * dataSize), "ReedSolomonDecoder");
         byte[] data = new byte[blockCount * dataSize];
         for (int block = 0; block < blockCount; block++) {
             int to = block * dataSize;

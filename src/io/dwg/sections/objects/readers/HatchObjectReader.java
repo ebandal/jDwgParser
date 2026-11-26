@@ -32,7 +32,7 @@ public class HatchObjectReader implements ObjectReader {
             r.readBitDouble();                  // gradient shift
             r.readBitLong();                    // single color gradient
             r.readBitDouble();                  // gradient tint
-            int numColors = count(r.readBitLong());
+            int numColors = r.count(r.readBitLong(), 1);
             for (int i = 0; i < numColors; i++) {
                 r.readBitDouble();              // shift value
                 r.readBitShort();               // color index
@@ -50,7 +50,7 @@ public class HatchObjectReader implements ObjectReader {
         hatch.setSolidFill(r.getInput().readBit());
         hatch.setAssociative(r.getInput().readBit());
 
-        int numLoops = count(r.readBitLong());
+        int numLoops = r.count(r.readBitLong(), 1);
         hatch.setNumBoundaryPaths(numLoops);
         int boundaryHandles = 0;
         boolean pixelSize = false;
@@ -62,19 +62,19 @@ public class HatchObjectReader implements ObjectReader {
             if (loop.polyline) {
                 boolean bulges = r.getInput().readBit();
                 loop.closed = r.getInput().readBit();
-                int n = count(r.readBitLong());
+                int n = r.count(r.readBitLong(), 1);
                 for (int k = 0; k < n; k++) {
                     double[] p = r.read2RawDouble();
                     loop.vertices.add(new double[] { p[0], p[1], bulges ? r.readBitDouble() : 0.0 });
                 }
             } else {
                 loop.closed = true;
-                int n = count(r.readBitLong());
+                int n = r.count(r.readBitLong(), 1);
                 for (int k = 0; k < n; k++) {
                     loop.edges.add(readEdge(r, v));
                 }
             }
-            boundaryHandles += count(r.readBitLong());
+            boundaryHandles += r.count(r.readBitLong(), 1);
             hatch.loops().add(loop);
         }
         hatch.setBoundaryHandleCount(boundaryHandles);
@@ -85,7 +85,7 @@ public class HatchObjectReader implements ObjectReader {
             hatch.setAngle(r.readBitDouble());
             hatch.setScale(r.readBitDouble());
             hatch.setDoubleHatch(r.getInput().readBit());
-            int numLines = count(r.readBitShort());
+            int numLines = r.count(r.readBitShort(), 1);
             for (int i = 0; i < numLines; i++) {
                 DwgHatch.PatternLine line = new DwgHatch.PatternLine();
                 line.angle = r.readBitDouble();
@@ -93,7 +93,7 @@ public class HatchObjectReader implements ObjectReader {
                 line.y = r.readBitDouble();
                 line.offsetX = r.readBitDouble();
                 line.offsetY = r.readBitDouble();
-                line.dashes = new double[count(r.readBitShort())];
+                line.dashes = new double[r.count(r.readBitShort(), 1)];
                 for (int k = 0; k < line.dashes.length; k++) {
                     line.dashes[k] = r.readBitDouble();
                 }
@@ -103,7 +103,7 @@ public class HatchObjectReader implements ObjectReader {
         if (pixelSize) {
             r.readBitDouble();
         }
-        int numSeeds = count(r.readBitLong());
+        int numSeeds = r.count(r.readBitLong(), 1);
         for (int i = 0; i < numSeeds; i++) {
             r.read2RawDouble();
         }
@@ -138,8 +138,8 @@ public class HatchObjectReader implements ObjectReader {
                 e.degree = r.readBitLong();
                 e.rational = r.getInput().readBit();
                 e.periodic = r.getInput().readBit();
-                int numKnots = count(r.readBitLong());
-                int numControl = count(r.readBitLong());
+                int numKnots = r.count(r.readBitLong(), 1);
+                int numControl = r.count(r.readBitLong(), 1);
                 e.knots = new double[numKnots];
                 for (int i = 0; i < numKnots; i++) {
                     e.knots[i] = r.readBitDouble();
@@ -153,7 +153,7 @@ public class HatchObjectReader implements ObjectReader {
                 // points. The spec lists the tangents always; read so, the 45 R2013 hatches with
                 // spline edges of the samples fail, read this way all end exactly.
                 if (v.from(DwgVersion.R2010)) {
-                    int numFit = count(r.readBitLong());
+                    int numFit = r.count(r.readBitLong(), 1);
                     for (int i = 0; i < numFit; i++) {
                         r.read2RawDouble();
                     }
@@ -168,12 +168,5 @@ public class HatchObjectReader implements ObjectReader {
                 throw new IllegalStateException("bad HATCH edge type " + e.type);
         }
         return e;
-    }
-
-    private static int count(int n) {
-        if (n < 0 || n > 10_000_000) {
-            throw new IllegalStateException("bad HATCH count " + n);
-        }
-        return n;
     }
 }
