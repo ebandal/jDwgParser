@@ -43,21 +43,35 @@ public class DwgStringDecoder {
      */
     public static Charset charsetForCodePage(int codePage) {
         try {
-            return switch (codePage) {
-                case 20127, 20000 -> StandardCharsets.US_ASCII;
-                case 20932 -> Charset.forName("Shift_JIS");
-                case 20936 -> Charset.forName("GB2312");
-                case 20949 -> Charset.forName("EUC-KR");
-                case 1252 -> StandardCharsets.ISO_8859_1;
-                case 1250 -> Charset.forName("ISO-8859-2");
-                case 1251 -> Charset.forName("ISO-8859-5");
-                case 1253 -> Charset.forName("ISO-8859-7");
-                case 1254 -> Charset.forName("ISO-8859-9");
-                case 1255 -> Charset.forName("ISO-8859-8");
-                case 1256 -> Charset.forName("ISO-8859-6");
-                case 1257 -> Charset.forName("ISO-8859-13");
-                default -> StandardCharsets.ISO_8859_1;
-            };
+            switch (codePage) {
+                case 20127:
+                case 20000:
+                    return StandardCharsets.US_ASCII;
+                case 20932:
+                    return Charset.forName("Shift_JIS");
+                case 20936:
+                    return Charset.forName("GB2312");
+                case 20949:
+                    return Charset.forName("EUC-KR");
+                case 1252:
+                    return StandardCharsets.ISO_8859_1;
+                case 1250:
+                    return Charset.forName("ISO-8859-2");
+                case 1251:
+                    return Charset.forName("ISO-8859-5");
+                case 1253:
+                    return Charset.forName("ISO-8859-7");
+                case 1254:
+                    return Charset.forName("ISO-8859-9");
+                case 1255:
+                    return Charset.forName("ISO-8859-8");
+                case 1256:
+                    return Charset.forName("ISO-8859-6");
+                case 1257:
+                    return Charset.forName("ISO-8859-13");
+                default:
+                    return StandardCharsets.ISO_8859_1;
+            }
         } catch (Exception e) {
             return StandardCharsets.ISO_8859_1;
         }

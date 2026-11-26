@@ -25,8 +25,91 @@ public class DwgLtype extends AbstractDwgTableRecord {
      * or a text when {@code shapeFlag} says so. {@code styleHandle} is the STYLE record of the
      * shape or text.
      */
-    public record Dash(double length, int shapeCode, double xOffset, double yOffset, double scale,
-                       double rotation, int shapeFlag, String text, DwgHandleRef styleHandle) {
+    public static final class Dash {
+        private final double length;
+        private final int shapeCode;
+        private final double xOffset;
+        private final double yOffset;
+        private final double scale;
+        private final double rotation;
+        private final int shapeFlag;
+        private final String text;
+        private final DwgHandleRef styleHandle;
+
+        public Dash(double length, int shapeCode, double xOffset, double yOffset, double scale, double rotation, int shapeFlag, String text, DwgHandleRef styleHandle) {
+            this.length = length;
+            this.shapeCode = shapeCode;
+            this.xOffset = xOffset;
+            this.yOffset = yOffset;
+            this.scale = scale;
+            this.rotation = rotation;
+            this.shapeFlag = shapeFlag;
+            this.text = text;
+            this.styleHandle = styleHandle;
+        }
+
+        public double length() {
+            return length;
+        }
+
+        public int shapeCode() {
+            return shapeCode;
+        }
+
+        public double xOffset() {
+            return xOffset;
+        }
+
+        public double yOffset() {
+            return yOffset;
+        }
+
+        public double scale() {
+            return scale;
+        }
+
+        public double rotation() {
+            return rotation;
+        }
+
+        public int shapeFlag() {
+            return shapeFlag;
+        }
+
+        public String text() {
+            return text;
+        }
+
+        public DwgHandleRef styleHandle() {
+            return styleHandle;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof Dash)) return false;
+            Dash other = (Dash) o;
+            return Double.compare(length, other.length) == 0
+                    && shapeCode == other.shapeCode
+                    && Double.compare(xOffset, other.xOffset) == 0
+                    && Double.compare(yOffset, other.yOffset) == 0
+                    && Double.compare(scale, other.scale) == 0
+                    && Double.compare(rotation, other.rotation) == 0
+                    && shapeFlag == other.shapeFlag
+                    && java.util.Objects.equals(text, other.text)
+                    && java.util.Objects.equals(styleHandle, other.styleHandle);
+        }
+
+        @Override
+        public int hashCode() {
+            return java.util.Objects.hash(length, shapeCode, xOffset, yOffset, scale, rotation, shapeFlag, text, styleHandle);
+        }
+
+        @Override
+        public String toString() {
+            return "Dash[" + "length=" + length + ", " + "shapeCode=" + shapeCode + ", " + "xOffset=" + xOffset + ", " + "yOffset=" + yOffset + ", " + "scale=" + scale + ", " + "rotation=" + rotation + ", " + "shapeFlag=" + shapeFlag + ", " + "text=" + text + ", " + "styleHandle=" + styleHandle + "]";
+        }
+
         /** This dash with the style handle filled in. */
         public Dash withStyleHandle(DwgHandleRef handle) {
             return new Dash(length, shapeCode, xOffset, yOffset, scale, rotation, shapeFlag, text, handle);

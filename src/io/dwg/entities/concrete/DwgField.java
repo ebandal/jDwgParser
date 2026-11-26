@@ -25,7 +25,7 @@ public class DwgField extends AbstractDwgObject implements DwgNonEntityObject {
     @Override
     public boolean isEntity() { return false; }
 
-    /** The field code, e.g. "%<\AcVar Date>%" (DXF 2, 3). */
+    /** The field code, e.g. {@code "%<\AcVar Date>%"} (DXF 2, 3). */
     public String fieldExpression() { return text("CODE"); }
     /** The value as text (DXF 301). */
     public String fieldValue() { return text("VALUETEXT"); }

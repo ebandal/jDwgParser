@@ -10,7 +10,7 @@ This is a **Java DWG parser library** specification project. It targets parsing 
 
 No build files exist yet. When implementing, the project will use:
 - **Build tool:** Maven or Gradle (TBD)
-- **Java version:** 16+ (uses Java Records)
+- **Java version:** 11+ (the build targets release 11: no records, text blocks, arrow switches or instanceof patterns)
 - **Test framework:** JUnit 5 + Mockito
 - **Benchmarks:** JMH (Java Microbenchmark Harness)
 
@@ -53,7 +53,7 @@ Phase 4  dwg-format(R13/R14) + all auxiliary sections + full test suite
 - **R2007+ complexity:** File structure adds LZ77 compression and encryption on top of section data — handle in `dwg-format` before passing to `dwg-sections`
 - **Text encoding:** CodePage-based for R2000 and earlier; UTF-16LE for R2007+
 - **Handle references** (`DwgHandle`, `DwgHandleRef`) are resolved lazily after the full object map is loaded
-- **Java Records** are used for immutable value types (coordinates, events, config); requires JDK 16+
+- **Immutable value types** (coordinates, issues, ...) are final classes with record-style accessors (`x()`), not Java records, to stay on Java 11
 - **`dwg-entities` is pure data model** — no I/O or parsing logic belongs there
 - **CRC validation:** CRC-8 for object data, CRC-32 for section integrity
 
@@ -63,7 +63,7 @@ In the `*.md` spec files:
 - `*(interface)*` — interface
 - `*(abstract)*` — abstract class
 - `*(enum)*` — enum
-- `*(record)*` — Java 16+ record
+- `*(record)*` — an immutable value class (written as a final class, Java 11)
 
 ---
 

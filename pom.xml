@@ -11,13 +11,33 @@
     <packaging>jar</packaging>
 
     <name>jDwgParser</name>
-    <description>Java DWG Parser Library - Parse and write AutoCAD DWG files</description>
+    <description>Reads AutoCAD DWG files (R13 to R2018) in pure Java, after the Open Design Specification for .dwg files</description>
     <url>https://github.com/ebandal/jDwgParser</url>
+
+    <!-- The license is that of LICENSE; change both together when the licensing (AGPLv3 +
+         commercial) is decided. -->
+    <licenses>
+        <license>
+            <name>GNU General Public License v3.0</name>
+            <url>https://www.gnu.org/licenses/gpl-3.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <name>Heesu Ban</name>
+            <url>https://github.com/ebandal</url>
+        </developer>
+    </developers>
+    <scm>
+        <connection>scm:git:https://github.com/ebandal/jDwgParser.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/ebandal/jDwgParser.git</developerConnection>
+        <url>https://github.com/ebandal/jDwgParser</url>
+    </scm>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>16</maven.compiler.source>
-        <maven.compiler.target>16</maven.compiler.target>
+        <maven.compiler.release>11</maven.compiler.release>
         <junit.version>5.9.2</junit.version>
         <mockito.version>5.2.0</mockito.version>
         <jmh.version>1.35</jmh.version>
@@ -79,8 +99,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.11.0</version>
                 <configuration>
-                    <source>16</source>
-                    <target>16</target>
+                    <release>11</release>
                     <encoding>UTF-8</encoding>
                 </configuration>
             </plugin>
@@ -102,39 +121,14 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
-                <version>3.3.0</version>
-                <configuration>
-                    <archive>
-                        <manifest>
-                            <mainClass>run.ReadTest</mainClass>
-                        </manifest>
-                    </archive>
-                </configuration>
-            </plugin>
-
-            <!-- Maven Assembly Plugin for creating fat JAR -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-assembly-plugin</artifactId>
                 <version>3.4.2</version>
                 <configuration>
                     <archive>
-                        <manifest>
-                            <mainClass>run.ReadTest</mainClass>
-                        </manifest>
+                        <manifestEntries>
+                            <Automatic-Module-Name>io.dwg</Automatic-Module-Name>
+                        </manifestEntries>
                     </archive>
-                    <descriptorRefs>
-                        <descriptorRef>jar-with-dependencies</descriptorRef>
-                    </descriptorRefs>
                 </configuration>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>single</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
 
             <!-- Clean Plugin -->

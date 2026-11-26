@@ -48,7 +48,7 @@ public class BitReader {
         return b == 1;
     }
 
-    /** n bits (n <= 32), most significant bit first */
+    /** n bits ({@code n <= 32}), most significant bit first */
     public int readBits(int n) {
         int v = 0;
         for (int i = 0; i < n; i++) {

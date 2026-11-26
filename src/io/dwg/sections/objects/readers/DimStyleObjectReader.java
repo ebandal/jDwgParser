@@ -28,7 +28,56 @@ public class DimStyleObjectReader implements ObjectReader {
     private enum Type { B, RC, BS, BD, T, CMC, CI }
 
     /** A variable, read from files of {@code from} on and before {@code until} (null: no end). */
-    private record Field(String name, Type type, DwgVersion from, DwgVersion until) {
+    private static final class Field {
+        private final String name;
+        private final Type type;
+        private final DwgVersion from;
+        private final DwgVersion until;
+
+        Field(String name, Type type, DwgVersion from, DwgVersion until) {
+            this.name = name;
+            this.type = type;
+            this.from = from;
+            this.until = until;
+        }
+
+        public String name() {
+            return name;
+        }
+
+        public Type type() {
+            return type;
+        }
+
+        public DwgVersion from() {
+            return from;
+        }
+
+        public DwgVersion until() {
+            return until;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof Field)) return false;
+            Field other = (Field) o;
+            return java.util.Objects.equals(name, other.name)
+                    && java.util.Objects.equals(type, other.type)
+                    && java.util.Objects.equals(from, other.from)
+                    && java.util.Objects.equals(until, other.until);
+        }
+
+        @Override
+        public int hashCode() {
+            return java.util.Objects.hash(name, type, from, until);
+        }
+
+        @Override
+        public String toString() {
+            return "Field[" + "name=" + name + ", " + "type=" + type + ", " + "from=" + from + ", " + "until=" + until + "]";
+        }
+
         boolean in(DwgVersion v) {
             return v.from(from) && (until == null || !v.from(until));
         }
@@ -105,16 +154,16 @@ public class DimStyleObjectReader implements ObjectReader {
     public void readHandles(DwgObject target, BitStreamReader r, DwgVersion v) throws Exception {
         DwgDimStyle style = (DwgDimStyle) target;
         long self = target.handle();
-        style.setXrefBlockHandle(new DwgHandleRef(r.readHandleReference(self)));
-        style.set("DIMTXSTY", new DwgHandleRef(r.readHandleReference(self)));
+        style.setXrefBlockHandle(r.readRef(self));
+        style.set("DIMTXSTY", r.readRef(self));
         if (v.from(DwgVersion.R2000)) {
             for (String name : new String[] {"DIMLDRBLK", "DIMBLK", "DIMBLK1", "DIMBLK2"}) {
-                style.set(name, new DwgHandleRef(r.readHandleReference(self)));
+                style.set(name, r.readRef(self));
             }
         }
         if (v.from(DwgVersion.R2007)) {
             for (String name : new String[] {"DIMLTYPE", "DIMLTEX1", "DIMLTEX2"}) {
-                style.set(name, new DwgHandleRef(r.readHandleReference(self)));
+                style.set(name, r.readRef(self));
             }
         }
     }

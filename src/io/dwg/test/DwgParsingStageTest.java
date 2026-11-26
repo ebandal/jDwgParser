@@ -268,7 +268,7 @@ public class DwgParsingStageTest {
             System.out.printf("    - 레이어 수: %d\n", layers.size());
             if (!layers.isEmpty()) {
                 System.out.println("      레이어 목록:");
-                for (DwgLayer layer : layers.stream().limit(5).toList()) {
+                for (DwgLayer layer : layers.stream().limit(5).collect(java.util.stream.Collectors.toList())) {
                     System.out.printf("        • %s (handle=0x%X)\n", layer.name(), layer.handle());
                 }
                 if (layers.size() > 5) {
@@ -287,7 +287,7 @@ public class DwgParsingStageTest {
                 }
                 for (Map.Entry<String, Integer> entry : typeCounts.entrySet()
                     .stream().sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
-                    .limit(10).toList()) {
+                    .limit(10).collect(java.util.stream.Collectors.toList())) {
                     System.out.printf("        • %s: %d\n", entry.getKey(), entry.getValue());
                 }
             }

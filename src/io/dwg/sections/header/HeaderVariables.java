@@ -39,36 +39,67 @@ public class HeaderVariables {
     }
 
     private Object getBuiltin(String name) {
-        return switch (name) {
-            case "DIMSCALE"  -> dimscale;
-            case "LTSCALE"   -> ltscale;
-            case "INSBASE"   -> insBase;
-            case "EXTMIN"    -> extMin;
-            case "EXTMAX"    -> extMax;
-            case "LIMMIN"    -> limMin;
-            case "LIMMAX"    -> limMax;
-            case "LUNITS"    -> lunits;
-            case "LUPREC"    -> luprec;
-            case "CLAYER"    -> currentLayer;
-            case "CELTYPE"   -> currentLineType;
-            case "DIMSTYLE"  -> dimstyle;
-            default          -> null;
-        };
+        switch (name) {
+            case "DIMSCALE":
+                return dimscale;
+            case "LTSCALE":
+                return ltscale;
+            case "INSBASE":
+                return insBase;
+            case "EXTMIN":
+                return extMin;
+            case "EXTMAX":
+                return extMax;
+            case "LIMMIN":
+                return limMin;
+            case "LIMMAX":
+                return limMax;
+            case "LUNITS":
+                return lunits;
+            case "LUPREC":
+                return luprec;
+            case "CLAYER":
+                return currentLayer;
+            case "CELTYPE":
+                return currentLineType;
+            case "DIMSTYLE":
+                return dimstyle;
+            default:
+                return null;
+        }
     }
 
     public void set(String varName, Object value) {
         vars.put(varName, value);
         // 알려진 필드는 직접 갱신
         switch (varName) {
-            case "DIMSCALE" -> dimscale = (Double) value;
-            case "LTSCALE"  -> ltscale  = (Double) value;
-            case "INSBASE"  -> insBase  = (Point3D) value;
-            case "EXTMIN"   -> extMin   = (Point3D) value;
-            case "EXTMAX"   -> extMax   = (Point3D) value;
-            case "LIMMIN"   -> limMin   = (Point2D) value;
-            case "LIMMAX"   -> limMax   = (Point2D) value;
-            case "LUNITS"   -> lunits   = (Integer) value;
-            case "LUPREC"   -> luprec   = (Integer) value;
+            case "DIMSCALE":
+                dimscale = (Double) value;
+                break;
+            case "LTSCALE":
+                ltscale  = (Double) value;
+                break;
+            case "INSBASE":
+                insBase  = (Point3D) value;
+                break;
+            case "EXTMIN":
+                extMin   = (Point3D) value;
+                break;
+            case "EXTMAX":
+                extMax   = (Point3D) value;
+                break;
+            case "LIMMIN":
+                limMin   = (Point2D) value;
+                break;
+            case "LIMMAX":
+                limMax   = (Point2D) value;
+                break;
+            case "LUNITS":
+                lunits   = (Integer) value;
+                break;
+            case "LUPREC":
+                luprec   = (Integer) value;
+                break;
         }
     }
 

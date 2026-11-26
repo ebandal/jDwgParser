@@ -58,13 +58,18 @@ public class R2000SectionLocator {
      * number → SectionType 이름 매핑
      */
     public String toSectionName() {
-        return switch (number) {
-            case 0 -> SectionType.HEADER.sectionName();
-            case 1 -> SectionType.CLASSES.sectionName();
-            case 2 -> SectionType.HANDLES.sectionName();
-            case 3 -> SectionType.OBJECTS.sectionName();
-            default -> "Unknown[" + number + "]";
-        };
+        switch (number) {
+            case 0:
+                return SectionType.HEADER.sectionName();
+            case 1:
+                return SectionType.CLASSES.sectionName();
+            case 2:
+                return SectionType.HANDLES.sectionName();
+            case 3:
+                return SectionType.OBJECTS.sectionName();
+            default:
+                return "Unknown[" + number + "]";
+        }
     }
 
     @Override

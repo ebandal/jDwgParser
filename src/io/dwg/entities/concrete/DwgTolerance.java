@@ -6,7 +6,7 @@ import io.dwg.entities.DwgObjectType;
 
 /**
  * TOLERANCE 엔티티 (타입 0x2E)
- * 공차 기하공차 표시 (GD&T)
+ * 공차 기하공차 표시 (GD&amp;T)
  */
 public class DwgTolerance extends AbstractDwgEntity {
     private Point3D insertionPoint;     // 삽입점

@@ -19,7 +19,56 @@ public class DwgMLineStyle extends AbstractDwgObject implements DwgNonEntityObje
      * One line of the style. Up to R2013 the linetype is given by index ({@code linetypeIndex});
      * R2018+ files give its handle ({@code linetypeHandle}) instead.
      */
-    public record Line(double offset, CmColor color, int linetypeIndex, DwgHandleRef linetypeHandle) {
+    public static final class Line {
+        private final double offset;
+        private final CmColor color;
+        private final int linetypeIndex;
+        private final DwgHandleRef linetypeHandle;
+
+        public Line(double offset, CmColor color, int linetypeIndex, DwgHandleRef linetypeHandle) {
+            this.offset = offset;
+            this.color = color;
+            this.linetypeIndex = linetypeIndex;
+            this.linetypeHandle = linetypeHandle;
+        }
+
+        public double offset() {
+            return offset;
+        }
+
+        public CmColor color() {
+            return color;
+        }
+
+        public int linetypeIndex() {
+            return linetypeIndex;
+        }
+
+        public DwgHandleRef linetypeHandle() {
+            return linetypeHandle;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof Line)) return false;
+            Line other = (Line) o;
+            return Double.compare(offset, other.offset) == 0
+                    && java.util.Objects.equals(color, other.color)
+                    && linetypeIndex == other.linetypeIndex
+                    && java.util.Objects.equals(linetypeHandle, other.linetypeHandle);
+        }
+
+        @Override
+        public int hashCode() {
+            return java.util.Objects.hash(offset, color, linetypeIndex, linetypeHandle);
+        }
+
+        @Override
+        public String toString() {
+            return "Line[" + "offset=" + offset + ", " + "color=" + color + ", " + "linetypeIndex=" + linetypeIndex + ", " + "linetypeHandle=" + linetypeHandle + "]";
+        }
+
         /** This line with the linetype handle filled in. */
         public Line withLinetypeHandle(DwgHandleRef handle) {
             return new Line(offset, color, linetypeIndex, handle);
