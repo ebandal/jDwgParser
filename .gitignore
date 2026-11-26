@@ -2,6 +2,7 @@
 /dwg/
 /doc/
 /target/
+/examples/*/target/
 
 # Maven Wrapper
 .mvn/wrapper/maven-wrapper.jar

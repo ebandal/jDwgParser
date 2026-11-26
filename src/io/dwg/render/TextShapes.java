@@ -104,95 +104,13 @@ final class TextShapes {
         out.add(current.toString());
     }
 
-    /** Replaces the control codes of single line text : %%d, %%p, %%c, %%u, %%o, \U+XXXX. */
+    /** Single line text without its control codes ({@link io.dwg.api.PlainText#ofText}). */
     static String plain(String s) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c == '%' && i + 2 < s.length() && s.charAt(i + 1) == '%') {
-                char code = Character.toLowerCase(s.charAt(i + 2));
-                i += 2;
-                switch (code) {
-                case 'd': sb.append('°'); break;
-                case 'p': sb.append('±'); break;
-                case 'c': sb.append('Ø'); break;
-                case '%': sb.append('%'); break;
-                default:  break;                // %%u, %%o, %%k : underline, overline, strike through
-                }
-            } else if (c == '\\' && s.startsWith("U+", i + 1) && i + 7 <= s.length()) {
-                try {
-                    sb.append((char) Integer.parseInt(s.substring(i + 3, i + 7), 16));
-                    i += 6;
-                } catch (NumberFormatException e) {
-                    sb.append(c);
-                }
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString();
+        return io.dwg.api.PlainText.ofText(s);
     }
 
-    /** Lines of an MTEXT content without its formatting codes. */
+    /** Lines of an MTEXT content without its formatting codes ({@link io.dwg.api.PlainText#linesOfMText}). */
     static List<String> plainLines(String s) {
-        List<String> lines = new ArrayList<>();
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c == '\\' && i + 1 < s.length()) {
-                char code = s.charAt(++i);
-                switch (code) {
-                case 'P': case 'X': case 'N':
-                    lines.add(sb.toString());
-                    sb.setLength(0);
-                    break;
-                case '~':
-                    sb.append(' ');
-                    break;
-                case '\\': case '{': case '}':
-                    sb.append(code);
-                    break;
-                case 'U':
-                    if (s.startsWith("+", i + 1) && i + 6 <= s.length()) {
-                        try {
-                            sb.append((char) Integer.parseInt(s.substring(i + 2, i + 6), 16));
-                            i += 5;
-                        } catch (NumberFormatException e) {
-                            // not a code point : drop the escape
-                        }
-                    }
-                    break;
-                case 'S': {
-                    // stacked text "\Sa^b;" or "\Sa/b;" -> a/b
-                    int end = s.indexOf(';', i);
-                    String stacked = end < 0 ? s.substring(i + 1) : s.substring(i + 1, end);
-                    sb.append(stacked.replace('^', '/').replace('#', '/'));
-                    i = end < 0 ? s.length() : end;
-                    break;
-                }
-                case 'f': case 'F': case 'H': case 'W': case 'C': case 'c': case 'T': case 'Q': case 'A': case 'p': {
-                    // codes with an argument ending in ';'
-                    int end = s.indexOf(';', i);
-                    i = end < 0 ? s.length() : end;
-                    break;
-                }
-                default:
-                    break;                      // \L \l \O \o \K \k : underline, overline, strike through
-                }
-            } else if (c == '{' || c == '}') {
-                // grouping only
-            } else if (c == '\n') {
-                lines.add(sb.toString());
-                sb.setLength(0);
-            } else if (c != '\r') {
-                sb.append(c);
-            }
-        }
-        lines.add(sb.toString());
-        List<String> result = new ArrayList<>();
-        for (String line : lines) {
-            result.add(plain(line));
-        }
-        return result;
+        return io.dwg.api.PlainText.linesOfMText(s);
     }
 }
