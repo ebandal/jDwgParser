@@ -92,8 +92,13 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
 
                 for (int i = 0; i < sectionMap.size(); i++) {
                     R2007SectionMapParser.SectionMapEntry section = sectionMap.get(i);
-                    byte[] sectionData = extractObjectsData(fileData, section, pageMap,
-                        r2007Header.pageMapOffset());
+                    byte[] sectionData;
+                    try {
+                        sectionData = extractObjectsData(fileData, section, pageMap,
+                            r2007Header.pageMapOffset());
+                    } catch (Exception e) {
+                        continue;                   // one section that cannot be read does not take the others
+                    }
 
                     if (sectionData != null && sectionData.length > 0) {
                         String sectionName = section.sectionName;
@@ -108,6 +113,9 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
         return sections;
     }
 
+    /** Section encoding whose Reed-Solomon code words are not interleaved (§5.13.1). */
+    private static final long NOT_INTERLEAVED = 1;
+
     /**
      * Extract Objects section data using RS(255,251) + LZ77 decompression
      */
@@ -116,8 +124,8 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
             java.util.List<R2007PageMapParser.PageMapEntry> pageMap,
             long pageMapOffset) throws Exception {
 
+        io.dwg.core.io.ReadLimits.reserve((long) (objectsSection.dataSize), "R2007FileStructureHandler");
         byte[] allObjectsData = new byte[(int)objectsSection.dataSize];
-        int objectsOffset = 0;
 
         for (int p = 0; p < objectsSection.pages.size(); p++) {
             R2007SectionMapParser.SectionPageEntry page = objectsSection.pages.get(p);
@@ -134,29 +142,40 @@ public class R2007FileStructureHandler extends AbstractFileStructureHandler {
 
             if (filePageOffset < 0) continue;
 
+            io.dwg.core.io.ReadLimits.reserve((long) (pageSize), "R2007FileStructureHandler");
             byte[] rsData = new byte[(int)pageSize];
             System.arraycopy(fileData, (int)filePageOffset, rsData, 0, (int)pageSize);
 
-            // Section 5.4: the page data is padded to a multiple of 8 bytes and Reed-Solomon
-            // encoded in interleaved code words of 251 data bytes.
+            // §5.4, §5.13: the page data is padded to a multiple of 8 bytes and Reed-Solomon
+            // encoded in code words of 251 data bytes. Sections of encoding 4 interleave the code
+            // words; those of encoding 1 (AppInfo, Preview, ...) do not: their data blocks come
+            // one after another, then the parity. Found on the samples: read interleaved, an
+            // encoding 1 page of more than one block is scrambled (the preview's start sentinel
+            // of §14 is only there when it is read in order).
             long alignedSize = (page.compSize + 7) & ~7L;
             int blockCount = (int) ((alignedSize + ReedSolomonDecoder.DATA_PAGE_DATA_SIZE - 1)
                 / ReedSolomonDecoder.DATA_PAGE_DATA_SIZE);
-            byte[] pedata = ReedSolomonDecoder.deinterleave(rsData, blockCount,
-                ReedSolomonDecoder.DATA_PAGE_DATA_SIZE);
+            byte[] pedata = objectsSection.encoded == NOT_INTERLEAVED
+                ? java.util.Arrays.copyOf(rsData, blockCount * ReedSolomonDecoder.DATA_PAGE_DATA_SIZE)
+                : ReedSolomonDecoder.deinterleave(rsData, blockCount, ReedSolomonDecoder.DATA_PAGE_DATA_SIZE);
 
             byte[] decompressed;
             if (page.compSize < page.uncompSize) {
+                // the compressed data is compSize bytes; the rest of the blocks is filler
                 Lz77Decompressor lz77 = new Lz77Decompressor();
-                decompressed = lz77.decompress(pedata, (int)page.uncompSize);
+                decompressed = lz77.decompress(java.util.Arrays.copyOf(pedata, (int) page.compSize),
+                    (int) page.uncompSize);
             } else {
                 decompressed = pedata;
             }
 
-            if (objectsOffset + decompressed.length <= allObjectsData.length) {
-                System.arraycopy(decompressed, 0, allObjectsData, objectsOffset,
-                    decompressed.length);
-                objectsOffset += decompressed.length;
+            // §5.5: each page holds the section data from its offset, uncompSize bytes long. A page
+            // that is stored uncompressed comes out of the Reed-Solomon blocks padded to whole
+            // blocks, and pages that are not in the file (all zeros, §5.2) leave a gap of zeros.
+            long at = page.offset;
+            int length = (int) Math.min(page.uncompSize, decompressed.length);
+            if (at >= 0 && at + length <= allObjectsData.length) {
+                System.arraycopy(decompressed, 0, allObjectsData, (int) at, length);
             }
         }
 
