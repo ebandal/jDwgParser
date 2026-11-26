@@ -3,6 +3,31 @@
 목표: 서버에서 쓰는 순수 Java DWG **읽기** 라이브러리로, 상용 라이선스를 팔 수 있는 상태로 만든다.
 위에서부터 순서대로 진행한다.
 
+## 주 사용 사례 (2026-11-26 결정)
+
+**명령 한 줄로 DWG → PNG 변환, 캔버스는 원본 크기.** API를 직접 쓰는 고객보다 이 용도가 많을 것으로 본다. 그래서 공개 API를 바꾸더라도 이 경로의 메모리를 줄이는 것을 우선한다.
+
+```
+java -jar jdwgparser.jar drawing.dwg              # drawing.png
+```
+
+- [x] 변환 명령(`io.dwg.cli.Convert`, jar의 실행 클래스): PNG/SVG/PDF, 파일·폴더, `--size`, `--background`
+- [x] 이미지 단계 메모리: 렌더러가 도형을 모아 두지 않고 그리기 단계마다 만들어 바로 그림(14MB 도면 310MB → 199MB, PNG는 픽셀 단위로 같음)
+- [x] 읽기 단계 메모리: 문서를 들고 있지 않고 객체를 읽는 대로 그림 모델로 넘김(`DwgReader.stream`, `DocumentDrawing.Builder`), 파일 원본은 섹션 추출 뒤 놓음, 핸들 참조 캐시 크기 고정. 변환에 필요한 힙: 14MB 도면 310MB → 111MB, 6.7MB 도면 135MB → 55MB, 2.2MB 도면 47MB → 23MB(출력은 픽셀 단위로 같음)
+  - [ ] 더 줄일 곳: 읽는 동안의 Objects 섹션 원본(14MB 도면에서 24MB), 그림 모델의 좌표 배열(선의 시작·끝점, 렌더 모델을 함께 쓰는 기준 렌더러·비교 도구까지 바꿔야 함)
+  - [x] 작은 힙에서 섹션 읽기가 상한 초과를 삼켜 객체 0개인 문서를 돌려주던 버그 수정(이제 `DwgReadException`). 기본 상한(`maxBytes`)은 최대 힙 전체
+- [x] "원본 크기" 캔버스 정의 (사용자 결정: 둘 다 지원)
+  - `--dpi N`: 모형 공간 배치의 용지 크기에 N dpi로 맞춤. `--px-per-unit N`: 도면 1단위당 N픽셀. 기본은 용지 300dpi, 용지 정보가 없으면 1단위 = 1픽셀. `--size N`(긴 변)도 남김
+  - 샘플 244개 중 235개에 모형 공간 용지 정보가 있음(대부분 A4·Letter)
+  - [x] 축소 출력 `--scale 1/4`(1/8, 1/16, 0.3 등): 위 크기에 배율을 곱함, 여백도 같은 비율
+- [x] 큰 PNG: 한 장(빠름, 메모리 많이)과 `--split`(느림, 메모리 적게) 중 사용자가 고름
+  - 한 장 모드는 메모리가 모자라면 그리기 전에 멈추고 `--split`을 안내
+  - `--split`: 띠 단위로 그려 조각 PNG(`이름[가로x세로].png`)에 바로 씀. 줄 단위 PNG 기록기(`PngWriter`)를 새로 작성. 16000px PNG를 64MB로(한 장은 약 1GB)
+  - `merge 이름.tiles`: 조각을 한 장으로, 한 줄씩 읽고 씀(`PngRows`). Java 이미지 크기 제한(한 변 약 46,000px)도 받지 않음
+  - [ ] 큰 이미지에서 합친 결과가 한 장과 아주 조금 다름(16000px에서 2억 픽셀 중 3,864개, 최대 7/255): 띠마다 좌표를 옮겨 생기는 안티에일리어싱 반올림 차이
+  - [ ] 분할 속도: 띠마다 도면 전체를 훑음. 도형 경계 상자를 기록해 두고 띠에 걸치지 않는 도형을 건너뛰면 빨라짐
+- [ ] 흰 배경에서 밝은 색(노랑, 청록 등)이 잘 안 보임: 흑백·인쇄용 색 옵션
+
 ## P0 — 판매 전에 반드시 (라이선스)
 
 - [x] **다른 구현에서 옮겨 온 코드를 ODA 스펙만 보고 다시 작성** (상용 라이선스를 따로 팔 권리를 확보하기 위해)
@@ -111,6 +136,11 @@
 - [x] 공개 API: `DwgDocument.objects(Class)`, `object(handle)`, `layerOf(entity)`. API 패키지의 package-info(나머지는 내부용이라고 밝힘), `Automatic-Module-Name: io.dwg`, Javadoc 오류 0, README 5줄 빠른 시작(`QuickStartTest`)
   - [ ] Javadoc 누락 경고(공개 메서드 설명 없음) 정리
 - [x] ~~Maven Central 배포~~ — 하지 않음(2026-11-26): jar를 직접 판매
+- [x] 버전 체계(2026-11-26): Semantic Versioning, 첫 버전 0.1.0 ([VERSIONING.md](VERSIONING.md), [CHANGELOG.md](CHANGELOG.md))
+  - 버전의 원본은 pom 하나. 빌드가 jar에 넣음(`io/dwg/version.properties`, 매니페스트). `--version`과 `io.dwg.api.Version`
+  - 변환이 실패하면 버그 보고에 붙일 버전 줄을 출력. README에 보고할 때 보낼 것 안내
+  - [ ] 0.1.0 출시: 커밋 뒤 `v0.1.0` 태그, 고객에게 줄 jar 보관, pom을 `0.1.1-SNAPSHOT`으로
+  - [ ] 버그 보고 받을 곳 정하기(메일 주소, 이슈 트래커 등). 정해지면 README와 `--version` 안내에 적음
 - [x] SVG, PDF 출력: `Renderer.renderSvg`, `renderPdf`. 외부 라이브러리 없이, PNG와 같은 그림(`VectorOutputTest`)
 
 ## P4 — 알리기
