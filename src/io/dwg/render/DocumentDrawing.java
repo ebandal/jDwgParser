@@ -327,8 +327,10 @@ public final class DocumentDrawing {
             e.arrowhead = s.isArrowheadOn();
             return e;
         }
-        if (o instanceof DwgInsert && !(o instanceof io.dwg.entities.concrete.DwgMinsert)) {
-            // MINSERT is an INSERT with a grid; the renderer does not draw it yet
+        if (o instanceof DwgInsert && !(o instanceof io.dwg.entities.concrete.DwgMinsert)
+                && !(o instanceof io.dwg.entities.concrete.DwgTable)) {
+            // MINSERT (an INSERT with a grid) and ACAD_TABLE (an INSERT of its "*T" block) are
+            // not drawn yet; the reference renderer does not draw them either
             DwgInsert s = (DwgInsert) o;
             Insert e = new Insert();
             e.insertion = xyz(s.insertionPoint());
