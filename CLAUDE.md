@@ -22,13 +22,16 @@ The library is split into 5 modules with strict layering (no upward dependencies
 dwg-core → dwg-format → dwg-sections → dwg-entities → dwg-api
 ```
 
-| Module | Spec file | Classes | Responsibility |
-|---|---|---|---|
-| `dwg-core` | `01_dwg-core.md` | 35 | Bit-level I/O, types, LZ77, CRC, exceptions |
-| `dwg-format` | `02_dwg-format.md` | 28 | Version-specific file structure handlers (R13–R2018) |
-| `dwg-sections` | `03_dwg-sections.md` | 38 | Section parsers (§9–§28) |
-| `dwg-entities` | `04_dwg-entities.md` | 82 | Pure domain model (no parsing logic) |
-| `dwg-api` + `dwg-test` | `05_dwg-api-and-test.md` | 40 | Public API, query builder, test infra, JMH benchmarks |
+| Module | Package | Responsibility |
+|---|---|---|
+| `dwg-core` | `io.dwg.core` | Bit-level I/O, types, LZ77, CRC, exceptions |
+| `dwg-format` | `io.dwg.format` | Version-specific file structure handlers (R13–R2018) |
+| `dwg-sections` | `io.dwg.sections` | Section parsers (§9–§28) |
+| `dwg-entities` | `io.dwg.entities` | Pure domain model (no parsing logic) |
+| `dwg-api` | `io.dwg.api`, `io.dwg.cli`, `io.dwg.render` | Public API, the conversion command, rendering |
+
+(The design documents 00–05 written before the implementation were removed on 2026-11-26: they
+no longer matched the code. The code and its Javadoc are the reference.)
 
 ## Implementation Phases
 
@@ -89,7 +92,8 @@ When implementation details are unclear, follow this order:
      (sections byte-identical, objects ending at their stated bit size, versions rendering alike)
   3. Keep the variant the files support, and say in the comment that the samples settled it
 - **If no sample can settle it:** keep the most plausible reading, mark it "not yet checked against a
-  file" in the comment, and add it to `TODO.md`
+  file" in the comment, and add it to the to-do list (kept outside the repository, in
+  `jDwgParser-records/TODO.md`)
 
 ### 3️⃣ **Published Literature (for general algorithms)**
 - Textbooks and papers may be used for algorithms that are not DWG-specific

@@ -28,7 +28,7 @@ public class R13SectionLocator {
 
     /**
      * Writes the record. The record number is written as a raw long, which matches the record
-     * size {@code DwgWriter} assumes but not §3.2.6 (raw byte); see TODO.md.
+     * size {@code DwgWriter} assumes but not §3.2.6 (raw byte); to be settled when writing is finished.
      */
     public void write(BitOutput output) {
         output.writeRawLong(recordNumber);

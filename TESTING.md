@@ -95,8 +95,7 @@ run_test.bat path\to\sample.dwg
 #### 직접 Java 실행:
 ```bash
 mvn compile
-java -cp target/classes:target/dependency/* \
-  io.dwg.test.DwgParsingStageTest path/to/sample.dwg
+java -cp target/classes io.dwg.test.DwgParsingStageTest path/to/sample.dwg
 ```
 
 ### 3. 테스트 출력 해석

@@ -168,7 +168,7 @@ public class BitStreamReader {
      * <p>The specification says the count is a 3B (§2.1), but a 3B can only take the values
      * 0, 2, 6 and 7, which cannot describe 1, 3, 4 or 5 bytes. The count is therefore read as a
      * plain 3-bit number (0–7). Not yet checked against a file: none of the samples has a value
-     * read with this method (see TODO.md).
+     * read with this method.
      */
     public long readBitLongLong() {
         return littleEndian(input.readBits(3));

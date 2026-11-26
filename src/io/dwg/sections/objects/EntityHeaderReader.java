@@ -163,7 +163,7 @@ public class EntityHeaderReader {
     /**
      * ENC color of R2004+ (§2.11): a BS whose high byte holds flags. 0x20: a transparency BL
      * follows; 0x80: an RGB value (BL) follows; 0x40: the color has an AcDbColor handle.
-     * Not in the specification, and not yet checked against a file (see TODO.md): the
+     * Not in the specification, and not yet checked against a file: the
      * transparency is read before the RGB value, there is no RGB value when 0x40 is set, and
      * R2004–R2007 files are read as having the color handle in the data stream.
      */
