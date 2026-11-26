@@ -16,12 +16,11 @@
     <description>Reads AutoCAD DWG files (R13 to R2018) in pure Java, after the Open Design Specification for .dwg files</description>
     <url>https://github.com/ebandal/jDwgParser</url>
 
-    <!-- The license is that of LICENSE; change both together when the licensing (AGPLv3 +
-         commercial) is decided. -->
+    <!-- The license is that of LICENSE (and LICENSING.md); change them together. -->
     <licenses>
         <license>
-            <name>GNU General Public License v3.0</name>
-            <url>https://www.gnu.org/licenses/gpl-3.0.txt</url>
+            <name>PolyForm Noncommercial License 1.0.0 (commercial use needs a commercial license)</name>
+            <url>https://polyformproject.org/licenses/noncommercial/1.0.0</url>
             <distribution>repo</distribution>
         </license>
     </licenses>
@@ -100,6 +99,14 @@
             <resource>
                 <directory>resources</directory>
                 <filtering>true</filtering>
+            </resource>
+            <!-- the license goes with every copy of the jar (its Notices section) -->
+            <resource>
+                <directory>${project.basedir}</directory>
+                <includes>
+                    <include>LICENSE</include>
+                </includes>
+                <targetPath>META-INF</targetPath>
             </resource>
         </resources>
 

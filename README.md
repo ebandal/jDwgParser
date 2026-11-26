@@ -4,7 +4,153 @@ Java로 구현한 AutoCAD DWG 파일 파서 라이브러리.
 
 Open Design Specification for .dwg files v5.4.1을 기반으로 R13부터 R2018까지의 DWG 파일을 읽습니다. 외부 의존성이 없는 순수 Java 라이브러리이며 Java 11 이상에서 동작합니다. 쓰기(`DwgWriter`)는 아직 개발 중입니다.
 
-## 빠른 시작
+## 변환 예
+
+아래 그림은 공개된 DWG 도면을 jDwgParser의 변환 명령으로 PNG로 바꾼 결과입니다. 손대지 않은 그대로입니다.
+
+```sh
+java -jar jdwgparser-0.1.0.jar drawing.dwg drawing.png --size 1600
+```
+
+<table>
+<tr>
+<td width="47%"><img src="doc/images/bulacan-three-bedroom-house-floor-plan.png" alt="방 세 개 주택 평면도: 벽, 문, 가구, 치수, 문자, 해치"></td>
+<td><img src="doc/images/overhead-travelling-crane-in-shed.png" alt="창고의 천장 크레인: 트러스, 채움 영역, 해치"></td>
+</tr>
+<tr>
+<td>주택 평면도: 치수, 문자, 해치, 블록(가구·위생기구)<br>AutoCAD 2018 형식 · <a href="https://blocks.draftsperson.net/download/bulacan-three-bedroom-house-floor-plan/">원본 도면</a></td>
+<td>천장 크레인 창고: 트러스, 채움 영역, 해치<br>AutoCAD 2018 형식 · <a href="https://blocks.draftsperson.net/download/overhead-travelling-crane-in-shed/">원본 도면</a></td>
+</tr>
+<tr>
+<td colspan="2"><img src="doc/images/pedestrian-suspension-bridge-over-river.png" alt="보행자 현수교의 입면도와 배치도"></td>
+</tr>
+<tr>
+<td colspan="2">보행자 현수교 입면도와 배치도: 나무 블록, 치수, 선 종류<br>AutoCAD 2000 형식 · <a href="https://blocks.draftsperson.net/download/pedestrian-suspension-bridge-over-river/">원본 도면</a></td>
+</tr>
+</table>
+
+도면 출처: [blocks.draftsperson.net](https://blocks.draftsperson.net/) ([이용 조건](https://blocks.draftsperson.net/license/)). DWG 파일은 이 저장소에 포함하지 않으니, 원본 도면 링크에서 받으세요.
+
+## 명령 한 줄로 변환
+
+DWG 파일을 PNG, SVG, PDF로 바꿉니다. Java 11 이상만 있으면 됩니다.
+
+```
+java -jar jdwgparser.jar <입력.dwg | 입력폴더> [출력] [옵션]
+java -jar jdwgparser.jar merge <이름.tiles> [출력.png]
+```
+
+### 자주 쓰는 예
+
+```sh
+java -jar jdwgparser.jar drawing.dwg                          # drawing.png (도면의 용지 크기, 300dpi)
+java -jar jdwgparser.jar drawing.dwg out.pdf                  # 형식은 출력 확장자로 (png, svg, pdf)
+java -jar jdwgparser.jar drawing.dwg --scale 1/4              # 기본 크기의 1/4로 축소
+java -jar jdwgparser.jar drawing.dwg --dpi 150                # 용지 크기, 150dpi
+java -jar jdwgparser.jar drawing.dwg --size 4000              # 긴 변 4000픽셀
+java -jar jdwgparser.jar drawing.dwg --background white       # 흰 바탕에 검은 선
+java -jar jdwgparser.jar drawings/ images/                    # 폴더 안의 모든 .dwg (하위 폴더 포함)
+java -jar jdwgparser.jar drawing.dwg --px-per-unit 1 --split  # 원본 크기(1단위 = 1픽셀)를 조각으로
+java -jar jdwgparser.jar merge drawing.tiles                  # 조각을 한 장의 drawing.png로
+```
+
+### 출력 위치
+
+| 출력 인자 | 결과 |
+|---|---|
+| 생략 | 입력 파일 옆에 같은 이름의 `.png`. 예: `drawing.dwg` → `drawing.png` |
+| 파일 (`out.png`, `out.svg`, `out.pdf`) | 그 파일. 형식은 확장자로 정합니다 |
+| 폴더 | 그 폴더 안에 같은 이름으로. 입력이 폴더면 하위 폴더 구조를 그대로 둡니다 |
+
+`--format png|svg|pdf`로 형식을 직접 정할 수도 있습니다.
+
+### 크기
+
+먼저 크기 기준을 하나 정합니다. 아무것도 주지 않으면 `--dpi 300`입니다.
+
+| 옵션 | 뜻 |
+|---|---|
+| `--dpi N` | 도면(모형 공간 배치)에 저장된 용지 크기에 N dpi로 맞춥니다. 용지 정보가 없는 도면에 이 옵션을 주면 오류입니다 |
+| `--px-per-unit N` | 도면 1단위당 N픽셀. `1`이면 도면의 원래 크기(1단위 = 1픽셀)입니다 |
+| `--size N` | 긴 변을 N픽셀로 맞춥니다 |
+
+용지 정보가 없는 도면은 기본값이 `--px-per-unit 1`입니다.
+
+그다음 `--scale F`로 축소(또는 확대)할 수 있습니다. 위에서 정한 크기에 F를 곱합니다.
+- **값:** `1/2`, `1/4`, `1/8`, `1/16`처럼 분수로, 또는 `0.3`처럼 소수로 씁니다. 0보다 크고 64 이하입니다.
+- **여백:** 같은 비율로 줄어듭니다.
+- **메모리:** PNG 메모리는 F의 제곱으로 줄어서, 1/4이면 1/16만 씁니다.
+
+예를 들어 A4 용지 도면은 기본이 3508×2145px입니다. `--scale 1/4`이면 877×537px, `--scale 1/16`이면 219×134px입니다.
+
+### 큰 PNG: 한 장 또는 분할
+
+| 방식 | 장점 | 단점 |
+|---|---|---|
+| 한 장 (기본) | 빠름 | 이미지 전체(가로 × 세로 × 4바이트)가 메모리에 있어야 함 |
+| 분할 (`--split`) | 이미지 크기와 상관없이 메모리가 적음 | 띠마다 도면을 다시 훑으므로 띠가 많으면 느림 |
+
+16000×12807px PNG를 한 장으로 만들면 힙이 약 1GB 필요합니다. `--split`은 64MB, `merge`는 32MB면 됩니다.
+
+한 장 모드에서 메모리가 모자랄 것 같으면, 그리기 전에 멈추고 `--split`이나 `--scale`을 쓰라고 알립니다. 힙을 늘리려면 `java -Xmx2g -jar ...`처럼 실행합니다.
+
+**분할(`--split`)**
+- `--tile N`(기본 2048)픽셀 조각으로 나눠 저장합니다. 마지막 줄과 칸의 조각은 더 작을 수 있습니다.
+- 조각 이름은 `이름[가로번호x세로번호].png`이고 번호는 1부터 셉니다. 예: `drawing[1x1].png`, `drawing[2x3].png`(왼쪽에서 두 번째, 위에서 세 번째).
+- 조각과 함께 `이름.tiles` 파일이 생깁니다. 전체 크기와 조각 수가 적혀 있습니다.
+
+**합치기(`merge`)**
+- `merge 이름.tiles [출력.png]`로 조각을 한 장의 PNG로 합칩니다. 출력을 생략하면 `이름.png`입니다.
+- 한 줄씩 읽고 써서 메모리가 적게 들고, Java 이미지 크기 제한(한 변 약 46,000px)도 받지 않습니다.
+
+SVG와 PDF는 크기와 상관없이 메모리가 같으므로 분할이 필요 없습니다.
+
+### 그 밖의 옵션
+
+| 옵션 | 뜻 |
+|---|---|
+| `--background black\|white` | 바탕색. 기본은 검정이고, `white`면 흰 바탕에 검은 선입니다 |
+| `--max-mb N` | 파일 하나를 읽을 때 쓸 수 있는 메모리 상한(MB) |
+| `-h`, `--help` | 사용법 |
+| `--version` | 버전 한 줄(버전, 빌드 시각, Java, OS) |
+
+### 결과와 종료 코드
+
+파일마다 한 줄로 결과를 알립니다.
+
+```
+ok      drawing.dwg -> drawing.png (877x537 px, paper 210 x 297 mm at 300 dpi x 1/4, 1327 ms)
+failed  broken.dwg: ...
+```
+
+| 종료 코드 | 뜻 |
+|---|---|
+| 0 | 모두 성공 |
+| 1 | 일부 또는 전부 실패 |
+| 2 | 인자 오류 |
+
+### 메모리
+
+변환은 객체를 읽는 대로 그림 모델로 넘기고, 문서 전체는 들고 있지 않습니다. 기본 크기 기준으로 14MB 도면도 `-Xmx111m`으로 변환됩니다. 자세한 측정값은 [RELIABILITY.md](RELIABILITY.md)에 있습니다.
+
+## 버전과 버그 보고
+
+지금 버전은 **0.1.0**입니다. 버전 규칙(`주.부.수`)과 출시 절차는 [VERSIONING.md](VERSIONING.md)에, 버전별 변경은 [CHANGELOG.md](CHANGELOG.md)에 있습니다.
+
+```sh
+java -jar jdwgparser-0.1.0.jar --version
+# jDwgParser 0.1.0 (built 2026-11-26 08:18 UTC; Java 21.0.10; Windows 11 10.0 aarch64)
+```
+
+Java API에서는 `io.dwg.api.Version.describe()`가 같은 줄을 돌려줍니다.
+
+버그를 알려 주실 때는 다음을 보내 주세요.
+1. 위의 버전 줄. 변환이 실패하면 명령이 마지막에 이 줄을 출력합니다.
+2. 실행한 명령 전체(옵션 포함)와 출력된 `failed ...` 메시지
+3. 가능하면 도면 파일. 어렵다면 DWG 버전과 파일 크기
+4. 기대한 결과와 실제 결과
+
+## 빠른 시작 (Java API)
 
 ```java
 DwgDocument doc = DwgReader.defaultReader().open(Paths.get("drawing.dwg"));
@@ -145,10 +291,27 @@ dwg-core → dwg-format → dwg-sections → dwg-entities → dwg-api
 ### 빌드
 
 ```bash
-mvn clean compile
+mvn clean package               # 테스트를 돌린 뒤 jar를 만듭니다
+mvn clean package -DskipTests   # 테스트 없이 jar만
 ```
 
-### 테스트 (단계별 파싱 테스트)
+- **jar:** `target/jdwgparser-0.1.0.jar`가 생깁니다. 실행 클래스가 들어 있어 위의 [명령 한 줄로 변환](#명령-한-줄로-변환)에 그대로 씁니다. 실행에 필요한 다른 라이브러리는 없습니다.
+  ```bash
+  java -jar target/jdwgparser-0.1.0.jar drawing.dwg
+  ```
+- **다른 프로젝트에서 쓰기:** 이 jar를 클래스패스에 넣으면 됩니다. 모듈 이름은 `io.dwg`입니다.
+- **컴파일만:** `mvn clean compile`이면 `target/classes`에 클래스 파일만 만듭니다.
+
+### 테스트
+
+```bash
+mvn test
+mvn test -Ddwg.samples=/path/to/samples   # 샘플 폴더가 다른 곳에 있을 때 (또는 환경 변수 DWG_SAMPLES)
+```
+
+테스트는 샘플 도면을 씁니다. 기본으로 작업 폴더의 `samples`를 찾고, 없으면 샘플이 필요한 테스트는 건너뜁니다.
+
+### 단계별 파싱 테스트
 
 ```bash
 # Windows
@@ -159,8 +322,7 @@ run_test.bat path/to/sample.dwg
 
 # 직접 실행
 mvn compile
-java -cp target/classes:target/dependency/* \
-  io.dwg.test.DwgParsingStageTest path/to/sample.dwg
+java -cp target/classes io.dwg.test.DwgParsingStageTest path/to/sample.dwg
 ```
 
 자세한 테스트 가이드는 [TESTING.md](TESTING.md) 참조.
