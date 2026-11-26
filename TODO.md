@@ -11,8 +11,8 @@
   - [x] `core/util/ReedSolomonDecoder` — R2007 RS 디코딩 (스펙 §5.13). 인터리브 해제만 함. `ReedSolomon251Decoder`, `ReedSolomonDecoderApache`와 이를 쓰던 디버그 클래스 3개 삭제. R2007 섹션 1,244개의 해시가 변경 전과 동일
   - [x] `format/r2007/R2007SystemPageReader` (스펙 §5.3)
   - [x] `format/r2007/R2007SectionMapParser` (스펙 §5.2). 페이지 수 상한 1,000을 없애고 남은 데이터 길이로 검사 (큰 파일에서 섹션이 잘리던 문제 방지)
-  - [ ] R2007: 스펙 §5.2의 "0으로만 된 페이지는 파일에 쓰지 않는다" 규칙 처리 (페이지 데이터 오프셋으로 빈 페이지 채우기). 지금은 페이지를 이어 붙이기만 함
-  - [ ] (선택) RS 오류 정정: 교재(Lin & Costello, *Error Control Coding*)와 Berlekamp-Massey·Chien·Forney 논문을 보고 직접 구현. 샘플 R2007 데이터 블록 303,887개에서 오류가 있는 블록은 0개였으므로 급하지 않음
+  - [x] R2007: 페이지를 섹션 맵의 오프셋에 원래 크기만큼 넣음(§5.5). 파일에 없는 페이지(§5.2)는 0으로 남음. 압축하지 않은 페이지를 버리거나 길게 붙이던 버그도 함께 고침(아래 villa_1)
+  - [ ] (선택) RS 오류 정정: 교재(Lin & Costello, *Error Control Coding*)와 Berlekamp-Massey·Chien·Forney 논문을 보고 직접 구현. 샘플 R2007 데이터 블록 303,887개에서 오류가 있는 블록은 0개였으므로 급하지 않음. 데이터 페이지의 매개변수는 샘플로 확인함: GF(256), p(x) = 1 + x² + x³ + x⁴ + x⁸, 근 α¹~α⁴, 부호어의 첫 바이트가 x⁰의 계수(신드롬 계산으로 확인, `jDwgParser-records/tools/rs_syndromes.py`)
   - [x] `core/io/BitStreamReader`: 스펙 2장을 보고 다시 작성. 쓰지 않는 `readBitDoubleWithDefault` 삭제
   - [ ] BLL(§2.4) 길이 읽는 방식을 실제 파일로 확인: 스펙은 3B라고 하지만 3B로는 1·3·4·5바이트를 표현할 수 없어 3비트 숫자로 읽고 있음. 샘플에는 이 값을 쓰는 엔티티(R2010+ 미리보기)가 없음
   - [x] 파일 구조 처리기: R13~R2000 헤더(`R13FileHeaderReader`, §3.2), 섹션 로케이터(§3.2.6), R2004 헤더와 복호화(§4.1), R2007 헤더(§5.2)를 스펙을 보고 다시 작성. 중복이던 `R2007SectionMap`, 샘플에서 쓰이지 않던 R2004 페이지 순차 탐색 대체 경로 삭제
@@ -46,7 +46,11 @@
   - EED·XRECORD 그룹 1003/1005 핸들: 샘플에 없음
   - WIPEOUT은 IMAGE와 같은 구성. HATCH R2010+ 스플라인 접선은 맞춤점이 있을 때만. TOLERANCE R13~R14 알 수 없는 short는 BS, 텍스트는 TV. FIELD 값 문자열 길이는 BL
   - TABLESTYLE: 옛 형식의 색은 TC, R2010+ 셀 스타일 목록의 각 항목 앞에 BL 하나. CELLSTYLEMAP은 스펙대로
+  - ACAD_TABLE: R2010+ 형식에도 INSERT 필드와 INSERT 핸들이 앞에 있음. 셀 내용의 형식 재정의 앞에 BL 플래그. 값(§20.4.99)의 문자열은 R2007+에서 TV가 아니라 BL 바이트 수 + UTF-16LE 바이트. R2007 셀에는 텍스트 TV가 없음(텍스트는 값에)
   - MULTILEADER: 끊김 정보는 개수만큼 반복, 스타일 블록 핸들은 블록 내용일 때만, 내장 컨텍스트에 AcDbObjectContextData 필드 없음
+  - ACIS R2013+: 모델은 AcDs 섹션에 엔티티 핸들로 있고 empty 비트가 1. 그 뒤 비트 하나 다음에 바로 와이어프레임 점(점 유무 비트 없음). 끝에 비트, GUID(BL, BS, BS, 8 RC), BL. R13: 와이어프레임 뒤 개수 하나(실루엣 수로 정함)가 없음
+  - AcDs(24장): 데이터 색인의 로컬 오프셋은 세그먼트 머리말(48바이트) 뒤부터. R2018 SAB는 "ASM BinaryFile4"로 시작. LAYOUT·VIEW의 PNG 미리보기도 들어 있음
+  - BLOCK_HEADER: R2004+ 소유 객체 수는 xref·overlay 블록에는 없음 (스펙은 항상)
 - [x] 쓰지 않는 예전 패키지 삭제: `src/decode`, `src/structure`, `src/run`, `src/debug` (207개 파일)와 이를 쓰던 `src/test`의 예전 프로그램 4개
 - [x] 문서 정리: `CLAUDE.md`의 조사 원칙을 "스펙 → 샘플 실험 → 일반 알고리즘은 문헌"으로 바꾸고 다른 구현의 소스는 보지 않도록 함. `README.md`, `RELEASE_NOTES.md`, `03_dwg-sections.md`는 스펙 절과 측정값을 출처로. 루트의 작업 기록 문서 23개 삭제
 - [x] 다시 작성하는 과정을 기록으로 남기기: 비공개 기록부 `D:\workspace\jDwgParser-records\cleanroom-log.md`
@@ -63,41 +67,59 @@
 - [x] Classes 섹션(10장, §5.8): 모든 클래스가 엔티티로 표시되던 버그, R2004+ 머리말·추가 필드, R2007+ 문자열 스트림. 샘플 전체에서 클래스 번호가 500부터 차례대로
 - [x] DICTIONARY, XRECORD(데이터를 그룹 코드와 값으로), DICTIONARYVAR, SCALE, GROUP, LAYOUT, VIEWPORT
 - [x] 엔티티: RAY, XLINE, DIMENSION 7종, MTEXT(배경, R2018 열), INSERT·MINSERT(ATTRIB 핸들), 옛 POLYLINE 4종(정점 핸들), ATTDEF, VERTEX_MESH
-- [x] 3DSOLID/REGION/BODY: ACIS 모델을 SAT 텍스트나 SAB 바이트로 보관, 와이어프레임 읽기. R14~R2010 샘플 전부 정확
-  - [ ] R2013+: 모델이 데이터 저장 섹션(AcDs)에 있는 경우. 그 섹션 읽기가 필요
-  - [ ] R13 `example_r13.dwg`의 ACIS 버전 0인 객체 3개
+- [x] 3DSOLID/REGION/BODY: ACIS 모델을 SAT 텍스트나 SAB 바이트로 보관, 와이어프레임 읽기. R13~R2018 샘플 전부 정확
+  - [x] R2013+: 데이터 저장 섹션(AcDs, 24장) 읽기(`DataStorageSectionParser`, `DwgDocument.dataStorage()`), 모델을 엔티티에 연결. GUID(`guid()`)
+  - [x] R13 `example_r13.dwg`: SAT가 R14 사본과 같음
+  - [ ] AcDs 블롭 참조(0x40000바이트 넘는 모델): 스펙대로 작성했지만 샘플에 없음
+  - [ ] R13에서 빠진 개수가 와이어 수인지 실루엣 수인지 (샘플은 둘 다 0)
 - [x] 알 수 없는 클래스: 원래부터 `DwgGenericObject`로 반환. 이제 클래스 이름, 엔티티 여부, 객체 바이트도 보관
 - [x] SHAPE, TOLERANCE, MLINE, IMAGE, WIPEOUT, HATCH(R2010+ 스플라인), OLE2FRAME, FIELD, TABLESTYLE, CELLSTYLEMAP
 - [x] MULTILEADER 리더 추가 (컨텍스트, 리더 루트·선, 텍스트·블록 내용). 샘플 15개 모두 정확
   - [ ] R2010+: 화살촉 목록과 블록 레이블 목록 중 어느 것이 있는지 (샘플은 둘 다 비어 있어 판정 못 함)
 - [x] 스펙에 없는 타입(VISUALSTYLE, MATERIAL, PERSSUBENTMANAGER, SURFACE, MESH, UNDERLAY): 지어낸 필드를 읽던 리더 대신 공통 데이터만 읽고 바이트를 보관(`rawData()`)
-- [ ] 아직 맞지 않는 것 (`ReadIssue`, 샘플 전체): ACAD_TABLE 8개(스펙 §20.4.96~98 큼), gh44의 xref BLOCK_HEADER 2개(INSERT 개수 앞에서 어긋남), ACIS 6개(R13 버전 0, R2013+ AcDs)
-- [ ] Header 섹션(9장) 리더가 스펙 순서를 따르지 않음. 다시 작성 필요 (코드페이지, 범위, 단위 등)
-- [ ] R2007 `AC1021/villa_1.dwg`, `bmw_1.dwg`: 객체 대부분이 잘못 읽힘(타입이 무작위, EED 애플리케이션 핸들이 APPID가 아님). 섹션이나 객체 맵 단계 문제로 보임
-- [ ] R2007 `samples/2007/Constraints.dwg`: 섹션 맵에 AcDb:Classes가 없음
-- [ ] 한글: CP949 텍스트, MTEXT 제어코드, SHX/빅폰트 확인
+- [x] ACAD_TABLE: R2007까지의 형식(셀, 재정의)과 R2010+ 형식(TABLECONTENT). 샘플 8개 모두 정확, 버전별 셀 텍스트 같음
+- [x] ACAD_PROXY_ENTITY(§20.4.90): 지어낸 필드를 읽던 리더를 스펙대로 다시 작성(클래스 ID, 형식, 데이터 비트, 객체 핸들). villa_2의 1,463개 모두 클래스 ID가 Classes에 있고 핸들이 모두 실제 객체를 가리킴
+- [x] 남은 `ReadIssue` 정리: gh44의 xref BLOCK_HEADER 2개, ACIS 6개, villa_2 프록시 1,463개
+- [x] 읽기 점검에 R2007+ 문자열 스트림 추가: 끝을 넘으면 실패하고, 끝까지 읽어야 함. 이것으로 R2007 표가 셀마다 문자열을 하나 더 읽던 것을 찾음(R2007 셀에는 텍스트 TV가 없음). 이제 샘플 전체에서 `ReadIssue` 0개
+- [x] Header 섹션(9장) 리더를 스펙 목록대로 다시 작성(`HeaderVariableTable`). CRC(§2.14.1)와 끝 표지 확인, R2007+는 세 스트림. 샘플 253개 중 251개가 모든 스트림 끝까지 정확, 헤더 핸들 10,167개가 모두 실제 객체
+  - 스펙과 다른 곳: R2007+ 비트 크기는 모든 R2007+에 있음, R2010+ 크기 뒤 4바이트, MENUNAME은 모든 버전, 끝의 알 수 없는 short 4개는 R13에도 있고 R2007+에서는 핸들 뒤, R2007·R2010 끝에 0xAF 한 바이트
+  - [ ] `example_r13.dwg`는 12비트, `2000/PolyLine2D.dwg`는 1바이트가 더 남음 (판정할 샘플 부족)
+  - [ ] `CrcCalculator.Crc8Calculator`는 스펙 §2.14.1과 다른 계산임(새 `Crc16`이 스펙대로). 쓰는 곳 확인 후 정리
+  - [ ] `HeaderSectionWriter`는 예전 순서로 씀 (쓰기 작업 때 표를 써서 다시 작성)
+- [x] R2007 `AC1021/villa_1.dwg`, `bmw_1.dwg`, `mercedes_1.dwg`: 압축하지 않은 페이지가 RS 블록 단위로 길게 붙어 그 뒤 데이터가 228바이트 밀림. 작은 섹션(SummaryInfo 등)은 R2007 파일 94개에서 0으로만 채워져 있었음. 객체 크기가 섹션을 넘으면 건너뜀(villa_1의 메모리 부족)
+- [x] R2007 `samples/2007/Constraints.dwg`: Classes 페이지의 LZ77 입력에 압축 크기 뒤의 채움 바이트가 섞여 실패했고, 그 실패가 Classes·AuxHeader·Header를 모두 버리게 했음. 함께 찾은 것: encoding 1 섹션(Preview 등)은 RS 부호어를 인터리브하지 않음(R2007 Preview 98개가 모두 뒤섞여 있었음)
+- [ ] 한글: CP949 텍스트, MTEXT 제어코드, SHX/빅폰트 확인 — 보류(2026-11-26): 한글 도면 샘플을 구한 뒤 진행
+  - 샘플에 한글 도면이 없음(코드페이지 949 파일 0개, 한글 문자가 있는 텍스트 0개). 한글 도면 샘플이 필요함
+  - 텍스트 해석 자체는 맞음: R2007+ UTF-16, R2004 이전 코드페이지 29(windows-1251, 러시아어)와 30(windows-1252, °·Ø)이 샘플에서 바르게 나옴
+  - [ ] 코드페이지 번호표(`DwgStringDecoder.charsetForDwgCodePage`, 949는 25·40번)는 2026-11-13 커밋에서 들어왔고 출처 기록이 없음. 스펙에는 번호표가 없음. 샘플로 확인된 것은 29·30번뿐. 출처를 정하거나 한글 샘플로 확인 필요
 
 ## P2 — 신뢰성 수치
 
-- [ ] 실제 도면 수백~수천 개로 테스트하고 성공률 공개
-- [ ] 퍼징: 예외, 무한 루프, 메모리 폭주가 없어야 함. 읽기 타임아웃과 메모리 상한 옵션 제공
-- [ ] 벤치마크 (JMH): 속도와 메모리
-- [ ] `src/io/dwg/test`의 디버그용 main 클래스를 정리하고 JUnit 테스트로 옮기기 (`DwgRoundTripTest`에는 assert가 없음)
+- [x] 성공률 측정과 공개: [RELIABILITY.md](RELIABILITY.md). R13~R2018 샘플 233개 모두 열림, 객체 2,244,417개 중 문제 0 (`io.dwg.tools.SuccessReport`)
+  - [ ] 샘플을 수천 개로 늘리기 (지금 233개). 특히 한글 도면과 R2010·R2018 큰 도면
+- [x] 퍼징(`io.dwg.tools.ReadFuzz`, 회귀는 `RobustnessTest`): 메모리 부족 7건과 내부 예외를 고침. 6,000회에서 문서 또는 `DwgReadException`만 나옴
+- [x] 읽기 상한: `DwgReader.maxBytes(long)`(기본 최대 힙의 절반), `timeout(Duration)`. `open()`은 `DwgReadException` 하나만 던짐
+- [x] 벤치마크(JMH, `io.dwg.bench.ReadBenchmark`): 약 25 MB/s, 결과는 RELIABILITY.md
+  - [x] 메모리: 문서가 붙잡는 힙을 파일 크기의 약 14배에서 8배로 줄임(14MB 도면 198MB → 110MB), 속도는 그대로. 빈 목록을 만들지 않음, 핸들 참조·색 공유, 핸들 맵·객체 맵을 기본형 배열로, 기본 돌출 방향 공유
+    - [ ] 더 줄일 곳: 좌표 Point3D(14MB 도면에서 27MB), 공개 API의 `List<Double>`(SPLINE 매듭 등, API를 바꿔야 함)
+- [x] `src/io/dwg/test`의 디버그용 main 클래스 79개 삭제: 모두 assert 없는 main이라 옮길 테스트가 없었음. `DwgParsingStageTest`(README·TESTING.md에 사용법이 있음)만 남김
 
 ## P3 — 도입하기 쉽게
 
-- [ ] 루트 정리: `test_*.java`, `Analyze*.java` 같은 작업용 파일 (작업 기록 문서는 정리함)
-- [ ] Java 11(가능하면 8)로 낮추기 검토 (지금은 16)
-- [ ] 공개 API 정리, 내부 패키지 숨기기, 5줄 빠른 시작 예제, Javadoc
-- [ ] Maven Central 배포
-- [ ] SVG, PDF 출력 (렌더러에 추가)
+- [x] 루트 정리: 루트의 작업용 파일 32개(Java 29, 결과 파일 2, 스크립트 1), `src`의 기본 패키지 파일 2개와 `src/test`(16개)·`src/target` 삭제 (모두 라이브러리 jar에 들어가고 있었음)
+- [x] Java 11로 낮춤 (record 12개를 같은 API의 클래스로, switch 식·instanceof 패턴·텍스트 블록 제거). Java 8은 `var`·`List.of`·Java 11 API 때문에 하지 않음
+- [x] 공개 API: `DwgDocument.objects(Class)`, `object(handle)`, `layerOf(entity)`. API 패키지의 package-info(나머지는 내부용이라고 밝힘), `Automatic-Module-Name: io.dwg`, Javadoc 오류 0, README 5줄 빠른 시작(`QuickStartTest`)
+  - [ ] Javadoc 누락 경고(공개 메서드 설명 없음) 정리
+- [x] ~~Maven Central 배포~~ — 하지 않음(2026-11-26): jar를 직접 판매
+- [x] SVG, PDF 출력: `Renderer.renderSvg`, `renderPdf`. 외부 라이브러리 없이, PNG와 같은 그림(`VectorOutputTest`)
 
 ## P4 — 알리기
 
-- [ ] 웹 데모: DWG를 올리면 렌더링하고 텍스트를 추출해 보여주기
-- [ ] Apache Tika 파서 플러그인
-- [ ] Spring Boot 예제 (업로드 → 썸네일 → 색인)
-- [ ] 잠재 고객 3~5명 인터뷰 (문서관리, 건설, 공공 SI)
+- [ ] 웹 데모: DWG를 올리면 렌더링하고 텍스트를 추출해 보여주기 — 보류(2026-11-26)
+- [x] Apache Tika 파서 플러그인: `examples/tika-parser`. 텍스트(문단)와 메타데이터(버전, 객체 수, 문제 수). `AutoDetectParser`가 서비스 등록으로 사용
+  - 바탕: `DwgDocument.texts()`(TEXT, ATTRIB, MTEXT, 표 셀, 다중 지시선), `PlainText`(서식 코드 제거). 버전별 사본에서 같은 텍스트
+- [ ] Spring Boot 예제 (업로드 → 썸네일 → 색인) — 보류(2026-11-26)
+- [ ] 잠재 고객 3~5명 인터뷰 (문서관리, 건설, 공공 SI) — 질문지·대상·판단 기준: `jDwgParser-records/business/interview-guide.md`
 - 보류: LibreOffice 확장. 사용자가 무료로 쓰려는 층이라 수익으로 이어지지 않음
 
 ## 나중에 — 쓰기 (`DwgWriter`)
@@ -114,4 +136,4 @@
 
 ## 렌더링에서 아직 안 되는 것
 
-3DSOLID/REGION, 폴리곤 메시, MINSERT, MULTILEADER, ATTDEF, VIEWPORT, 이미지, 선종류, 선 굵기, 폴리라인 폭
+3DSOLID/REGION, 폴리곤 메시, MINSERT, MULTILEADER, ACAD_TABLE(익명 블록 *T를 INSERT로 그리면 됨, 기준 렌더러도 함께 고쳐야 함), ATTDEF, VIEWPORT, 이미지, 선종류, 선 굵기, 폴리라인 폭
