@@ -41,8 +41,9 @@ jDwgParser의 버전은 [Semantic Versioning 2.0.0](https://semver.org/lang/ko/)
 1. **CHANGELOG.md 정리:** "다음 버전" 절의 제목을 출시할 버전과 날짜로 바꿉니다. 바뀐 사용법이 있으면 맨 앞에 둡니다.
 2. **pom 버전:** `pom.xml`의 `<version>`에서 `-SNAPSHOT`을 뗍니다. `examples/`의 의존성 버전도 같이 맞춥니다.
 3. **빌드와 확인:** `mvn clean package`로 테스트를 통과시키고, `java -jar target/jdwgparser-X.Y.Z.jar --version`이 그 버전을 출력하는지 봅니다.
+   - **체크섬:** `cd target && sha256sum jdwgparser-X.Y.Z.jar > jdwgparser-X.Y.Z.jar.sha256`으로 만듭니다. 이 jar와 `.sha256` 파일을 함께 올리고 보관합니다.
 4. **커밋과 태그:** 커밋하고 `vX.Y.Z` 태그를 붙입니다(예: `git tag -a v0.1.0 -m "jDwgParser 0.1.0"`). 출시본의 소스는 이 태그로 찾습니다.
-5. **jar 보관:** 고객에게 준 jar를 버전별로 보관합니다. 버그 보고가 오면 같은 jar로 재현합니다.
+5. **배포와 보관:** jar와 `.sha256`을 GitHub Releases의 `vX.Y.Z`에 올립니다. 고객에게 준 jar는 버전별로 보관해 두었다가, 버그 보고가 오면 같은 jar로 재현합니다.
 6. **다음 개발 버전:** pom을 다음 버전 `-SNAPSHOT`으로 바꾸고 CHANGELOG에 빈 "다음 버전" 절을 만듭니다.
 
 ## 버그 보고에 받을 것

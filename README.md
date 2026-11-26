@@ -1,8 +1,13 @@
 # jDwgParser
 
-Java로 구현한 AutoCAD DWG 파일 파서 라이브러리.
+**한눈에 보기**
+- **무엇:** AutoCAD DWG 도면(R13~R2018)을 읽어 PNG, SVG, PDF로 바꾸는 순수 Java 도구이자 라이브러리입니다. AutoCAD가 필요 없습니다.
+- **실행 환경:** Java 11 이상이면 Windows, Linux, macOS 어디서나 돕니다. 외부 의존성은 없습니다.
+- **명령 한 줄:** `java -jar jdwgparser-0.1.0.jar drawing.dwg`로 `drawing.png`를 만듭니다. 프로그램이 읽을 결과가 필요하면 `--json`을 붙입니다.
+- **받기:** 저장소의 Releases에서 jar와 SHA-256 체크섬을 받거나, `mvn package`로 직접 빌드합니다.
+- **라이선스:** 비영리 사용은 무료입니다. 기업 등 영리 목적의 사용은 상용 라이선스가 필요합니다(연 US$490 또는 1회 US$1,490, 30일 평가 가능). 자세한 내용은 [LICENSING.md](LICENSING.md)에 있습니다.
 
-Open Design Specification for .dwg files v5.4.1을 기반으로 R13부터 R2018까지의 DWG 파일을 읽습니다. 외부 의존성이 없는 순수 Java 라이브러리이며 Java 11 이상에서 동작합니다. 쓰기(`DwgWriter`)는 아직 개발 중입니다.
+> **In English:** jDwgParser reads AutoCAD DWG drawings (R13 to R2018) and converts them to PNG, SVG or PDF, in pure Java 11+ with no dependencies and no AutoCAD. Run `java -jar jdwgparser-0.1.0.jar drawing.dwg` (add `--json` for machine-readable results). It is free for noncommercial use; commercial use needs a license (US$490 a year or US$1,490 once per organization, 30-day evaluation): see [LICENSING.md](LICENSING.md).
 
 ## 변환 예
 
@@ -112,6 +117,7 @@ SVG와 PDF는 크기와 상관없이 메모리가 같으므로 분할이 필요 
 | `--background black\|white` | 바탕색. 기본은 검정이고, `white`면 흰 바탕에 검은 선입니다 |
 | `--max-mb N` | 파일 하나를 읽을 때 쓸 수 있는 메모리 상한(MB) |
 | `-h`, `--help` | 사용법 |
+| `--json` | 결과 줄 대신 JSON 문서 하나를 출력. `merge`, `--version`에도 씀 |
 | `--version` | 버전 한 줄(버전, 빌드 시각, Java, OS) |
 
 ### 결과와 종료 코드
@@ -129,9 +135,53 @@ failed  broken.dwg: ...
 | 1 | 일부 또는 전부 실패 |
 | 2 | 인자 오류 |
 
+### 프로그램에서 읽기: `--json`
+
+`--json`을 붙이면 표준 출력에 JSON 문서 하나만 나옵니다. 스크립트나 AI 에이전트가 결과를 판단할 때 씁니다.
+
+```json
+{
+  "tool": "jDwgParser",
+  "version": "0.1.0",
+  "status": 0,
+  "converted": 1,
+  "failed": 0,
+  "files": [
+    {
+      "input": "drawing.dwg",
+      "output": "drawing.png",
+      "ok": true,
+      "format": "png",
+      "width": 825,
+      "height": 538,
+      "sizing": "paper 216 x 279 mm at 300 dpi x 1/4",
+      "entities": {"total": 47250, "decoded": 47170, "failedToDecode": 0, "unsupportedType": 80},
+      "ms": 546
+    }
+  ],
+  "license": "Free for noncommercial use; commercial use needs a license (LICENSE, LICENSING.md)."
+}
+```
+
+- **`status`:** 종료 코드와 같습니다.
+- **실패한 파일:** `"ok": false`와 `error`가 붙습니다. 하나라도 실패하면 버그 보고용 `bugReport` 줄도 들어갑니다.
+- **`entities`:** 도면의 전체 엔티티 수, 그린 수, 읽다 실패한 수, 지원하지 않는 종류라 건너뛴 수입니다.
+- **분할(`--split`):** 조각 수와 `.tiles` 파일을 담은 `tiles`가 붙습니다.
+- **인자 오류:** 상태 2와 `error`만 나옵니다.
+
 ### 메모리
 
 변환은 객체를 읽는 대로 그림 모델로 넘기고, 문서 전체는 들고 있지 않습니다. 기본 크기 기준으로 14MB 도면도 `-Xmx111m`으로 변환됩니다. 자세한 측정값은 [RELIABILITY.md](RELIABILITY.md)에 있습니다.
+
+## 받은 jar 확인 (SHA-256)
+
+출시할 때 jar와 함께 `jdwgparser-X.Y.Z.jar.sha256` 파일을 올립니다. 받은 jar가 중간에 바뀌거나 깨지지 않았는지 이 값으로 확인합니다.
+
+```sh
+sha256sum -c jdwgparser-0.1.0.jar.sha256              # Linux, macOS: "OK"가 나오면 같은 파일
+Get-FileHash jdwgparser-0.1.0.jar                     # Windows PowerShell: 출력된 값을 .sha256 파일의 값과 비교(대소문자 무시)
+certutil -hashfile jdwgparser-0.1.0.jar SHA256        # Windows cmd
+```
 
 ## 버전과 버그 보고
 
@@ -163,132 +213,28 @@ doc.issues().forEach(System.out::println);   // 읽지 못한 부분이 있으�
 - `open()`은 문서를 돌려주거나 `DwgReadException`을 던집니다. 지원하지 않는 버전, 구조가 깨진 파일, 상한 초과일 때입니다.
 - 일부만 깨진 파일은 나머지를 읽고, 깨진 부분은 `issues()`로 알려 줍니다.
 - 상한은 `maxBytes(long)`와 `timeout(Duration)`으로 정합니다. 자세한 내용은 [RELIABILITY.md](RELIABILITY.md)에 있습니다.
-- 이 예제는 `QuickStartTest`가 그대로 실행해 확인합니다.
 
-## 프로젝트 구조
+## 지원 범위
 
-```
-src/
-├── io/dwg/
-│   ├── core/          # 저수준 I/O, 버전 감지, 유틸리티
-│   │   ├── io/        # BitStream 읽기/쓰기
-│   │   ├── type/      # DwgHandle, Point3D 등
-│   │   ├── util/      # LZ77, CRC, 문자열 인코딩
-│   │   └── version/   # DwgVersion, 버전 감지
-│   │
-│   ├── format/        # 버전별 파일 구조 핸들러
-│   │   ├── common/    # 공통 인터페이스
-│   │   ├── r13/       # R13-R15 구현
-│   │   ├── r2004/     # R2004 구현
-│   │   └── r2007/     # R2007-R2010 구현
-│   │
-│   ├── sections/      # 섹션 파서/라이터
-│   │   ├── header/    # Header 변수
-│   │   ├── classes/   # 클래스 정의
-│   │   ├── handles/   # 핸들 맵
-│   │   └── objects/   # 엔티티/객체
-│   │
-│   ├── entities/      # 도메인 모델 (순수 데이터)
-│   │   ├── concrete/  # Line, Circle, Arc, Text 등
-│   │   └── ...
-│   │
-│   ├── api/           # 고수준 공개 API
-│   │   ├── DwgReader
-│   │   ├── DwgWriter
-│   │   └── DwgDocument
-│   │
-│   └── test/          # DwgParsingStageTest (단계별 진단 도구)
-test/                  # JUnit 테스트, 측정 도구(tools), 벤치마크(bench)
-```
+| 버전 | 샘플 | 열림 | 객체 | 문제가 있는 객체 |
+|------|------|------|------|-----------------|
+| R13 | 1 | 1 | 5,785 | 0 |
+| R14 | 4 | 4 | 1,550 | 0 |
+| R2000 | 34 | 34 | 54,016 | 0 |
+| R2004 | 29 | 29 | 163,136 | 0 |
+| R2007 | 98 | 98 | 1,611,090 | 0 |
+| R2010 | 19 | 19 | 4,294 | 0 |
+| R2013 | 27 | 27 | 353,156 | 0 |
+| R2018 | 21 | 21 | 51,390 | 0 |
 
-## 아키텍처
+2026-11-26에 샘플 도면 233개로 측정했습니다. R12 이하는 지원하지 않습니다.
+- **측정 방법과 손상 파일 시험:** [RELIABILITY.md](RELIABILITY.md)
+- **그림으로 그리는 엔티티와 아직 안 되는 것:** [RENDERING.md](RENDERING.md)
+- **쓰기(`DwgWriter`):** 아직 개발 중입니다.
 
-### 모듈 계층도
+## 빌드
 
-```
-dwg-core → dwg-format → dwg-sections → dwg-entities → dwg-api
-```
-
-| 모듈 | 책임 |
-|------|------|
-| `dwg-core` | 비트스트림 I/O, 타입, LZ77/CRC |
-| `dwg-format` | 버전별 파일 구조 (R13~R2018) |
-| `dwg-sections` | 섹션 파서/라이터 |
-| `dwg-entities` | 순수 데이터 모델 (엔티티+비엔티티) |
-| `dwg-api` | 공개 API (DwgReader, DwgWriter) |
-
-### 주요 패턴
-
-- **Strategy**: `DwgFileStructureHandler` — 버전별 파싱 전략
-- **Factory**: `DwgFileStructureHandlerFactory` — 버전에 맞는 핸들러 선택
-- **Registry**: `SectionParserRegistry` — 섹션 이름 → 파서 매핑
-- **Builder**: `DwgReader`, `DwgDocument` — Fluent API
-
-## 구현 단계 및 완료 상태
-
-### ✅ Phase 2-9 완료 (v0.1.0)
-
-**Phase 2: 기초 구현** ✓
-- BitStream I/O (읽기/쓰기), DWG 타입, 버전 감지, LZ77/CRC
-
-**Phase 4: R2000 지원** ✓
-- R2000 HeaderVariables, 섹션 파싱 (22개 샘플 파일 100% 통과)
-
-**Phase 5: R2004 엔티티 해석** ✓
-- Objects 섹션 비트 단위 파싱, 64개 엔티티 리더 구현
-
-**Phase 6A: R2007/R2010/R2013/R2018 기초** ✓
-- R2007 Reed-Solomon 헤더, PageMap/SectionMap 추출
-- R2010+ 파일 구조 인식
-
-**Phase 6B: Objects 섹션 추출** ✓
-- R2007 RS(255,239) 복호화 및 LZ77 해제
-- Objects 섹션 197KB+ 추출 (18개 샘플 100%)
-
-**Phase 7: 완전 통합 및 검증** ✓
-- Handles 오프셋 계산 수정 (blockCount 8바이트 정렬)
-- 순차 파싱 폴백 구현
-- 4,816 엔티티 추출 (+42% 개선)
-
-**Phase 8: 엔티티 타입 확장** ✓
-- 74개 엔티티 타입 구현 (완전 커버리지)
-- 19개 신규 타입 추가 (MLINE, MTEXT, WIPEOUT, IMAGE 등)
-
-**Phase 9 Tier 1: R2004 LZ77 수정** ✓
-- R2004 전용 LZ77 디컴프레서 구현 (+42% 개선, 645개 추가 엔티티)
-
-**Phase 9 Tier 3: R2010+ 라우팅 수정** ✓
-- 아키텍처 버그 발견: R2010/R2013/R2018은 R2004 파일 구조 사용
-- R2007 핸들러 대신 R2004 핸들러로 라우팅 변경
-- Reed-Solomon 디코더 단순화 (deinterleave만, BM 에러정정 제거)
-- 엔티티 추출 **6,825 → 12,756 (+87%)**
-
-### 📊 최종 성과
-
-2026-11-26 측정 ([RELIABILITY.md](RELIABILITY.md)에 방법과 자세한 결과):
-
-| 메트릭 | 결과 |
-|--------|------|
-| R13~R2018 샘플 도면 | 233/233 열림 |
-| 읽은 객체 | 2,244,417개, 읽기 점검에서 문제가 있는 객체 0개 |
-| 손상 파일 퍼징 | 6,000회: 문서를 돌려주거나 `DwgReadException`, 그 밖의 예외·시간 초과·메모리 부족 0 |
-| 읽기 속도 | 평균 약 25 MB/s |
-
-### 🎯 Phase 10 (계획)
-
-- 성능 최적화 (일부 R2018 파일 순차 파싱 폴백)
-- R13/R14 완전 지원
-- 보조 섹션 파서 확장 (AppInfo, Preview, XData)
-- 쓰기 기능 (Phase 3)
-
-## 빌드 및 실행
-
-### 요구사항
-
-- Java 11+
-- Maven 3.6+
-
-### 빌드
+필요한 것: Java 11 이상, Maven 3.6 이상
 
 ```bash
 mvn clean package               # 테스트를 돌린 뒤 jar를 만듭니다
@@ -309,183 +255,18 @@ mvn test
 mvn test -Ddwg.samples=/path/to/samples   # 샘플 폴더가 다른 곳에 있을 때 (또는 환경 변수 DWG_SAMPLES)
 ```
 
-테스트는 샘플 도면을 씁니다. 기본으로 작업 폴더의 `samples`를 찾고, 없으면 샘플이 필요한 테스트는 건너뜁니다.
-
-### 단계별 파싱 테스트
-
-```bash
-# Windows
-run_test.bat path/to/sample.dwg
-
-# macOS/Linux
-./run_test.sh path/to/sample.dwg
-
-# 직접 실행
-mvn compile
-java -cp target/classes io.dwg.test.DwgParsingStageTest path/to/sample.dwg
-```
-
-자세한 테스트 가이드는 [TESTING.md](TESTING.md) 참조.
-
-### 렌더링으로 눈으로 확인
-
-`DwgReader`로 읽은 도면의 모델 스페이스를 PNG로 그려 결과를 직접 확인할 수 있습니다. R13부터 R2018까지 그릴 수 있습니다. R2000은 별도 기준 리더와 대조했고, 나머지 버전은 같은 도면의 R2000 판과 같은 그림이 나오는지로 확인했습니다. R12 이하는 지원하지 않습니다.
-
-```bash
-mvn compile
-java -cp target/classes io.dwg.render.tool.RenderTest              # samples/2000 전체 → target/render
-java -cp target/classes io.dwg.render.tool.RenderTest path/to/file.dwg out
-```
-
-출력 읽는 법과 지원 범위는 [RENDERING.md](RENDERING.md) 참조.
-
-## Phase 9 Tier 3 핵심 발견사항
-
-### 아키텍처 버그 (R2010+ 파일 라우팅)
-
-**문제**: R2010, R2013, R2018 파일이 0개 엔티티 추출 (완전 실패)
-
-**근본 원인**: 파일 구조 라우팅 오류. 스펙 6~8장에 따르면 R2010, R2013, R2018의 파일 헤더, 페이지 맵, 섹션 맵, 압축은 R2004와 같다.
-
-**발견**: R2010, R2013, R2018은 R2004 파일 구조 사용
-- R2007은 유일하게 Reed-Solomon(255,239) 헤더 암호화 사용
-- R2010+는 R2004 방식 (XOR 암호화 + LZ77)
-
-**해결**: 파일 라우팅 변경
-```java
-// Before: R2010/R2013/R2018 → R2007FileStructureHandler (XOR 구조로 RS 읽으려다 실패)
-// After: R2010/R2013/R2018 → R2004FileStructureHandler (올바른 구조)
-
-case R2004: case R2010: case R2013: case R2018:
-    return new R2004FileStructureHandler();
-case R2007:
-    return new R2007FileStructureHandler();
-```
-
-**보너스 발견**: Reed-Solomon 디코더 단순화
-- 디코더를 스펙 §5.13의 deinterleave 전용으로 단순화 (샘플 R2007 데이터 블록 303,887개에 오류가 있는 블록이 없음)
-- 이전 Berlekamp-Massey 에러 정정 제거
-
-**결과**: 
-- R2010+ 성공률: 7% → 100%
-- 추출 엔티티: 6,825 → 12,756 (+87%)
-
-### 핵심 교훈
-
-알고리즘 버그로 보이는 문제를 조사할 때는 먼저 알고리즘이 올바른 입력을 받는지 확인하세요. 이 경우 알고리즘 자체는 정상이었지만 잘못된 파일 구조로 라우팅되어 있었습니다.
-
-## 사용 예시
-
-### 기본 사용법
-
-```java
-import io.dwg.api.DwgReader;
-import io.dwg.api.DwgDocument;
-import io.dwg.entities.DwgEntity;
-import java.nio.file.Paths;
-import java.util.List;
-
-// DWG 파일 읽기
-DwgDocument doc = DwgReader.defaultReader()
-    .open(Paths.get("drawing.dwg"));
-
-// 문서 정보
-System.out.println("버전: " + doc.version());
-System.out.println("객체 수: " + doc.objectMap().size());
-
-// 레이어 조회
-doc.layer("0")
-    .ifPresent(layer -> System.out.println("0 레이어 색상: " + layer.color()));
-
-// 엔티티 조회
-List<DwgEntity> entities = doc.entities();
-for (DwgEntity e : entities) {
-    System.out.println(e.objectType() + " at handle 0x" + Long.toHexString(e.handle()));
-}
-```
-
-## v0.1.0 버전 지원 현황
-
-| 버전 | 샘플 | 열림 | 객체 | 문제가 있는 객체 |
-|------|------|------|------|-----------------|
-| R13 | 1 | 1 | 5,785 | 0 |
-| R14 | 4 | 4 | 1,550 | 0 |
-| R2000 | 34 | 34 | 54,016 | 0 |
-| R2004 | 29 | 29 | 163,136 | 0 |
-| R2007 | 98 | 98 | 1,611,090 | 0 |
-| R2010 | 19 | 19 | 4,294 | 0 |
-| R2013 | 27 | 27 | 353,156 | 0 |
-| R2018 | 21 | 21 | 51,390 | 0 |
-
-2026-11-26 측정. R12 이하는 지원하지 않습니다. 자세한 내용은 [RELIABILITY.md](RELIABILITY.md)를 보세요.
-
-### 지원 엔티티 타입 (74개)
-
-**기하학 엔티티 (30개)**
-- 2D: LINE, CIRCLE, ARC, POLYLINE, LWPOLYLINE, SPLINE, ELLIPSE, TEXT, MTEXT
-- 3D: 3DFACE, 3DPOLYLINE, REGION, SOLID, TRACE, SHAPE, MULTILEADER, ARC_DIMENSION
-- 특수: HATCH, IMAGE, UNDERLAY, WIPEOUT, SURFACE, MESH, MLINE
-
-**객체 및 제어 (44개)**
-- LAYER, LINETYPE, STYLE, DIMSTYLE, APPID, UCS, VIEW, VPORT
-- 제어 객체: BLOCK_CONTROL, ENDBLK, INSERT
-- 속성: XREF, ATTRIB, ATTDEF
-- 테이블: TABLE, SCALE_LIST, TABLESTYLE, CELLSTYLE, PLOTSTYLE
-- 데이터: DICTIONARY, DICTIONARYVAR, LAYOUT, MATERIAL, DATASOURCE
-- 기타: TOLERANCE, LEADER, OLE2FRAME, PROXY, PERSSUBENTMANAGER
-
-## 단계별 파싱 흐름
-
-```
-[파일 읽기] → [버전 감지] → [헤더 파싱] → [섹션 추출] 
-    ↓              ↓               ↓            ↓
- 1단계         2단계          3단계        4단계
-
-[섹션 파싱] → [객체 생성] → [DwgDocument] → [API 사용]
-    ↓              ↓            ↓            ↓
-  5단계         5단계        6단계        최종
-```
-
-각 단계는 독립적으로 테스트 가능합니다 ([DwgParsingStageTest](src/io/dwg/test/DwgParsingStageTest.java) 참고).
-
-## 주요 클래스
-
-### API 계층
-
-- `DwgReader` — 파일 읽기
-- `DwgWriter` — 파일 쓰기
-- `DwgDocument` — 파싱된 문서
-
-### 핵심 도메인
-
-- `DwgObject` — 모든 객체의 기본 인터페이스
-- `DwgEntity` — 도형 엔티티
-- `DwgVersion` — 버전 열거 및 버전 비교
-- `HeaderVariables` — 헤더 변수 (500+개)
-- `HandleRegistry` — 핸들 → 오프셋 매핑
-
-### 저수준 I/O
-
-- `BitStreamReader` — 비트 단위 읽기
-- `BitStreamWriter` — 비트 단위 쓰기
-- `ByteBufferBitInput` — 버퍼 기반 입력
-- `ByteBufferBitOutput` — 버퍼 기반 출력
+테스트는 샘플 도면을 씁니다. 기본으로 작업 폴더의 `samples`를 찾고, 없으면 샘플이 필요한 테스트는 건너뜁니다. 진단 도구는 [TESTING.md](TESTING.md)에 있습니다.
 
 ## 라이선스
 
-GNU General Public License v3.0 (see [LICENSE](LICENSE))
-
-## 참고 자료
-
-- [OpenDesign Specification](https://www.opendesign.com/guestdownloads) — 공식 스펙
-- AutoCAD DWG 포맷 위키
-- Autodesk 공식 문서
+비영리 사용은 무료이고, 기업 등 영리 목적의 사용은 상용 라이선스(연간 구독 또는 1회 구매)가 필요합니다.
+- **조건:** [LICENSE](LICENSE)는 PolyForm Noncommercial License 1.0.0에 30일 평가 허락을 더한 것입니다.
+- **설명과 가격:** 무료 범위, 가격, 평가는 [LICENSING.md](LICENSING.md)에 있습니다.
+- **예전 라이선스:** 2026-11-26 전에 GPLv3로 공개된 사본은 그 조건으로 남습니다.
 
 ## 기여
 
-이슈 및 PR을 환영합니다.
-
-## 개발 팀
-
-- Initial design: ebandal
-- Contributors: 커뮤니티 (현재)
+버그 보고와 기능 요청은 이슈로 받습니다. 보낼 내용은 [버전과 버그 보고](#버전과-버그-보고)를 봐 주세요.
+- **PR:** 코드 기여(PR)는 받지 않습니다. 열린 PR은 닫습니다.
+- **이슈의 코드:** 이슈에 코드를 붙여 주시면 참고만 하고, 수정은 직접 작성합니다.
+- **첨부한 도면:** 재현용 도면을 첨부하시면 문제 확인에만 쓰고, 공개하거나 다른 곳에 쓰지 않습니다.

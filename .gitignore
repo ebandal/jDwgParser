@@ -1,6 +1,7 @@
 /bin/
 /dwg/
-/doc/
+/doc/*
+!/doc/images/
 /target/
 /examples/*/target/
 
